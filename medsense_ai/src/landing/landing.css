@@ -1,0 +1,228 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500&display=swap');
+
+:root {
+  --white: #ffffff;
+  --off-white: #f8fafc;
+  --navy: #0d1117;
+  --navy-soft: #1a2332;
+  --blue: #2563eb;
+  --blue-light: #dbeafe;
+  --blue-mid: #93c5fd;
+  --gray-100: #f1f5f9;
+  --gray-200: #e2e8f0;
+  --gray-400: #94a3b8;
+  --gray-600: #475569;
+  --gray-800: #1e293b;
+  --green: #10b981;
+  --font-display: 'Syne', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --radius-card: 20px;
+  --radius-btn: 12px;
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.06);
+  --shadow-float: 0 20px 48px rgba(37, 99, 235, 0.12);
+  --transition-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --transition-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-body);
+  color: var(--navy);
+  background: var(--white);
+  overflow-x: hidden;
+}
+
+/* ─── Section tag pill ─── */
+.section-tag {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--blue);
+  background: var(--blue-light);
+  padding: 0.3rem 0.9rem;
+  border-radius: 100px;
+  margin-bottom: 1rem;
+}
+
+/* ─── Dot grid animation ─── */
+@keyframes dotDrift {
+  from { background-position: 0 0; }
+  to   { background-position: 40px 40px; }
+}
+.dot-grid-bg {
+  background-image: radial-gradient(circle, #cbd5e1 1px, transparent 1px);
+  background-size: 40px 40px;
+  animation: dotDrift 8s linear infinite;
+}
+
+/* ─── Ripple ─── */
+@keyframes ripple-expand {
+  from { transform: scale(0); opacity: 1; }
+  to   { transform: scale(1); opacity: 0; }
+}
+
+/* ─── Nav link underline ─── */
+.nav-link {
+  position: relative;
+  text-decoration: none;
+  color: var(--gray-800);
+  font-family: var(--font-body);
+  font-size: 0.93rem;
+  font-weight: 500;
+  padding: 0.25rem 0;
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+.nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: -2px; left: 0;
+  width: 0; height: 2px;
+  background: var(--blue);
+  transition: width 0.3s ease;
+}
+.nav-link:hover::after { width: 100%; }
+
+/* ─── Feature card icon glow ─── */
+@keyframes iconPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(37,99,235,0); }
+  50%       { box-shadow: 0 0 0 8px rgba(37,99,235,0.08); }
+}
+
+/* ─── Gradient text ─── */
+.gradient-text {
+  color: var(--blue);
+}
+
+/* ─── Hero grid ─── */
+.hero-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4rem;
+  align-items: center;
+  padding: 3rem 5vw 2rem;
+}
+@media (max-width: 768px) {
+  .hero-content { grid-template-columns: 1fr; gap: 2.5rem; padding: 2rem 4vw; }
+}
+
+/* ─── Features grid ─── */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+@media (max-width: 960px) { .features-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .features-grid { grid-template-columns: 1fr; } }
+
+/* ─── Steps grid ─── */
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+  position: relative;
+}
+@media (max-width: 768px) { .steps-grid { grid-template-columns: 1fr; } }
+
+/* ─── Pricing grid ─── */
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.75rem;
+  align-items: stretch;
+}
+@media (max-width: 900px) { .pricing-grid { grid-template-columns: 1fr; max-width: 420px; margin: 0 auto; } }
+
+/* ─── Testimonials grid ─── */
+.testimonials-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.75rem;
+}
+@media (max-width: 900px) { .testimonials-grid { grid-template-columns: 1fr; } }
+
+/* ─── Stats strip ─── */
+.stats-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+@media (max-width: 700px) { .stats-strip { grid-template-columns: repeat(2, 1fr); } }
+
+/* ─── Footer grid ─── */
+.footer-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr 1fr;
+  gap: 3rem;
+}
+@media (max-width: 900px) { .footer-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .footer-grid { grid-template-columns: 1fr; } }
+
+/* ─── Comparison table ─── */
+.comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 3rem;
+  font-family: var(--font-body);
+}
+.comparison-table th,
+.comparison-table td {
+  padding: 0.875rem 1.25rem;
+  text-align: center;
+  border-bottom: 1px solid var(--gray-200);
+  font-size: 0.9rem;
+}
+.comparison-table th {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.85rem;
+  background: var(--gray-100);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gray-600);
+}
+.comparison-table th:first-child,
+.comparison-table td:first-child { text-align: left; font-weight: 500; }
+.comparison-table tr:last-child td { border-bottom: none; }
+
+/* ─── Scroll bar ─── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: var(--gray-100); }
+::-webkit-scrollbar-thumb { background: var(--blue); border-radius: 3px; }
+
+/* ─── Feature card beam sweep ─── */
+@keyframes beamSweep {
+  0%   { transform: translateX(-100%) skewX(-15deg); }
+  100% { transform: translateX(300%) skewX(-15deg); }
+}
+.card-beam::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 40%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+  transform: translateX(-100%) skewX(-15deg);
+}
+.card-beam:hover::after {
+  animation: beamSweep 0.65s ease forwards;
+}
+
+/* ─── Floating badge pulse ─── */
+@keyframes badgePulse {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.04); }
+}
+
+/* ─── Step connector dash ─── */
+@keyframes dashMove {
+  to { stroke-dashoffset: -40; }
+}

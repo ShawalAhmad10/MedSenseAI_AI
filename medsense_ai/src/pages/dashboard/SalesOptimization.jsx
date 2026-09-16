@@ -1,0 +1,218 @@
+// src/pages/dashboard/SalesOptimization.jsx
+// Real API: /api/sales/*
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import {
+  TrendingUp, TrendingDown, Minus, Package,
+  DollarSign, ShoppingCart, BarChart3, Loader2, AlertTriangle, RefreshCw,
+} from 'lucide-react';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Cell,
+} from 'recharts';
+import api from '../../services/api';
+
+const PERIODS = [
+  { id: '7',  label: 'Last 7 Days'  },
+  { id: '30', label: 'Last 30 Days' },
+  { id: '90', label: 'Last 90 Days' },
+];
+
+const COLORS = ['#2563eb','#7c3aed','#10b981','#f59e0b','#ef4444','#0ea5e9','#8b5cf6','#06b6d4'];
+
+function KPICard({ title, value, delta, icon: Icon, color }) {
+  const isPos = delta > 0; const isNeg = delta < 0;
+  const TrendIcon = isPos ? TrendingUp : isNeg ? TrendingDown : Minus;
+  const trendColor = isPos ? '#16a34a' : isNeg ? '#dc2626' : '#94a3b8';
+  return (
+    <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 14, padding: '1.25rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+        <div style={{ width: 34, height: 34, borderRadius: 9, background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon size={16} color={color} />
+        </div>
+        <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{title}</span>
+      </div>
+      <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--navy)', marginBottom: '0.25rem' }}>
+        {typeof value === 'number' && value > 1000 ? `PKR ${value.toLocaleString()}` : value}
+      </div>
+      {delta !== undefined && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', color: trendColor }}>
+          <TrendIcon size={12} />
+          {Math.abs(delta)}% vs previous period
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function SalesOptimization() {
+  const [days,         setDays]         = useState('30');
+  const [loading,      setLoading]      = useState(true);
+  const [overview,     setOverview]     = useState(null);
+  const [products,     setProducts]     = useState([]);
+  const [slowMovers,   setSlowMovers]   = useState([]);
+  const [recommendations, setRecs]     = useState([]);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const params = `?days=${days}`;
+      const [ov, pr, sm, rc] = await Promise.all([
+        api.get(`/sales/overview${params}`).then(r => r.data?.data).catch(() => null),
+        api.get(`/sales/products${params}&limit=8`).then(r => r.data?.data ?? []).catch(() => []),
+        api.get(`/sales/slow-movers${params}&limit=6`).then(r => r.data?.data ?? []).catch(() => []),
+        api.get(`/sales/recommendations${params}`).then(r => r.data?.data ?? []).catch(() => []),
+      ]);
+      setOverview(ov);
+      setProducts(pr);
+      setSlowMovers(sm);
+      setRecs(rc);
+    } catch (err) {
+      console.error('SalesOptimization load error:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, [days]);
+
+  const priorityColor = { high: '#dc2626', medium: '#f59e0b', low: '#2563eb' };
+
+  return (
+    <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: 'var(--navy)' }}>Sales Optimization</h1>
+          <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: '#64748b' }}>Real data from your pharmacy orders</p>
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          {PERIODS.map(p => (
+            <button key={p.id} onClick={() => setDays(p.id)} style={{
+              padding: '0.4rem 0.875rem', borderRadius: 8, border: '1px solid',
+              borderColor: days === p.id ? '#2563eb' : '#e2e8f0',
+              background: days === p.id ? '#eff6ff' : 'white',
+              color: days === p.id ? '#2563eb' : '#64748b',
+              fontWeight: days === p.id ? 600 : 400, fontSize: '0.8rem', cursor: 'pointer',
+            }}>{p.label}</button>
+          ))}
+          <button onClick={load} style={{ width: 36, height: 36, borderRadius: 9, border: '1px solid #e2e8f0', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+            {loading ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={14} />}
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}>
+          <Loader2 size={28} color="#2563eb" style={{ animation: 'spin 1s linear infinite' }} />
+        </div>
+      ) : (
+        <>
+          {/* KPI Row */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginBottom: '1.5rem' }}>
+            <KPICard title="Total Revenue"     value={overview?.revenue?.value     ?? 0}  delta={overview?.revenue?.delta}     icon={DollarSign}   color="#2563eb" />
+            <KPICard title="Total Orders"      value={overview?.orders?.value      ?? 0}  delta={overview?.orders?.delta}      icon={ShoppingCart} color="#7c3aed" />
+            <KPICard title="Avg Order Value"   value={overview?.avgOrderValue?.value ?? 0} delta={overview?.avgOrderValue?.delta} icon={TrendingUp}  color="#16a34a" />
+          </div>
+          {/* Top Products Chart */}
+          {products.length > 0 && (
+            <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 14, padding: '1.25rem', marginBottom: '1.25rem' }}>
+              <h3 style={{ margin: '0 0 1rem', fontSize: '0.9rem', fontWeight: 700, color: 'var(--navy)' }}>
+                Top Selling Medicines
+              </h3>
+              <div style={{ minWidth: 0 }}>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={products} layout="vertical" margin={{ left: 80 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
+                    <YAxis type="category" dataKey="productName" tick={{ fontSize: 11 }} width={80} />
+                    <Tooltip formatter={v => [`PKR ${v?.toLocaleString()}`, 'Revenue']} />
+                    <Bar dataKey="totalRevenue" radius={[0, 4, 4, 0]}>
+                      {products.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            {/* AI Recommendations */}
+            <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 14, padding: '1.25rem' }}>
+              <h3 style={{ margin: '0 0 0.875rem', fontSize: '0.9rem', fontWeight: 700, color: 'var(--navy)' }}>
+                Recommendations
+              </h3>
+              {recommendations.length === 0 ? (
+                <p style={{ color: '#94a3b8', fontSize: '0.82rem', margin: 0 }}>No recommendations at this time.</p>
+              ) : (
+                recommendations.map((r, i) => (
+                  <div key={i} style={{ display: 'flex', gap: '0.75rem', padding: '0.625rem 0', borderBottom: i < recommendations.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: priorityColor[r.priority] ?? '#94a3b8', marginTop: 6, flexShrink: 0 }} />
+                    <div>
+                      <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: 'var(--navy)' }}>{r.title}</p>
+                      <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#64748b' }}>{r.description}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Slow Movers */}
+            <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 14, padding: '1.25rem' }}>
+              <h3 style={{ margin: '0 0 0.875rem', fontSize: '0.9rem', fontWeight: 700, color: 'var(--navy)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <AlertTriangle size={16} color="#f59e0b" /> Slow Movers
+              </h3>
+              {slowMovers.length === 0 ? (
+                <p style={{ color: '#94a3b8', fontSize: '0.82rem', margin: 0 }}>All inventory is moving well.</p>
+              ) : (
+                slowMovers.map((s, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0', borderBottom: i < slowMovers.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                    <div>
+                      <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: 'var(--navy)' }}>{s.productName}</p>
+                      <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748b' }}>{s.category} · {s.quantity} units in stock</p>
+                    </div>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 600, background: '#fef3c7', color: '#d97706', padding: '2px 8px', borderRadius: 100 }}>
+                      {s.daysNoSales}d no sales
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Product Table */}
+          {products.length > 0 && (
+            <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 14, padding: '1.25rem', marginTop: '1rem', overflowX: 'auto' }}>
+              <h3 style={{ margin: '0 0 0.875rem', fontSize: '0.9rem', fontWeight: 700, color: 'var(--navy)' }}>Product Performance</h3>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    {['Rank', 'Medicine', 'Category', 'Qty Sold', 'Revenue', 'Orders'].map(h => (
+                      <th key={h} style={{ padding: '0.625rem 0.875rem', fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', textAlign: 'left' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.map((p, i) => (
+                    <tr key={p.productId} style={{ borderBottom: '1px solid #f8fafc' }}>
+                      <td style={{ padding: '0.625rem 0.875rem', fontSize: '0.82rem', fontWeight: 700, color: COLORS[i % COLORS.length] }}>#{p.rank}</td>
+                      <td style={{ padding: '0.625rem 0.875rem', fontSize: '0.82rem', fontWeight: 600, color: 'var(--navy)' }}>{p.productName}</td>
+                      <td style={{ padding: '0.625rem 0.875rem', fontSize: '0.78rem' }}>
+                        <span style={{ background: '#eff6ff', color: '#2563eb', padding: '1px 7px', borderRadius: 100, fontSize: '0.68rem', fontWeight: 600 }}>{p.category}</span>
+                      </td>
+                      <td style={{ padding: '0.625rem 0.875rem', fontSize: '0.82rem' }}>{p.totalQty}</td>
+                      <td style={{ padding: '0.625rem 0.875rem', fontSize: '0.82rem', fontWeight: 700 }}>PKR {p.totalRevenue.toLocaleString()}</td>
+                      <td style={{ padding: '0.625rem 0.875rem', fontSize: '0.82rem' }}>{p.orderCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
