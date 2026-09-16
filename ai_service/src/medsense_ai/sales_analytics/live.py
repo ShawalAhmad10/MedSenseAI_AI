@@ -35,6 +35,8 @@ class LiveObservedEventName(StrEnum):
     CART_ITEM_REMOVED = EventName.CART_ITEM_REMOVED.value
     CHECKOUT_STARTED = 'checkout_started'
     ORDER_CREATED = EventName.ORDER_CREATED.value
+    PURCHASE_COMPLETED = EventName.PURCHASE_COMPLETED.value
+    ORDER_CANCELLED = EventName.ORDER_CANCELLED.value
 
 
 class LiveEvent(CanonicalModel):
@@ -82,12 +84,18 @@ class LiveEvent(CanonicalModel):
                 'Only cart add/remove events require quantity'
             )
 
+        order_events = (
+            LiveObservedEventName.ORDER_CREATED,
+            LiveObservedEventName.PURCHASE_COMPLETED,
+            LiveObservedEventName.ORDER_CANCELLED,
+        )
+
         if (
-            (self.event_name == LiveObservedEventName.ORDER_CREATED)
+            (self.event_name in order_events)
             != (self.order_id is not None)
         ):
             raise ValueError(
-                'Only successful order submissions require order_id'
+                'Order lifecycle events require order_id'
             )
         return self
 
@@ -164,10 +172,19 @@ def live_funnel(database: Database, origin: DataOrigin) -> LiveFunnelReport:
         event.event_name.value
         for event in events
     )
-    sessions = defaultdict(list)
-    for event in events:
-        sessions[event.session_id].append(event)
     names = list(LiveEventName)
+    stage_values = {
+        name.value
+        for name in names
+    }
+
+    sessions = defaultdict(list)
+
+    for event in events:
+        if event.event_name.value not in stage_values:
+            continue
+
+        sessions[event.session_id].append(event)
     stage_index = {
         name.value: index
         for index, name in enumerate(names)

@@ -346,7 +346,102 @@ exports.updateOrderStatus = async (req, res) => {
       }
     }
 
+    let lifecycleEvent = null;
+
+    const requestedTerminal =
+      delivery_status === 'delivered'
+        ? 'purchase_completed'
+        : delivery_status === 'cancelled'
+          ? 'order_cancelled'
+          : null;
+
+    const previousWasTerminal = [
+      'delivered',
+      'cancelled',
+      'refunded'
+    ].includes(current.cur_del_status);
+
+    if (
+      requestedTerminal &&
+      !previousWasTerminal
+    ) {
+      const productRows = await sequelize.query(
+        `SELECT DISTINCT product_id
+         FROM invoice_report
+         WHERE invoice_id = :invoice_id
+           AND status = 1
+           AND product_id IS NOT NULL
+         ORDER BY product_id`,
+        {
+          replacements: {
+            invoice_id: Number(id)
+          },
+          type: sequelize.QueryTypes.SELECT,
+          transaction
+        }
+      );
+
+      const productIds = [
+        ...new Set(
+          productRows
+            .map((row) => Number(row.product_id))
+            .filter(
+              (value) =>
+                Number.isSafeInteger(value) &&
+                value > 0
+            )
+        )
+      ];
+
+      if (productIds.length > 0) {
+        const transitionTimestamp =
+          updated?.[0]?.updated_at
+            ? new Date(updated[0].updated_at)
+            : new Date();
+
+        lifecycleEvent = {
+          schema_version: 'storefront-funnel-v1',
+          event_id:
+            `amna-order-${id}-${requestedTerminal.replaceAll('_', '-')}`,
+          event_name: requestedTerminal,
+          session_id: `lifecycle-order-${id}`,
+          cart_id: `lifecycle-cart-${id}`,
+          occurred_at: transitionTimestamp.toISOString(),
+          data_origin: 'partner_real',
+          ...(
+            Number.isSafeInteger(
+              Number(current.customer_id)
+            ) &&
+            Number(current.customer_id) > 0
+              ? {
+                  customer_id:
+                    String(
+                      Number(current.customer_id)
+                    )
+                }
+              : {}
+          ),
+          product_ids: productIds,
+          order_id: String(id)
+        };
+      }
+    }
+
     await transaction.commit();
+
+    if (lifecycleEvent) {
+      try {
+        await funnelService.publishEvent(
+          lifecycleEvent
+        );
+      } catch (telemetryError) {
+        console.error(
+          'Post-commit lifecycle telemetry failed:',
+          telemetryError
+        );
+      }
+    }
+
     res.json({ success: true, message: 'Order updated successfully', data: updated[0] });
 
   } catch (error) {
