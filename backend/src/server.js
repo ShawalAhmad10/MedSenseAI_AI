@@ -22,6 +22,7 @@ const reportRoutes = require('./routes/reportRoutes');
 const orderRoutes  = require('./routes/orderRoutes');
 const salesRoutes  = require('./routes/salesRoutes');
 const funnelRoutes = require('./routes/funnelRoutes');
+const leadRoutes = require('./routes/leadRoutes');
 const alertRoutes  = require('./routes/alertRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 
@@ -111,6 +112,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/sales',  salesRoutes);
 app.use('/api/funnel', funnelRoutes);
+app.use('/api/leads', leadRoutes);
 app.use('/api/alerts', alertRoutes);
 
 // ─── Error Handling ──────────────────────────────────────────────────────────
