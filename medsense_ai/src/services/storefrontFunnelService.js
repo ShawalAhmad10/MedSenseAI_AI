@@ -46,6 +46,81 @@ export function resetFunnelCartId() {
   sessionStorage.removeItem(CART_ID_KEY);
 }
 
+export function getFunnelContext() {
+  return {
+    session_id: getFunnelSessionId(),
+    cart_id: getFunnelCartId()
+  };
+}
+
+export async function trackFunnelEventOnce(
+  eventName,
+  productIds,
+  quantity = null
+) {
+  try {
+    const ids = [
+      ...new Set(
+        (productIds || [])
+          .map((value) => {
+            const raw =
+              typeof value === 'string'
+                ? value.replace(/^prod-/, '')
+                : value;
+
+            return Number(raw);
+          })
+          .filter(
+            (value) =>
+              Number.isSafeInteger(value) &&
+              value > 0
+          )
+      )
+    ].sort((a, b) => a - b);
+
+    if (ids.length === 0) {
+      return null;
+    }
+
+    const cartId = getFunnelCartId();
+
+    const onceKey =
+      `medsense_funnel_once:${eventName}:${cartId}:${ids.join(',')}`;
+
+    if (
+      sessionStorage.getItem(onceKey) === 'done' ||
+      sessionStorage.getItem(onceKey) === 'pending'
+    ) {
+      return null;
+    }
+
+    sessionStorage.setItem(onceKey, 'pending');
+
+    const result =
+      await trackFunnelEvent(
+        eventName,
+        ids,
+        quantity
+      );
+
+    if (result?.success === true) {
+      sessionStorage.setItem(onceKey, 'done');
+      return result;
+    }
+
+    sessionStorage.removeItem(onceKey);
+    return result;
+
+  } catch (error) {
+    console.warn(
+      'Funnel once-event unavailable:',
+      error.message
+    );
+
+    return null;
+  }
+}
+
 export async function trackFunnelEvent(
   eventName,
   productIds,

@@ -1,12 +1,24 @@
 // Beyond SRS scope: ecommerce quick-view convenience modal for faster storefront browsing.
-import React from 'react';
+import React, { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
+import { trackFunnelEventOnce } from '../../services/storefrontFunnelService';
 import InteractionBadge from './InteractionBadge';
 
 export default function QuickViewModal({ isOpen, onClose, product }) {
   const { addItem } = useCart();
+
+  useEffect(() => {
+    if (!isOpen || !product?.id) {
+      return;
+    }
+
+    void trackFunnelEventOnce(
+      'product_viewed',
+      [product.id]
+    );
+  }, [isOpen, product?.id]);
 
   return (
     <AnimatePresence>

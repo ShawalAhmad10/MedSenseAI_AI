@@ -4,6 +4,7 @@ const { sequelize } = require('../config/database');
 const { createNotification } = require('./notificationController');
 const User = require('../models/User');
 const ddiService = require('../services/ddiService');
+const funnelService = require('../services/funnelService');
 
 // Get all orders (invoice) with pagination
 exports.getAllOrders = async (req, res) => {
@@ -1040,6 +1041,61 @@ exports.createOrder = async (req, res) => {
     }
 
     await transaction.commit();
+
+    // Commerce is already committed. Analytics cannot fail this order.
+    try {
+      const sessionId =
+        typeof req.body?.funnel_session_id === 'string'
+          ? req.body.funnel_session_id.trim()
+          : '';
+
+      const cartId =
+        typeof req.body?.funnel_cart_id === 'string'
+          ? req.body.funnel_cart_id.trim()
+          : '';
+
+      const funnelProductIds = [
+        ...new Set(
+          normalizedItems
+            .map((item) => Number(item.product_id))
+            .filter(
+              (productId) =>
+                Number.isSafeInteger(productId) &&
+                productId > 0
+            )
+        )
+      ];
+
+      if (
+        sessionId &&
+        sessionId.length <= 128 &&
+        cartId &&
+        cartId.length <= 128 &&
+        funnelProductIds.length > 0
+      ) {
+        void funnelService.publishEvent({
+          schema_version: 'storefront-funnel-v1',
+          event_id: `amna-order-${invoice_id}`,
+          event_name: 'order_created',
+          session_id: sessionId,
+          cart_id: cartId,
+          occurred_at: new Date().toISOString(),
+          data_origin: 'partner_real',
+          product_ids: funnelProductIds,
+          order_id: String(invoice_id)
+        }).catch((funnelError) => {
+          console.error(
+            'Order funnel telemetry failed:',
+            funnelError.message
+          );
+        });
+      }
+    } catch (funnelError) {
+      console.error(
+        'Order funnel telemetry setup failed:',
+        funnelError.message
+      );
+    }
 
     // Create notification for all pharmacy staff
     try {

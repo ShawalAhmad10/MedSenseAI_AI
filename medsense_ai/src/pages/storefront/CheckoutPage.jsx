@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { createOrder } from '../../services/storefrontOrderService';
 import { getCustomerDetails } from '../../services/customerService';
+import { getFunnelContext, resetFunnelCartId, trackFunnelEventOnce } from '../../services/storefrontFunnelService';
 
 const steps = ['address', 'prescription', 'payment', 'review'];
 
@@ -98,6 +99,21 @@ export default function CheckoutPage() {
       loadCustomerData();
     }
   }, [isAuthenticated, user]);
+
+  useEffect(() => {
+    if (
+      !isAuthenticated ||
+      !user?.id ||
+      items.length === 0
+    ) {
+      return;
+    }
+
+    void trackFunnelEventOnce(
+      'checkout_started',
+      items.map((item) => item.id)
+    );
+  }, [isAuthenticated, user?.id, items]);
 
   const loadCustomerData = async () => {
     try {
@@ -433,9 +449,14 @@ export default function CheckoutPage() {
                   setError(null);
                   
                   try {
-                    // Prepare order data - Cash on Delivery only
+                    // Prepare order data - Cash on Delivery only.
+                    // Funnel identifiers are observational metadata.
+                    const funnelContext = getFunnelContext();
+
                     const orderData = {
                       customer_id: user.id,
+                      funnel_session_id: funnelContext.session_id,
+                      funnel_cart_id: funnelContext.cart_id,
                       customer_name: form.fullName,
                       customer_phone: form.phone,
                       customer_email: user.email || '',
@@ -465,6 +486,8 @@ export default function CheckoutPage() {
                     
                     if (response.success) {
                       clearCart();
+                      resetFunnelCartId();
+
                       navigate('/order-confirmation', { 
                         state: { 
                           orderNumber: response.data.orderNumber,

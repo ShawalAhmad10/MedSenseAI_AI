@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { checkCartDDI, extractDdiWarnings } from '../services/storefrontDdiService';
+import { trackFunnelEvent } from '../services/storefrontFunnelService';
 import { useAuth } from './AuthContext';
 
 const CartContext = createContext(null);
@@ -153,6 +154,13 @@ export function CartProvider({ children }) {
       });
 
       setDrawerOpen(true);
+
+      // Best-effort analytics only.
+      void trackFunnelEvent(
+        'cart_item_added',
+        [item.id],
+        1
+      );
     } catch (error) {
       console.error('Error adding item to cart:', error);
       alert('Failed to add item to cart. Please try again.');

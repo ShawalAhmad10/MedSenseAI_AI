@@ -6,6 +6,7 @@ import InteractionBadge from '../../components/storefront/InteractionBadge';
 import ProductCard from '../../components/storefront/ProductCard';
 import QuickViewModal from '../../components/storefront/QuickViewModal';
 import { getProductBySlug } from '../../services/storefrontProductService';
+import { trackFunnelEventOnce } from '../../services/storefrontFunnelService';
 import { useCart } from '../../context/CartContext';
 
 const tabs = ['Description', 'Usage', 'Side Effects', 'Interaction Info'];
@@ -35,6 +36,11 @@ export default function ProductPage() {
 
         setProduct(item);
         setError('');
+
+        void trackFunnelEventOnce(
+          'product_viewed',
+          [item.id]
+        );
         
         // Load alternatives from the item itself
         if (item.alternativeProducts && item.alternativeProducts.length > 0) {
