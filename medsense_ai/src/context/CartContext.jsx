@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { checkCartDDI, extractDdiWarnings } from '../services/storefrontDdiService';
 import { useAuth } from './AuthContext';
 
 const CartContext = createContext(null);
@@ -44,6 +45,9 @@ export function CartProvider({ children }) {
     return getStoredCart(userId);
   });
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [ddiResult, setDdiResult] = useState(null);
+  const [ddiLoading, setDdiLoading] = useState(false);
+  const [ddiError, setDdiError] = useState(null);
 
   // Load cart when user changes (login/logout)
   useEffect(() => {
@@ -55,6 +59,53 @@ export function CartProvider({ children }) {
   useEffect(() => {
     saveCart(userId, items);
   }, [userId, items]);
+
+  // Authoritative DDI review whenever cart identity changes.
+  // Product salts/status are reloaded by Express from PostgreSQL.
+  useEffect(() => {
+    let cancelled = false;
+
+    if (items.length === 0) {
+      setDdiResult(null);
+      setDdiError(null);
+      setDdiLoading(false);
+      return undefined;
+    }
+
+    const timer = window.setTimeout(async () => {
+      setDdiLoading(true);
+      setDdiError(null);
+
+      try {
+        const result = await checkCartDDI(items);
+
+        if (!cancelled) {
+          setDdiResult(result);
+          setDdiError(null);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          const upstreamResult = error.response?.data?.data ?? null;
+          const message =
+            error.response?.data?.message ||
+            error.message ||
+            'Drug interaction review could not be completed.';
+
+          setDdiResult(upstreamResult);
+          setDdiError(message);
+        }
+      } finally {
+        if (!cancelled) {
+          setDdiLoading(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [items]);
 
   // ── Live stock fetch ──────────────────────────────────────────
   const fetchLiveStock = async (productId) => {
@@ -198,6 +249,17 @@ export function CartProvider({ children }) {
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const prescriptionItems = items.filter((item) => item.requiresPrescription);
 
+  const ddiWarnings = useMemo(
+    () => extractDdiWarnings(ddiResult, ddiError || ''),
+    [ddiResult, ddiError],
+  );
+
+  const ddiCheckoutAllowed =
+    items.length > 0 &&
+    !ddiLoading &&
+    !ddiError &&
+    ddiResult?.checkout_allowed === true;
+
   const value = useMemo(
     () => ({
       items,
@@ -209,11 +271,16 @@ export function CartProvider({ children }) {
       subtotal,
       itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
       prescriptionItems,
+      ddiResult,
+      ddiLoading,
+      ddiError,
+      ddiWarnings,
+      ddiCheckoutAllowed,
       drawerOpen,
       openDrawer: () => setDrawerOpen(true),
       closeDrawer: () => setDrawerOpen(false),
     }),
-    [drawerOpen, items, prescriptionItems, subtotal, userId],
+    [ddiCheckoutAllowed, ddiError, ddiLoading, ddiResult, ddiWarnings, drawerOpen, items, prescriptionItems, subtotal, userId],
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

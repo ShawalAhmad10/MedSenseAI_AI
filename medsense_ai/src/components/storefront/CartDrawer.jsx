@@ -7,7 +7,16 @@ import { useCart } from '../../context/CartContext';
 import InteractionBadge from './InteractionBadge';
 
 export default function CartDrawer({ isOpen, onClose }) {
-  const { items, prescriptionItems, removeItem, subtotal, updateQuantity } = useCart();
+  const {
+    items,
+    prescriptionItems,
+    removeItem,
+    subtotal,
+    updateQuantity,
+    ddiLoading,
+    ddiCheckoutAllowed,
+    ddiWarnings,
+  } = useCart();
 
   return (
     <AnimatePresence>
@@ -79,9 +88,18 @@ export default function CartDrawer({ isOpen, onClose }) {
                   <InteractionBadge level="moderate" text={`${prescriptionItems.length} item(s) need prescription review`} />
                 </div>
               )}
-              {items.length > 0 && prescriptionItems.length === 0 && (
+              {items.length > 0 && (
                 <div style={{ marginBottom: '0.8rem' }}>
-                  <InteractionBadge level="low" text="Checked - no interactions found" />
+                  <InteractionBadge
+                    level={ddiLoading ? 'moderate' : ddiCheckoutAllowed ? 'low' : 'moderate'}
+                    text={
+                      ddiLoading
+                        ? 'Checking drug interactions...'
+                        : ddiCheckoutAllowed
+                          ? 'DDI review completed - no governed warning found'
+                          : `Interaction review required${ddiWarnings.length ? ` (${ddiWarnings.length})` : ''}`
+                    }
+                  />
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.9rem', fontWeight: 700 }}>
@@ -89,7 +107,18 @@ export default function CartDrawer({ isOpen, onClose }) {
                 <span>PKR {subtotal}</span>
               </div>
               <div style={{ display: 'grid', gap: '0.65rem' }}>
-                <Link className="sf-button" onClick={onClose} style={{ textAlign: 'center', textDecoration: 'none' }} to="/checkout">
+                <Link
+                  className={ddiCheckoutAllowed ? 'sf-button' : 'sf-button-secondary'}
+                  onClick={(event) => {
+                    if (!ddiCheckoutAllowed) {
+                      event.preventDefault();
+                      return;
+                    }
+                    onClose();
+                  }}
+                  style={{ textAlign: 'center', textDecoration: 'none' }}
+                  to="/checkout"
+                >
                   Proceed to Checkout
                 </Link>
                 <Link className="sf-button-secondary" onClick={onClose} style={{ textAlign: 'center', textDecoration: 'none' }} to="/cart">

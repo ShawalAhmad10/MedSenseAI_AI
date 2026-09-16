@@ -13,7 +13,17 @@ const steps = ['address', 'prescription', 'payment', 'review'];
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const { isAuthenticated, openAuthModal, user } = useAuth();
-  const { clearCart, items, prescriptionItems, subtotal } = useCart();
+  const {
+    clearCart,
+    items,
+    prescriptionItems,
+    subtotal,
+    ddiResult,
+    ddiLoading,
+    ddiError,
+    ddiWarnings,
+    ddiCheckoutAllowed,
+  } = useCart();
   const [stepIndex, setStepIndex] = useState(0);
   const [showWarnings, setShowWarnings] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -297,7 +307,7 @@ export default function CheckoutPage() {
               <label className="sf-summary-block" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', cursor: 'pointer' }}>
                 <input checked={form.payment === 'cod'} name="payment" onChange={() => setForm({ ...form, payment: 'cod' })} type="radio" />
                 <span>
-                  <strong style={{ display: 'block' }}>💵 Cash on Delivery</strong>
+                  <strong style={{ display: 'block' }}>Cash on Delivery</strong>
                   <span className="sf-muted">Pay when you receive your order</span>
                 </span>
               </label>
@@ -310,7 +320,7 @@ export default function CheckoutPage() {
                 border: '1px solid #86efac'
               }}>
                 <p style={{ margin: 0, color: '#166534', fontSize: '0.9rem' }}>
-                  ✅ Pay in cash when your order is delivered to your doorstep. No advance payment required.
+                  Pay in cash when your order is delivered to your doorstep. No advance payment required.
                 </p>
               </div>
               
@@ -342,7 +352,7 @@ export default function CheckoutPage() {
                   <strong>Address:</strong> {form.address}, {form.city}
                 </p>
                 <p className="sf-muted" style={{ marginBottom: '0.5rem' }}>
-                  <strong>Payment:</strong> 💵 Cash on Delivery
+                  <strong>Payment:</strong> Cash on Delivery
                 </p>
                 
                 {form.notes && (
@@ -352,7 +362,7 @@ export default function CheckoutPage() {
                 )}
                 
                 <p className="sf-muted" style={{ marginBottom: 0, paddingTop: '0.75rem', borderTop: '1px solid var(--sf-border)' }}>
-                  <strong>{items.length} item(s) • Total: PKR {total.toFixed(2)}</strong>
+                  <strong>{items.length} item(s) - Total: PKR {total.toFixed(2)}</strong>
                 </p>
               </div>
               {error && (
@@ -408,8 +418,17 @@ export default function CheckoutPage() {
             ) : (
               <button
                 className="sf-button"
-                disabled={isSubmitting}
                 onClick={async () => {
+                  if (ddiLoading || !ddiCheckoutAllowed) {
+                    setShowWarnings(true);
+                    setError(
+                      ddiError ||
+                      ddiResult?.message ||
+                      'Drug interaction review must clear before placing the order.',
+                    );
+                    return;
+                  }
+
                   setIsSubmitting(true);
                   setError(null);
                   
@@ -462,9 +481,14 @@ export default function CheckoutPage() {
                     setIsSubmitting(false);
                   }
                 }}
+                disabled={isSubmitting || ddiLoading || !ddiCheckoutAllowed}
                 type="button"
               >
-                {isSubmitting ? 'Placing Order...' : 'Place Order'}
+                {ddiLoading
+                  ? 'Checking Interactions...'
+                  : isSubmitting
+                    ? 'Placing Order...'
+                    : 'Place Order'}
               </button>
             )}
           </div>
@@ -472,6 +496,36 @@ export default function CheckoutPage() {
 
         <aside className="sf-card sf-section-card" style={{ height: 'fit-content' }}>
           <h2 className="sf-section-heading" style={{ marginBottom: '1rem' }}>Order Summary</h2>
+          {items.length > 0 && (
+            <div className="sf-summary-block" style={{ marginBottom: '1rem' }}>
+              <strong style={{ display: 'block', marginBottom: '0.35rem' }}>
+                Drug interaction review
+              </strong>
+
+              <p
+                className="sf-muted"
+                style={{ marginBottom: ddiCheckoutAllowed ? 0 : '0.7rem' }}
+              >
+                {ddiLoading
+                  ? 'Checking medicines against the governed DDI service...'
+                  : ddiCheckoutAllowed
+                    ? 'DDI review completed - no governed warning found.'
+                    : ddiError ||
+                      ddiResult?.message ||
+                      'Interaction review is required before checkout.'}
+              </p>
+
+              {!ddiLoading && !ddiCheckoutAllowed && (
+                <button
+                  className="sf-button-secondary"
+                  onClick={() => setShowWarnings(true)}
+                  type="button"
+                >
+                  Review interaction warning
+                </button>
+              )}
+            </div>
+          )}
           {items.length === 0 ? (
             <div className="sf-empty">Your cart is empty. Add products before checking out.</div>
           ) : (
@@ -503,7 +557,7 @@ export default function CheckoutPage() {
         </aside>
       </div>
 
-      <InteractionWarningModal isOpen={showWarnings} onClose={() => setShowWarnings(false)} warnings={[]} />
+      <InteractionWarningModal isOpen={showWarnings} onClose={() => setShowWarnings(false)} warnings={ddiWarnings} />
     </div>
   );
 }

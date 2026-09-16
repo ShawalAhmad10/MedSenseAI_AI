@@ -11,6 +11,7 @@ router.get('/stats', orderController.getOrderStats);
 router.get('/stats/today', orderController.getTodayStats);
 router.get('/stats/daily', orderController.getDailyStats);
 router.get('/stats/top-medicines', orderController.getTopMedicines);
+router.post('/ddi-check', orderController.checkCartDDI);
 router.get('/:id', orderController.getOrderById);
 router.post('/', orderController.createOrder); // Public for storefront orders
 

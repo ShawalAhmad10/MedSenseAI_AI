@@ -3,6 +3,7 @@
 const { sequelize } = require('../config/database');
 const { createNotification } = require('./notificationController');
 const User = require('../models/User');
+const ddiService = require('../services/ddiService');
 
 // Get all orders (invoice) with pagination
 exports.getAllOrders = async (req, res) => {
@@ -354,6 +355,137 @@ exports.updateOrderStatus = async (req, res) => {
   }
 };
 
+// Authoritative storefront cart DDI check.
+// Client sends product IDs only; medicine identity/salt/status comes from PostgreSQL.
+exports.checkCartDDI = async (req, res) => {
+  try {
+    const requestedItems = Array.isArray(req.body?.items)
+      ? req.body.items
+      : [];
+
+    if (requestedItems.length === 0) {
+      return res.status(400).json({
+        success: false,
+        code: 'EMPTY_DDI_CART',
+        message: 'Cart must contain at least one product for DDI review'
+      });
+    }
+
+    const productIds = [];
+
+    for (const item of requestedItems) {
+      const rawId =
+        typeof item?.product_id === 'string'
+          ? item.product_id.replace(/^prod-/, '')
+          : item?.product_id;
+
+      const productId = Number(rawId);
+
+      if (!Number.isInteger(productId) || productId <= 0) {
+        return res.status(400).json({
+          success: false,
+          code: 'INVALID_DDI_PRODUCT_ID',
+          message: 'Every cart item must contain a valid product_id'
+        });
+      }
+
+      if (!productIds.includes(productId)) {
+        productIds.push(productId);
+      }
+    }
+
+    const productRows = await sequelize.query(
+      `SELECT
+         product_id,
+         product_title,
+         product_generic_name,
+         product_salt,
+         product_requires_rx,
+         product_status
+       FROM product
+       WHERE product_id IN (:product_ids)`,
+      {
+        replacements: { product_ids: productIds },
+        type: sequelize.QueryTypes.SELECT
+      }
+    );
+
+    const rowsById = new Map(
+      productRows.map((product) => [
+        Number(product.product_id),
+        product
+      ])
+    );
+
+    const missingProductIds = productIds.filter(
+      (productId) => !rowsById.has(productId)
+    );
+
+    if (missingProductIds.length > 0) {
+      return res.status(404).json({
+        success: false,
+        code: 'DDI_PRODUCT_NOT_FOUND',
+        message: 'One or more cart products no longer exist',
+        data: {
+          product_ids: missingProductIds
+        }
+      });
+    }
+
+    const authoritativeProducts = productIds.map((productId) => {
+      const product = rowsById.get(productId);
+
+      return {
+        product_id: Number(product.product_id),
+        product_title: product.product_title || null,
+        product_generic_name: product.product_generic_name || null,
+        product_salt: product.product_salt || null,
+        product_requires_rx:
+          product.product_requires_rx == null
+            ? null
+            : Boolean(product.product_requires_rx),
+        product_status: Number(product.product_status ?? 0)
+      };
+    });
+
+    const ddi = await ddiService.checkCart(authoritativeProducts);
+
+    if (
+      ddi.httpStatus === 503 ||
+      ddi.result.status === 'SERVICE_UNAVAILABLE'
+    ) {
+      return res.status(503).json({
+        success: false,
+        code: 'DDI_SERVICE_UNAVAILABLE',
+        message: ddi.result.message || 'DDI service is unavailable',
+        data: ddi.result
+      });
+    }
+
+    if (ddi.httpStatus !== 200) {
+      return res.status(502).json({
+        success: false,
+        code: 'DDI_UPSTREAM_ERROR',
+        message: 'DDI service returned an unexpected response',
+        data: ddi.result
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: ddi.result
+    });
+  } catch (error) {
+    console.error('Cart DDI check error:', error);
+
+    return res.status(503).json({
+      success: false,
+      code: error.code || 'DDI_SERVICE_UNAVAILABLE',
+      message: 'Drug interaction review could not be completed'
+    });
+  }
+};
+
 // Create new order (invoice)
 exports.createOrder = async (req, res) => {
   const transaction = await sequelize.transaction();
@@ -508,6 +640,93 @@ exports.createOrder = async (req, res) => {
 
     items.length = 0;
     items.push(...normalizedItems);
+
+    // ================================================================
+    // SERVER-AUTHORITATIVE DDI CHECKOUT GATE
+    // Uses only products already reloaded from PostgreSQL above.
+    // Duplicate cart lines are collapsed for DDI identity evaluation.
+    // ================================================================
+    const ddiProductsById = new Map();
+
+    for (const item of normalizedItems) {
+      ddiProductsById.set(Number(item.product_id), {
+        product_id: Number(item.product_id),
+        product_title: item.product_title || null,
+        product_generic_name: item.product_generic_name || null,
+        product_salt: item.product_salt || null,
+        product_requires_rx:
+          item.product_requires_rx == null
+            ? null
+            : Boolean(item.product_requires_rx),
+        product_status: 1
+      });
+    }
+
+    let ddi;
+
+    try {
+      ddi = await ddiService.checkCart(
+        Array.from(ddiProductsById.values())
+      );
+    } catch (error) {
+      await transaction.rollback();
+
+      console.error('Checkout DDI service error:', error);
+
+      return res.status(503).json({
+        success: false,
+        code: 'DDI_SERVICE_UNAVAILABLE',
+        message:
+          'Drug interaction review is unavailable. Checkout was stopped because the safety check could not be completed.'
+      });
+    }
+
+    if (
+      ddi.httpStatus === 503 ||
+      ddi.result.status === 'SERVICE_UNAVAILABLE'
+    ) {
+      await transaction.rollback();
+
+      return res.status(503).json({
+        success: false,
+        code: 'DDI_SERVICE_UNAVAILABLE',
+        message:
+          ddi.result.message ||
+          'Drug interaction review is unavailable. Checkout was stopped.',
+        data: {
+          ddi: ddi.result
+        }
+      });
+    }
+
+    if (ddi.httpStatus !== 200) {
+      await transaction.rollback();
+
+      return res.status(502).json({
+        success: false,
+        code: 'DDI_UPSTREAM_ERROR',
+        message:
+          'Drug interaction review returned an unexpected response. Checkout was stopped.',
+        data: {
+          ddi: ddi.result
+        }
+      });
+    }
+
+    if (!ddi.result.checkout_allowed) {
+      await transaction.rollback();
+
+      return res.status(409).json({
+        success: false,
+        code: 'DDI_REVIEW_REQUIRED',
+        message:
+          ddi.result.message ||
+          'Drug interaction review is required before checkout.',
+        data: {
+          ddi: ddi.result
+        }
+      });
+    }
 
     // Calculate totals
     let subtotal = 0;

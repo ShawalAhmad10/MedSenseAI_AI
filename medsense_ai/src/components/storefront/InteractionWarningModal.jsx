@@ -28,13 +28,20 @@ export default function InteractionWarningModal({ isOpen, onClose, warnings }) {
                   <strong style={{ display: 'block', fontFamily: 'var(--font-display)', fontSize: '1.25rem' }}>
                     Interaction Review
                   </strong>
-                  <span className="sf-muted">Mock safety layer for cart and checkout flow</span>
+                  <span className="sf-muted">Authoritative MedSenseAI drug-interaction review</span>
                 </div>
                 <button className="sf-icon-button" onClick={onClose} type="button">
                   <X size={18} />
                 </button>
               </div>
               <div style={{ display: 'grid', gap: '0.9rem' }}>
+                {warnings.length === 0 && (
+                  <div className="sf-summary-block">
+                    <p className="sf-muted" style={{ marginBottom: 0 }}>
+                      No governed DDI warning is currently shown. This does not guarantee that the medicines are clinically safe together.
+                    </p>
+                  </div>
+                )}
                 {warnings.map((warning) => (
                   <div className="sf-summary-block" key={warning.title}>
                     <div className={warning.severity === 'high' ? 'sf-badge-danger' : 'sf-badge-warning'}>

@@ -8,7 +8,17 @@ import InteractionWarningModal from '../../components/storefront/InteractionWarn
 import EscalateToPharmacistModal from '../../components/storefront/EscalateToPharmacistModal';
 
 export default function CartPage() {
-  const { items, prescriptionItems, removeItem, subtotal, updateQuantity } = useCart();
+  const {
+    items,
+    prescriptionItems,
+    removeItem,
+    subtotal,
+    updateQuantity,
+    ddiLoading,
+    ddiError,
+    ddiWarnings,
+    ddiCheckoutAllowed,
+  } = useCart();
   const [showWarnings, setShowWarnings] = useState(false);
   const [showEscalation, setShowEscalation] = useState(false);
 
@@ -26,8 +36,16 @@ export default function CartPage() {
               </p>
             </div>
             <InteractionBadge
-              level={prescriptionItems.length ? 'moderate' : 'low'}
-              text={prescriptionItems.length ? 'Prescription check pending' : 'Checked - no interactions found'}
+              level={ddiLoading ? 'moderate' : ddiCheckoutAllowed ? 'low' : 'moderate'}
+              text={
+                items.length === 0
+                  ? 'Add medicines to begin DDI review'
+                  : ddiLoading
+                    ? 'Checking drug interactions...'
+                    : ddiCheckoutAllowed
+                      ? 'DDI review completed - no governed warning found'
+                      : 'Interaction review required'
+              }
             />
           </div>
 
@@ -103,9 +121,18 @@ export default function CartPage() {
             </div>
           </div>
 
-          {items.length > 0 && prescriptionItems.length === 0 && (
+          {items.length > 0 && (
             <div className="sf-summary-block" style={{ marginTop: '1rem' }}>
-              <InteractionBadge level="low" text="Checked - no interactions found" />
+              <InteractionBadge
+                level={ddiLoading ? 'moderate' : ddiCheckoutAllowed ? 'low' : 'moderate'}
+                text={
+                  ddiLoading
+                    ? 'Checking drug interactions...'
+                    : ddiCheckoutAllowed
+                      ? 'DDI review completed - no governed warning found'
+                      : ddiError || `${ddiWarnings.length || 1} interaction review item(s) require attention`
+                }
+              />
             </div>
           )}
 
@@ -129,9 +156,15 @@ export default function CartPage() {
             <button className="sf-button-secondary" onClick={() => setShowEscalation(true)} type="button">
               Escalate to Pharmacist
             </button>
-            <Link 
-              className={items.length === 0 ? "sf-button-secondary" : "sf-button"}
-              style={{ textAlign: 'center', textDecoration: 'none', pointerEvents: items.length === 0 ? 'none' : 'auto' }} 
+            <Link
+              className={ddiCheckoutAllowed ? 'sf-button' : 'sf-button-secondary'}
+              onClick={(event) => {
+                if (!ddiCheckoutAllowed) {
+                  event.preventDefault();
+                  setShowWarnings(true);
+                }
+              }}
+              style={{ textAlign: 'center', textDecoration: 'none' }}
               to="/checkout"
             >
               Continue to Checkout <ArrowRight size={15} style={{ marginLeft: 4, verticalAlign: 'text-bottom' }} />
@@ -140,7 +173,7 @@ export default function CartPage() {
         </aside>
       </div>
 
-      <InteractionWarningModal isOpen={showWarnings} onClose={() => setShowWarnings(false)} warnings={[]} />
+      <InteractionWarningModal isOpen={showWarnings} onClose={() => setShowWarnings(false)} warnings={ddiWarnings} />
       <EscalateToPharmacistModal isOpen={showEscalation} onClose={() => setShowEscalation(false)} />
     </div>
   );
