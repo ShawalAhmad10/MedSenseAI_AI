@@ -1,0 +1,16 @@
+{
+  "artifact_sha256": {
+    "inference_drug_features.csv": "f62939268fc81c5804f2498dbd8d6ab5d82c80e4cf2e419e494d919e4b5573b1",
+    "inference_morgan_fingerprints.npz": "a1559dc5fe7d0722ca1230b249b57ef738fd4ea51d8cb6cbb138c9215ebabfb5",
+    "selected_model.joblib": "bd590c773e879ce595a813973f95d742d6d1895bb3b3d479b379e71317e01667"
+  },
+  "model_version": "med-ddi-binary-1.0.0",
+  "python_implementation": "CPython",
+  "scikit_learn_version": "1.8.0",
+  "selected_model": "linear_sgd_logistic",
+  "selected_threshold": 0.06481356918811798,
+  "selection_rule": "highest validation PR-AUC; validation F1 tie-break",
+  "threshold_rule": "maximize validation F2 to weight recall more heavily for warning triage",
+  "trained_at_utc": "2026-09-02T13:35:26.692411+00:00",
+  "warning": "Research discrimination model only. The comparison class is sampled-unlabeled, not clinically verified safe or non-interacting."
+}

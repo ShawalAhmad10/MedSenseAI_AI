@@ -1316,7 +1316,7 @@ exports.getProfitLossReport = async (req, res) => {
 
     if (startDate) { dateWhere += ' AND DATE(i.invoice_date) >= :startDate'; replacements.startDate = startDate; }
     if (endDate)   { dateWhere += ' AND DATE(i.invoice_date) <= :endDate';   replacements.endDate   = endDate;   }
-    if (productId) { dateWhere += ' AND ii.product_id = :productId::uuid';   replacements.productId = productId; }
+    if (productId) { dateWhere += ' AND ii.product_id = :productId';   replacements.productId = productId; }
 
     // Join invoice_report with stock_history via batch_number to get purchase price
     const rows = await sequelize.query(
@@ -1538,7 +1538,7 @@ exports.getStockReport = async (req, res) => {
         si.supplier_name
       FROM stock_report sl
       LEFT JOIN stock_history b      ON b.batch_id = sl.batch_id
-      LEFT JOIN product p      ON p.product_id = sl.product_id::uuid
+      LEFT JOIN product p      ON p.product_id = sl.product_id
       LEFT JOIN stock s        ON s.stock_id = b.stock_id
       LEFT JOIN supplier_info si ON si.supplier_id = s.supplier_id
       WHERE ${where}
@@ -1612,7 +1612,7 @@ exports.getStockReturnReport = async (req, res) => {
         si.supplier_name
       FROM stock_return_report srr
       LEFT JOIN stock_return sr   ON sr.return_id = srr.return_id
-      LEFT JOIN product p         ON p.product_id = srr.product_id::uuid
+      LEFT JOIN product p         ON p.product_id = srr.product_id
       LEFT JOIN supplier_info si  ON si.supplier_id = sr.supplier_id
       WHERE ${where}
       ORDER BY srr.created_at DESC, srr.report_id DESC

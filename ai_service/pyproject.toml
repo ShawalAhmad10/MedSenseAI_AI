@@ -1,0 +1,56 @@
+﻿[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "medsense-ai-service"
+version = "0.1.0"
+description = "Safety-focused service foundation for MedSenseAI"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115,<1.0",
+    "pydantic-settings>=2.6,<3.0",
+    "sqlalchemy>=2.0,<3.0",
+    "uvicorn[standard]>=0.32,<1.0",
+    "Pillow>=10,<13",
+    "joblib>=1.4,<2.0",
+    "numpy>=2.1,<3.0",
+    "scikit-learn>=1.7,<1.9",
+]
+medsense-ingest-rxnorm-cpc = "medsense_ai.medical_data_ingestion.cli:main"
+medsense-build-ddi-dataset = "medsense_ai.ddi_training.cli:main"
+medsense-ddi-model = "medsense_ai.ddi_model.cli:main"
+medsense-ddi-runtime = "medsense_ai.ddi_runtime.cli:main"
+
+[project.optional-dependencies]
+test = [
+    "httpx2>=2.0,<3.0",
+    "pytest>=8.0,<9.0",
+]
+ddi-training = [
+    "joblib>=1.4,<2.0",
+    "numpy>=2.1,<3.0",
+    "rdkit>=2025.3,<2026.0",
+    "scikit-learn>=1.7,<1.9",
+]
+sales-training = [
+    "joblib>=1.4,<2.0",
+    "numpy>=2.1,<3.0",
+    "scikit-learn>=1.7,<1.9",
+    "threadpoolctl>=3.2,<4.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"medsense_ai.integrations.amna_medcopy" = ["data/*.json"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers"
+filterwarnings = ["error::starlette.exceptions.StarletteDeprecationWarning"]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+

@@ -9,7 +9,7 @@ const StockHistoryOpen = sequelize.define('StockHistoryOpen', {
     field: 'open_id'
   },
   product_id: {
-    type: DataTypes.UUID,
+    type: DataTypes.INTEGER,
     allowNull: true,
     field: 'product_id'
   },

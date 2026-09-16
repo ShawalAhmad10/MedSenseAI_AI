@@ -395,6 +395,120 @@ exports.createOrder = async (req, res) => {
       });
     }
 
+    // ================================================================
+    // SERVER-AUTHORITATIVE CHECKOUT VALIDATION
+    // Product identity, title, selling price and stock come from PostgreSQL.
+    // ================================================================
+    const normalizedItems = [];
+
+    for (const requestedItem of items) {
+      const productId = Number(requestedItem.product_id);
+      const requestedQty = Number(requestedItem.quantity);
+
+      if (
+        !Number.isInteger(productId) ||
+        productId <= 0 ||
+        !Number.isInteger(requestedQty) ||
+        requestedQty <= 0
+      ) {
+        await transaction.rollback();
+
+        return res.status(400).json({
+          success: false,
+          code: 'INVALID_ORDER_ITEM',
+          message: 'Each item requires a valid product_id and positive integer quantity'
+        });
+      }
+
+      const productRows = await sequelize.query(
+        "SELECT product_id, product_title, product_price, product_discount, product_status, product_salt, product_generic_name, product_requires_rx FROM product WHERE product_id = :product_id AND COALESCE(product_status, 1) = 1 LIMIT 1",
+        {
+          replacements: {
+            product_id: productId
+          },
+          type: sequelize.QueryTypes.SELECT,
+          transaction
+        }
+      );
+
+      const product = productRows[0];
+
+      if (!product) {
+        await transaction.rollback();
+
+        return res.status(404).json({
+          success: false,
+          code: 'PRODUCT_NOT_AVAILABLE',
+          message: 'Product ' + productId + ' is not available'
+        });
+      }
+
+      const stockRows = await sequelize.query(
+        "SELECT COALESCE(SUM(remaining_quantity), 0)::int AS available FROM stock_history WHERE product_id = :product_id AND remaining_quantity > 0 AND status = 1 AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)",
+        {
+          replacements: {
+            product_id: productId
+          },
+          type: sequelize.QueryTypes.SELECT,
+          transaction
+        }
+      );
+
+      const availableStock =
+        Number(stockRows[0]?.available || 0);
+
+      if (availableStock < requestedQty) {
+        await transaction.rollback();
+
+        return res.status(409).json({
+          success: false,
+          code: 'INSUFFICIENT_STOCK',
+          message:
+            'Insufficient stock for ' +
+            product.product_title +
+            '. Requested ' +
+            requestedQty +
+            ', available ' +
+            availableStock +
+            '.',
+          data: {
+            product_id: productId,
+            requested: requestedQty,
+            available: availableStock
+          }
+        });
+      }
+
+      normalizedItems.push({
+        product_id: product.product_id,
+        product_title: product.product_title,
+        quantity: requestedQty,
+
+        // Client selling price is ignored.
+        unit_price:
+          Number(product.product_price || 0),
+
+        // Keep latest-partner discount/tax contract unchanged.
+        discount:
+          Number(requestedItem.discount || 0),
+
+        tax:
+          Number(requestedItem.tax || 0),
+
+        product_salt:
+          product.product_salt || null,
+
+        product_generic_name:
+          product.product_generic_name || null,
+
+        product_requires_rx:
+          Boolean(product.product_requires_rx)
+      });
+    }
+
+    items.length = 0;
+    items.push(...normalizedItems);
+
     // Calculate totals
     let subtotal = 0;
     let totalItemDiscount = 0;
@@ -496,7 +610,9 @@ exports.createOrder = async (req, res) => {
          WHERE product_id = :product_id
            AND remaining_quantity > 0
            AND status = 1
-         ORDER BY expiry_date ASC, batch_id ASC`,
+            AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)
+         ORDER BY expiry_date ASC, batch_id ASC
+          FOR UPDATE`,
         { replacements: { product_id: item.product_id },
           type: sequelize.QueryTypes.SELECT, transaction }
       );
@@ -514,6 +630,20 @@ exports.createOrder = async (req, res) => {
 
       // Pass 2 – write invoice_report + deduct stock + write stock_report
       const totalAllocated = batchAllocations.reduce((s, a) => s + a.allocateQty, 0);
+
+      if (
+        quantityToAllocate > 0 ||
+        totalAllocated !== item.quantity
+      ) {
+        throw new Error(
+          'STOCK_ALLOCATION_FAILED: product ' +
+          item.product_id +
+          ', requested ' +
+          item.quantity +
+          ', allocated ' +
+          totalAllocated
+        );
+      }
 
       for (const { batch, allocateQty } of batchAllocations) {
         // Distribute discount & tax proportionally across batches
@@ -585,7 +715,7 @@ exports.createOrder = async (req, res) => {
               batch_id:    batch.batch_id,
               ref:         invoice_number,
               qty_change:  -allocateQty,
-              balance:     parseFloat(stockTotals.total_qty) - allocateQty,
+              balance:     parseFloat(stockTotals.total_qty),
               unit_price:  batch.purchase_price,
               notes:       `Sale - ${invoice_number} - Batch ${batch.batch_number}`
             },

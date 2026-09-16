@@ -15,7 +15,7 @@ const StockHistory = sequelize.define('StockHistory', {
     comment: 'Foreign key to stock.stock_id (purchase bill)'
   },
   product_id: {
-    type: DataTypes.UUID,
+    type: DataTypes.INTEGER,
     allowNull: false,
     field: 'product_id',
     comment: 'Foreign key to product.product_id'

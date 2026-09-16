@@ -3,8 +3,8 @@ const { sequelize } = require('../config/database');
 
 const Product = sequelize.define('Product', {
   product_id: {
-    type: DataTypes.UUID,
-    defaultValue: DataTypes.UUIDV4,
+    type: DataTypes.INTEGER,
+    autoIncrement: true,
     primaryKey: true,
     field: 'product_id'
   },

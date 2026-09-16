@@ -15,7 +15,7 @@ const StockReport = sequelize.define('StockReport', {
     comment: 'Foreign key to stock_history.batch_id'
   },
   product_id: {
-    type: DataTypes.UUID,
+    type: DataTypes.INTEGER,
     allowNull: false,
     field: 'product_id',
     comment: 'Foreign key to product.product_id'

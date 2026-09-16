@@ -15,7 +15,7 @@ const StockReturnReport = sequelize.define('StockReturnReport', {
     comment: 'Foreign key to stock_return.return_id'
   },
   product_id: {
-    type: DataTypes.UUID,
+    type: DataTypes.INTEGER,
     allowNull: true,
     field: 'product_id'
   },

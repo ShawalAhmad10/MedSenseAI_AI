@@ -297,7 +297,7 @@ exports.listInvoices = async (req, res) => {
          p.product_pack_description AS pack_description
        FROM invoice i
        LEFT JOIN invoice_report ii ON ii.invoice_id = i.invoice_id AND ii.status = 1
-       LEFT JOIN product p ON p.product_id = ii.product_id::uuid
+       LEFT JOIN product p ON p.product_id = ii.product_id
        WHERE i.status = 1
        ORDER BY i.${sortCol} ${order}
        LIMIT :lim`,
@@ -1038,7 +1038,7 @@ exports.createInvoiceReturn = async (req, res) => {
              total_price = GREATEST(total_price - (:retQty * unit_price), 0),
              updated_at  = NOW()
          WHERE invoice_id  = :invId
-           AND product_id  = :productId::uuid
+           AND product_id  = :productId
            AND status      = 1`,
         {
           replacements: {
@@ -1300,7 +1300,7 @@ exports.listInvoiceReport = async (req, res) => {
         i.created_at
       FROM invoice_report ii
       JOIN invoice i ON ii.invoice_id = i.invoice_id
-      LEFT JOIN product p ON p.product_id = ii.product_id::uuid
+      LEFT JOIN product p ON p.product_id = ii.product_id
       WHERE ${where}
       ORDER BY i.invoice_date DESC, ii.item_id DESC
       LIMIT :lim
@@ -1544,7 +1544,7 @@ exports.createCustomerReturn = async (req, res) => {
       // Reduce invoice_report quantity
       await sequelize.query(`
         UPDATE invoice_report SET quantity = GREATEST(quantity - :qty, 0), total_price = GREATEST(total_price - (:qty * unit_price), 0), updated_at = NOW()
-        WHERE invoice_id = :invId AND product_id = :pid::uuid AND status = 1`,
+        WHERE invoice_id = :invId AND product_id = :pid AND status = 1`,
         { replacements: { qty: item.quantity, invId: linkedInvoiceId, pid: item.productId }, transaction }
       );
     }

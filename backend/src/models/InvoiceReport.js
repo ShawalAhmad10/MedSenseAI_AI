@@ -15,7 +15,7 @@ const InvoiceReport = sequelize.define('InvoiceReport', {
     comment: 'Foreign key to invoice.invoice_id'
   },
   product_id: {
-    type: DataTypes.UUID,
+    type: DataTypes.INTEGER,
     allowNull: true,
     field: 'product_id',
     comment: 'Foreign key to product_info table'
