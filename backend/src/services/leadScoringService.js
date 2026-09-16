@@ -1,13 +1,13 @@
 const axios = require('axios');
 const { sequelize } = require('../config/database');
 
-const AI_SERVICE_URL = (
-  process.env.AI_SERVICE_URL ||
-  'http://127.0.0.1:8000'
+const LEAD_AI_SERVICE_URL = (
+  process.env.LEAD_AI_SERVICE_URL ||
+  'http://127.0.0.1:8002'
 ).replace(/\/+$/, '');
 
 const LEAD_SCORE_URL =
-  `${AI_SERVICE_URL}/api/v1/integrations/amna/leads/score`;
+  `${LEAD_AI_SERVICE_URL}/api/v1/integrations/amna/leads/score`;
 
 const LEAD_TIMEOUT_MS =
   Number(process.env.LEAD_TIMEOUT_MS || 10000);
@@ -255,6 +255,6 @@ module.exports = {
   scoreCustomer,
   listActiveCustomerIds,
   scoreCustomers,
-  AI_SERVICE_URL,
+  LEAD_AI_SERVICE_URL,
   LEAD_SCORE_URL
 };
