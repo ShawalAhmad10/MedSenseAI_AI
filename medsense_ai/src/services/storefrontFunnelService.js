@@ -1,0 +1,124 @@
+const FUNNEL_API =
+  'http://localhost:5005/api/funnel/events';
+
+const SESSION_ID_KEY = 'medsense_session_id';
+const CART_ID_KEY = 'medsense_funnel_cart_id';
+
+function randomId(prefix) {
+  if (
+    typeof crypto !== 'undefined' &&
+    typeof crypto.randomUUID === 'function'
+  ) {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+
+  return (
+    `${prefix}-${Date.now()}-` +
+    Math.random().toString(36).slice(2)
+  );
+}
+
+export function getFunnelSessionId() {
+  let value =
+    sessionStorage.getItem(SESSION_ID_KEY);
+
+  if (!value) {
+    value = randomId('session');
+    sessionStorage.setItem(SESSION_ID_KEY, value);
+  }
+
+  return value;
+}
+
+export function getFunnelCartId() {
+  let value =
+    sessionStorage.getItem(CART_ID_KEY);
+
+  if (!value) {
+    value = randomId('cart');
+    sessionStorage.setItem(CART_ID_KEY, value);
+  }
+
+  return value;
+}
+
+export function resetFunnelCartId() {
+  sessionStorage.removeItem(CART_ID_KEY);
+}
+
+export async function trackFunnelEvent(
+  eventName,
+  productIds,
+  quantity = null
+) {
+  try {
+    const ids = [
+      ...new Set(
+        (productIds || [])
+          .map((value) => {
+            const raw =
+              typeof value === 'string'
+                ? value.replace(/^prod-/, '')
+                : value;
+
+            return Number(raw);
+          })
+          .filter(
+            (value) =>
+              Number.isSafeInteger(value) &&
+              value > 0
+          )
+      )
+    ];
+
+    if (ids.length === 0) {
+      return null;
+    }
+
+    const payload = {
+      event_name: eventName,
+      session_id: getFunnelSessionId(),
+      cart_id: getFunnelCartId(),
+      product_ids: ids
+    };
+
+    if (
+      eventName === 'cart_item_added' &&
+      Number.isSafeInteger(Number(quantity)) &&
+      Number(quantity) > 0
+    ) {
+      payload.quantity = Number(quantity);
+    }
+
+    const response = await fetch(
+      FUNNEL_API,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload),
+        keepalive: true
+      }
+    );
+
+    if (!response.ok) {
+      console.warn(
+        'Funnel telemetry rejected:',
+        response.status
+      );
+
+      return null;
+    }
+
+    return await response.json();
+
+  } catch (error) {
+    console.warn(
+      'Funnel telemetry unavailable:',
+      error.message
+    );
+
+    return null;
+  }
+}

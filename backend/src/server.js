@@ -21,6 +21,7 @@ const invoiceRoutes = require('./routes/invoiceRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const orderRoutes  = require('./routes/orderRoutes');
 const salesRoutes  = require('./routes/salesRoutes');
+const funnelRoutes = require('./routes/funnelRoutes');
 const alertRoutes  = require('./routes/alertRoutes');
 
 const app = express();
@@ -129,6 +130,7 @@ app.use('/api/invoice', invoiceRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/sales',  salesRoutes);
+app.use('/api/funnel', funnelRoutes);
 app.use('/api/alerts', alertRoutes);
 
 // ─── Error Handling ──────────────────────────────────────────────────────────
