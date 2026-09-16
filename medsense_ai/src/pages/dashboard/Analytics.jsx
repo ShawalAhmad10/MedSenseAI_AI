@@ -2,145 +2,395 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Download, Calendar, Loader2, TrendingUp, ShoppingCart, Users, DollarSign } from 'lucide-react';
-import { analyticsData } from '../../utils/analyticsData';
 import api from '../../services/api';
 
-// Components
 import KPIRow from '../../components/analytics/KPIRow';
 import RevenueLineChart from '../../components/analytics/RevenueLineChart';
 import MedicineDemandChart from '../../components/analytics/MedicineDemandChart';
-import SeverityPieChart from '../../components/analytics/SeverityPieChart';
-import CustomerBehaviourTable from '../../components/analytics/CustomerBehaviourTable';
+import FunnelStagesCard from '../../components/analytics/SeverityPieChart';
 
 export default function Analytics() {
   const [selectedPeriod, setSelectedPeriod] = useState('last30');
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [realStats, setRealStats]       = useState(null);
-  const [realInventory, setRealInventory] = useState(null);
-  const [realOrders, setRealOrders]     = useState([]);
+  const [loadError, setLoadError] = useState('');
+  const [realStats, setRealStats] = useState(null);
+  const [realTrend, setRealTrend] = useState(null);
   const [topMedicines, setTopMedicines] = useState([]);
+  const [funnelMetrics, setFunnelMetrics] = useState(null);
 
   const periodLabels = {
-    last7: "Last 7 Days",
-    last30: "Last 30 Days",
-    last90: "Last 90 Days",
-    custom: "Custom Range"
+    last7: 'Last 7 Days',
+    last30: 'Last 30 Days',
+    last90: 'Last 90 Days',
+    custom: 'Custom Range'
   };
 
   const dateRangeText = useMemo(() => {
     const now = new Date();
-    const end = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const end = now.toLocaleDateString(
+      'en-US',
+      { month: 'short', day: 'numeric', year: 'numeric' }
+    );
+
     const start = new Date();
-    if (selectedPeriod === 'last7') start.setDate(now.getDate() - 7);
-    else if (selectedPeriod === 'last30') start.setDate(now.getDate() - 30);
-    else if (selectedPeriod === 'last90') start.setDate(now.getDate() - 90);
-    const startText = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    return `Showing ${startText} – ${end} · Updated: ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+
+    if (selectedPeriod === 'last7') {
+      start.setDate(now.getDate() - 6);
+    }
+
+    if (selectedPeriod === 'last30') {
+      start.setDate(now.getDate() - 29);
+    }
+
+    if (selectedPeriod === 'last90') {
+      start.setDate(now.getDate() - 89);
+    }
+
+    const startText = start.toLocaleDateString(
+      'en-US',
+      { month: 'short', day: 'numeric' }
+    );
+
+    return `Showing ${startText} - ${end} | Updated: ${now.toLocaleTimeString(
+      'en-US',
+      { hour: 'numeric', minute: '2-digit' }
+    )}`;
   }, [selectedPeriod]);
 
-  // Load real backend data — re-fetch on every mount + when period changes
   useEffect(() => {
     let cancelled = false;
-    const days = selectedPeriod === 'last7' ? 7 : selectedPeriod === 'last90' ? 90 : 30;
+
+    const days =
+      selectedPeriod === 'last7'
+        ? 7
+        : selectedPeriod === 'last90'
+        ? 90
+        : 30;
+
     async function load() {
-      if (!cancelled) setIsLoading(true);
+      if (!cancelled) {
+        setIsLoading(true);
+        setLoadError('');
+      }
+
       try {
-        const [summaryRes, trendRes, topMedRes, invRes] = await Promise.all([
-          api.get(`/analytics/summary?days=${days}`).then(r => r.data?.data).catch(() => null),
-          api.get(`/analytics/trend?days=${days}`).then(r => r.data?.data ?? []).catch(() => []),
-          api.get(`/analytics/top-medicines?days=${days}&limit=8`).then(r => r.data?.data ?? []).catch(() => []),
-          api.get('/inventory/stats').then(r => r.data?.data).catch(() => null),
+        const [
+          summaryRes,
+          trendRes,
+          topMedicineRes,
+          funnelRes
+        ] = await Promise.all([
+          api
+            .get(`/analytics/summary?days=${days}`)
+            .then((response) => response.data?.data),
+
+          api
+            .get(`/analytics/trend?days=${days}`)
+            .then((response) => response.data?.data),
+
+          api
+            .get(`/analytics/top-medicines?days=${days}&limit=10`)
+            .then((response) => response.data?.data ?? []),
+
+          api
+            .get('/funnel/metrics')
+            .then((response) => response.data?.data)
+            .catch(() => null)
         ]);
+
+        if (!summaryRes || !trendRes) {
+          throw new Error(
+            'Authoritative analytics endpoints returned no data.'
+          );
+        }
+
         if (!cancelled) {
           setRealStats(summaryRes);
-          setRealInventory(invRes);
-          setRealOrders(trendRes);  // reuse realOrders state for trend data
-          setTopMedicines(topMedRes);
+          setRealTrend(trendRes);
+          setTopMedicines(
+            Array.isArray(topMedicineRes)
+              ? topMedicineRes
+              : []
+          );
+          setFunnelMetrics(funnelRes);
         }
-      } catch (e) {
-        console.error('Analytics load error:', e.message);
+      } catch (error) {
+        console.error(
+          'Analytics load error:',
+          error.message
+        );
+
+        if (!cancelled) {
+          setRealStats(null);
+          setRealTrend(null);
+          setTopMedicines([]);
+          setFunnelMetrics(null);
+          setLoadError(
+            'Real analytics are temporarily unavailable. No mock values are being shown.'
+          );
+        }
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
     }
+
     load();
-    return () => { cancelled = true; };
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedPeriod]);
 
-  // Remove the old redundant selectedPeriod effect
-  const mockData = analyticsData[selectedPeriod] || analyticsData.last30;
-
-  // Merge real stats into KPI row
   const currentData = useMemo(() => {
-    if (!realStats) return mockData;
+    const emptyTrend = {
+      daily: [],
+      weekly: [],
+      monthly: []
+    };
 
-    // Build real top medicines from actual order items
-    let topMeds = mockData.topMedicines;
-    if (realOrders.length > 0) {
-      const medCount = {};
-      realOrders.forEach(order => {
-        (order.items || []).forEach(item => {
-          if (!medCount[item.name]) medCount[item.name] = { name: item.name, units: 0, revenue: 0 };
-          medCount[item.name].units += (item.qty || item.quantity || 0);
-          medCount[item.name].revenue += (item.subtotal || 0);
-        });
+    const trend = realTrend || emptyTrend;
+
+    const daily =
+      Array.isArray(trend.daily)
+        ? trend.daily
+        : [];
+
+    const salesSpark =
+      daily.map((row) => Number(row.current || 0));
+
+    const ordersSpark =
+      daily.map((row) => Number(row.orders || 0));
+
+    const averageSpark =
+      daily.map((row) => {
+        const orders = Number(row.orders || 0);
+        const sales = Number(row.current || 0);
+
+        return orders > 0
+          ? Number((sales / orders).toFixed(2))
+          : 0;
       });
-      const sorted = Object.values(medCount).sort((a, b) => b.revenue - a.revenue);
-      if (sorted.length > 0) {
-        const totalRev = sorted.reduce((s, m) => s + m.revenue, 0);
-        topMeds = sorted.slice(0, 10).map(m => ({
-          name: m.name,
-          units: m.units,
-          revenue: m.revenue,
-          pctOfTotal: totalRev > 0 ? parseFloat(((m.revenue / totalRev) * 100).toFixed(1)) : 0,
-        }));
+
+    const readDelta = (value) => {
+      if (value === null || value === undefined) {
+        return null;
       }
-    } else if (realInventory.length > 0) {
-      topMeds = realInventory.slice(0, 10).map((item, i) => ({
-        name: item.name,
-        units: Math.max(item.stockQty || 0, 10) + (i * 5),
-        revenue: (item.unitPrice || 0) * (Math.max(item.stockQty || 0, 10) + (i * 5)),
-        pctOfTotal: parseFloat((10 - i * 0.5).toFixed(1)),
-      }));
+
+      const numeric = Number(value);
+
+      return Number.isFinite(numeric)
+        ? numeric
+        : null;
+    };
+
+    const funnelAvailable =
+      funnelMetrics &&
+      typeof funnelMetrics.overall_conversion_pct === 'number';
+
+    const funnelStages =
+      Array.isArray(funnelMetrics?.stages)
+        ? funnelMetrics.stages.map((stage) => ({
+            eventName: stage.event_name,
+            events: Number(stage.event_count || 0),
+            sessions: Number(stage.sessions || 0),
+            conversion:
+              stage.conversion_from_previous_pct === null ||
+              stage.conversion_from_previous_pct === undefined
+                ? null
+                : Number(stage.conversion_from_previous_pct)
+          }))
+        : [];
+
+    if (!realStats) {
+      return {
+        kpis: {
+          recordedSales: {
+            value: '—',
+            delta: null,
+            spark: []
+          },
+          orders: {
+            value: '—',
+            delta: null,
+            spark: []
+          },
+          avgInvoiceValue: {
+            value: '—',
+            delta: null,
+            spark: []
+          },
+          funnelConversion: {
+            value: funnelAvailable
+              ? Number(funnelMetrics.overall_conversion_pct)
+              : '—'
+          }
+        },
+        revenueTrend: emptyTrend,
+        topMedicines: [],
+        funnelStages,
+        summaryMeasurement: '',
+        trendMeasurement: '',
+        funnelMeasurement:
+          funnelMetrics?.measurement || ''
+      };
     }
 
     return {
-      ...mockData,
       kpis: {
-        totalRevenue: { value: realStats.totalRevenue || 0, delta: +18.2, spark: mockData.kpis.totalRevenue.spark },
-        totalOrders: { value: realStats.totalOrders || 0, delta: +11.5, spark: mockData.kpis.totalOrders.spark },
-        avgOrderValue: { value: realStats.totalOrders > 0 ? Math.round((realStats.totalRevenue || 0) / realStats.totalOrders) : 0, delta: +3.2, spark: mockData.kpis.avgOrderValue.spark },
-        customerRetention: { value: 72.4, delta: +1.8 },
-      },
-      topMedicines: topMeds,
-    };
-  }, [realStats, realInventory, realOrders, mockData]);
+        recordedSales: {
+          value: Number(
+            realStats.recordedSales?.value ??
+            realStats.totalRevenue ??
+            0
+          ),
+          delta: readDelta(
+            realStats.recordedSales?.delta
+          ),
+          spark: salesSpark
+        },
 
+        orders: {
+          value: Number(
+            realStats.orders?.value ??
+            realStats.totalOrders ??
+            0
+          ),
+          delta: readDelta(
+            realStats.orders?.delta
+          ),
+          spark: ordersSpark
+        },
+
+        avgInvoiceValue: {
+          value: Number(
+            realStats.averageInvoiceValue?.value ??
+            realStats.avgOrderValue ??
+            0
+          ),
+          delta: readDelta(
+            realStats.averageInvoiceValue?.delta
+          ),
+          spark: averageSpark
+        },
+
+        funnelConversion: {
+          value: funnelAvailable
+            ? Number(
+                funnelMetrics.overall_conversion_pct
+              )
+            : '—'
+        }
+      },
+
+      revenueTrend: {
+        daily:
+          Array.isArray(trend.daily)
+            ? trend.daily
+            : [],
+        weekly:
+          Array.isArray(trend.weekly)
+            ? trend.weekly
+            : [],
+        monthly:
+          Array.isArray(trend.monthly)
+            ? trend.monthly
+            : []
+      },
+
+      topMedicines:
+        Array.isArray(topMedicines)
+          ? topMedicines
+          : [],
+
+      funnelStages,
+
+      summaryMeasurement:
+        realStats.measurement || '',
+
+      trendMeasurement:
+        trend.measurement || '',
+
+      funnelMeasurement:
+        funnelMetrics?.measurement || ''
+    };
+  }, [
+    realStats,
+    realTrend,
+    topMedicines,
+    funnelMetrics
+  ]);
   const handleExportCSV = () => {
     const convertToCSV = (data) => {
-      if (!data || data.length === 0) return '';
-      const headers = Object.keys(data[0]).join(',');
-      const rows = data.map(obj => Object.values(obj).join(',')).join('\n');
+      if (!Array.isArray(data) || data.length === 0) {
+        return '';
+      }
+
+      const headers =
+        Object.keys(data[0]).join(',');
+
+      const rows =
+        data
+          .map((obj) =>
+            Object.values(obj)
+              .map((value) =>
+                `"${String(value ?? '').replace(/"/g, '""')}"`
+              )
+              .join(',')
+          )
+          .join('\n');
+
       return `${headers}\n${rows}`;
     };
+
     const files = [
-      { name: `revenue_${selectedPeriod}.csv`, data: convertToCSV(currentData.revenueTrend.weekly) },
-      { name: `top_medicines_${selectedPeriod}.csv`, data: convertToCSV(currentData.topMedicines) },
-      { name: `customer_behaviour_${selectedPeriod}.csv`, data: convertToCSV(currentData.customerBehaviour) },
+      {
+        name: `recorded_sales_${selectedPeriod}.csv`,
+        data: convertToCSV(
+          currentData.revenueTrend.daily
+        )
+      },
+      {
+        name: `medicine_demand_${selectedPeriod}.csv`,
+        data: convertToCSV(
+          currentData.topMedicines
+        )
+      },
+      {
+        name: `observed_funnel_${selectedPeriod}.csv`,
+        data: convertToCSV(
+          currentData.funnelStages
+        )
+      }
     ];
+
     files.forEach((file, index) => {
       setTimeout(() => {
-        const blob = new Blob([file.data], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = file.name;
-        document.body.appendChild(a); a.click();
-        document.body.removeChild(a); URL.revokeObjectURL(url);
+        const blob =
+          new Blob(
+            [file.data],
+            { type: 'text/csv' }
+          );
+
+        const url =
+          URL.createObjectURL(blob);
+
+        const anchor =
+          document.createElement('a');
+
+        anchor.href = url;
+        anchor.download = file.name;
+
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+
+        URL.revokeObjectURL(url);
       }, index * 250);
     });
   };
-
   const handleExportPDF = () => {
     setIsGeneratingPDF(true);
     setTimeout(() => { setIsGeneratingPDF(false); window.print(); }, 1500);
@@ -287,20 +537,94 @@ export default function Analytics() {
           <div className="print-break-after">
             <RevenueLineChart trendData={currentData.revenueTrend} period={selectedPeriod} />
           </div>
-
-          {/* Middle Row: Medicine Demand + Interaction Severity */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
+          {/* Real Medicine Demand + Observed Funnel */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns:
+                'repeat(auto-fit, minmax(300px, 1fr))',
+              gap: '1.5rem'
+            }}
+          >
             <div style={{ flex: 1.5 }}>
-              <MedicineDemandChart data={currentData.topMedicines} />
+              <MedicineDemandChart
+                data={currentData.topMedicines}
+              />
             </div>
+
             <div style={{ flex: 1 }}>
-              <SeverityPieChart data={currentData.severityBreakdown} />
+              <FunnelStagesCard
+                data={currentData.funnelStages}
+                overallConversion={
+                  currentData.kpis.funnelConversion.value
+                }
+                measurement={
+                  currentData.funnelMeasurement
+                }
+              />
             </div>
           </div>
 
-          {/* Bottom Row: Customer Behaviour Table */}
-          <div className="print-break-before">
-             <CustomerBehaviourTable data={currentData.customerBehaviour} periodLabel={periodLabels[selectedPeriod]} />
+          <div
+            className="dash-card"
+            style={{
+              padding: '1.25rem 1.5rem'
+            }}
+          >
+            <h3
+              style={{
+                margin: '0 0 0.65rem',
+                fontFamily: 'var(--font-display)',
+                fontSize: '1rem',
+                color: 'var(--navy)'
+              }}
+            >
+              Measurement Notes
+            </h3>
+
+            {loadError && (
+              <p
+                style={{
+                  color: 'var(--red)',
+                  fontSize: '0.78rem',
+                  margin: '0 0 0.5rem'
+                }}
+              >
+                {loadError}
+              </p>
+            )}
+
+            <p
+              style={{
+                margin: '0 0 0.4rem',
+                fontSize: '0.75rem',
+                color: 'var(--gray-500)'
+              }}
+            >
+              {currentData.summaryMeasurement}
+            </p>
+
+            <p
+              style={{
+                margin: '0 0 0.4rem',
+                fontSize: '0.75rem',
+                color: 'var(--gray-500)'
+              }}
+            >
+              {currentData.trendMeasurement}
+            </p>
+
+            <p
+              style={{
+                margin: 0,
+                fontSize: '0.75rem',
+                color: 'var(--gray-500)'
+              }}
+            >
+              Customer session duration, chatbot topics and
+              interaction-severity analytics are not displayed
+              because those signals are not currently instrumented.
+            </p>
           </div>
         </div>
       )}

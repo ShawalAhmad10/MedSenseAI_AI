@@ -23,6 +23,7 @@ const orderRoutes  = require('./routes/orderRoutes');
 const salesRoutes  = require('./routes/salesRoutes');
 const funnelRoutes = require('./routes/funnelRoutes');
 const alertRoutes  = require('./routes/alertRoutes');
+const analyticsRoutes = require('./routes/analyticsRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5005;
@@ -93,28 +94,7 @@ app.get('/api/inventory/stats', (req, res) => {
   });
 });
 
-// Analytics summary endpoint (stub for now)
-app.get('/api/analytics/summary', (req, res) => {
-  res.json({
-    totalRevenue: 0,
-    totalOrders: 0,
-    totalCustomers: 0,
-    avgOrderValue: 0
-  });
-});
-
-// Analytics trend endpoint (stub for now)
-app.get('/api/analytics/trend', (req, res) => {
-  res.json({
-    labels: [],
-    data: []
-  });
-});
-
-// Analytics top medicines endpoint (stub for now)
-app.get('/api/analytics/top-medicines', (req, res) => {
-  res.json([]);
-});
+app.use('/api/analytics', analyticsRoutes);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/brand', brandRoutes);

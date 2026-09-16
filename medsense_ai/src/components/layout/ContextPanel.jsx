@@ -1,4 +1,4 @@
-// src/components/layout/ContextPanel.jsx — Real backend data
+// src/components/layout/ContextPanel.jsx â€” Real backend data
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -16,8 +16,9 @@ export default function ContextPanel() {
 
   const load = useCallback(async () => {
     try {
-      const [statsRes, invRes, ordersRes] = await Promise.all([
-        api.get('/analytics/summary?days=30').then(r => r.data?.data).catch(() => null),
+      const [todayStatsRes, totalStatsRes, invRes, ordersRes] = await Promise.all([
+        api.get('/orders/stats/today').then(r => r.data?.data).catch(() => null),
+        api.get('/orders/stats').then(r => r.data?.data).catch(() => null),
         // /api/products returns product list with stockQty calculated from stock_history
         api.get('/products?limit=20&sortBy=stockQty&sortDir=asc').then(r => {
           const data = r.data?.data;
@@ -39,7 +40,7 @@ export default function ContextPanel() {
         .slice(0, 5)
         .map((item, idx) => {
           const qty  = item.stockQty ?? item.quantity ?? 0;
-          const name = item.title ?? item.product_title ?? item.name ?? '—';
+          const name = item.title ?? item.product_title ?? item.name ?? 'â€”';
           return {
             id: idx + 1, name,
             detail: qty === 0 ? 'Out of stock' : `${qty} units (${qty < 5 ? 'critical' : 'low'})`,
@@ -57,10 +58,10 @@ export default function ContextPanel() {
 
       setData({
         today: {
-          orders: statsRes?.todayOrders || 0,
-          revenue: statsRes?.totalRevenue  ?? statsRes?.todayRevenue ?? 0,
-          pendingAlerts: statsRes?.pendingOrders ?? 0,
-          activeCustomers: statsRes?.totalCustomers ?? 0,
+          orders: todayStatsRes?.today?.totalOrders ?? 0,
+          revenue: todayStatsRes?.today?.totalRevenue ?? 0,
+          pendingAlerts: todayStatsRes?.today?.pending ?? totalStatsRes?.pending ?? 0,
+          totalOrders: totalStatsRes?.total ?? 0,
         },
         inventoryAlerts: lowStock.length > 0 ? lowStock : [
           { id: 1, name: 'All items stocked', detail: 'No low stock alerts', color: 'var(--green)' }
@@ -93,7 +94,7 @@ export default function ContextPanel() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.1rem', color: 'var(--navy)', margin: 0 }}>Live Overview</h3>
-          <p style={{ fontSize: '0.75rem', color: 'var(--gray-400)', margin: 0 }}>Today · {today}</p>
+          <p style={{ fontSize: '0.75rem', color: 'var(--gray-400)', margin: 0 }}>Today Â· {today}</p>
         </div>
         <motion.button whileHover={{ rotate: 180 }} whileTap={{ scale: 0.9 }} onClick={handleRefresh}
           style={{ background: 'var(--dash-bg)', border: 'none', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--gray-600)' }}>
@@ -117,9 +118,9 @@ export default function ContextPanel() {
             <div className="dash-card" style={{ padding: '1rem' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <SnapshotItem icon={Package} label="Today's Orders" value={data.today.orders} iconBg="#eff6ff" iconColor="#3b82f6" />
-                <SnapshotItem icon={DollarSign} label="Today's Revenue" value={`PKR ${data.today.revenue.toLocaleString()}`} iconBg="#ecfdf5" iconColor="#10b981" />
+                <SnapshotItem icon={DollarSign} label="Today's Sales" value={`PKR ${data.today.revenue.toLocaleString()}`} iconBg="#ecfdf5" iconColor="#10b981" />
                 <SnapshotItem icon={AlertCircle} label="Pending Orders" value={data.today.pendingAlerts} iconBg="#fff1f0" iconColor="#ef4444" badge={data.today.pendingAlerts > 0} />
-                <SnapshotItem icon={Users} label="Total Orders" value={data.today.activeCustomers} iconBg="#f5f3ff" iconColor="#8b5cf6" />
+                <SnapshotItem icon={ShoppingCart} label="Total Orders" value={data.today.totalOrders} iconBg="#f5f3ff" iconColor="#8b5cf6" />
               </div>
             </div>
 
@@ -171,7 +172,7 @@ export default function ContextPanel() {
                       <div style={{ flex: 1 }}>
                         <p style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--navy)', margin: 0 }}>{order.name}</p>
                         <p style={{ fontSize: '0.68rem', color: 'var(--gray-400)', margin: 0 }}>
-                          {order.lastOrder === 0 ? 'Today' : `${order.lastOrder}d ago`} · {order.medicine}
+                          {order.lastOrder === 0 ? 'Today' : `${order.lastOrder}d ago`} Â· {order.medicine}
                         </p>
                       </div>
                     </div>

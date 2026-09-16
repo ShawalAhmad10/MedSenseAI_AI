@@ -1,26 +1,32 @@
-// src/components/analytics/KPIRow.jsx
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
-const Sparkline = ({ data, color, width = 100, height = 40 }) => {
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => setIsMounted(true), []);
+const Sparkline = ({ data = [], color, width = 100, height = 40 }) => {
+  const [mounted, setMounted] = useState(false);
 
-  if (!data || data.length === 0) return null;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-  const min = Math.min(...data);
-  const max = Math.max(...data);
+  if (!Array.isArray(data) || data.length === 0) return null;
+
+  const numeric = data.map((value) => Number(value) || 0);
+  const min = Math.min(...numeric);
+  const max = Math.max(...numeric);
   const range = max - min || 1;
-  
-  const points = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * width;
-    const y = height - ((v - min) / range) * height;
-    return `${x},${y}`;
-  }).join(' ');
+  const denominator = Math.max(numeric.length - 1, 1);
+
+  const points = numeric
+    .map((value, index) => {
+      const x = (index / denominator) * width;
+      const y = height - ((value - min) / range) * height;
+      return `${x},${y}`;
+    })
+    .join(' ');
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ overflow: 'visible' }}>
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
       <motion.polyline
         fill="none"
         stroke={color}
@@ -29,23 +35,36 @@ const Sparkline = ({ data, color, width = 100, height = 40 }) => {
         strokeLinejoin="round"
         points={points}
         initial={{ pathLength: 0, opacity: 0 }}
-        animate={isMounted ? { pathLength: 1, opacity: 1 } : {}}
-        transition={{ duration: 0.8, ease: "easeOut" }}
+        animate={mounted ? { pathLength: 1, opacity: 1 } : {}}
+        transition={{ duration: 0.8 }}
       />
     </svg>
   );
 };
 
-const RetentionArc = ({ value, color, size = 48 }) => {
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => setIsMounted(true), []);
+const PercentArc = ({ value, size = 48 }) => {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const numericValue =
+    typeof value === 'number' && Number.isFinite(value)
+      ? Math.max(0, Math.min(100, value))
+      : 0;
 
   const radius = size / 2 - 4;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (value / 100) * circumference;
+  const offset =
+    circumference - (numericValue / 100) * circumference;
 
   return (
-    <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+    <svg
+      width={size}
+      height={size}
+      style={{ transform: 'rotate(-90deg)' }}
+    >
       <circle
         cx={size / 2}
         cy={size / 2}
@@ -54,32 +73,54 @@ const RetentionArc = ({ value, color, size = 48 }) => {
         strokeWidth="4"
         fill="none"
       />
+
       <motion.circle
         cx={size / 2}
         cy={size / 2}
         r={radius}
-        stroke={color}
+        stroke="var(--blue)"
         strokeWidth="4"
         fill="none"
         strokeDasharray={circumference}
         initial={{ strokeDashoffset: circumference }}
-        animate={isMounted ? { strokeDashoffset: offset } : {}}
-        transition={{ duration: 1, ease: "easeOut" }}
+        animate={
+          mounted
+            ? { strokeDashoffset: offset }
+            : {}
+        }
+        transition={{ duration: 1 }}
         strokeLinecap="round"
       />
     </svg>
   );
 };
 
-const KPICard = ({ title, value, delta, spark, prefix = '', suffix = '', isRetention = false, index }) => {
-  const isPositive = delta > 0;
-  const isNeutral = Math.abs(delta) <= 0.5;
+const KPICard = ({
+  title,
+  value,
+  delta = null,
+  spark = [],
+  prefix = '',
+  suffix = '',
+  percentage = false,
+  comparisonLabel = 'vs previous equal period',
+  index
+}) => {
+  const hasDelta =
+    typeof delta === 'number' &&
+    Number.isFinite(delta);
+
+  const neutral =
+    hasDelta && Math.abs(delta) <= 0.005;
+
+  const positive =
+    hasDelta && delta > 0;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.1 }}
+      transition={{ delay: index * 0.08 }}
       className="dash-card"
       style={{
         padding: '1.5rem',
@@ -87,32 +128,116 @@ const KPICard = ({ title, value, delta, spark, prefix = '', suffix = '', isReten
         flexDirection: 'column',
         justifyContent: 'space-between',
         position: 'relative',
-        minHeight: '140px',
+        minHeight: 140,
         overflow: 'hidden'
       }}
     >
       <div>
-        <p style={{ fontSize: 'var(--text-label)', color: 'var(--gray-400)', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>
+        <p
+          style={{
+            fontSize: 'var(--text-label)',
+            color: 'var(--gray-400)',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            marginBottom: '0.5rem',
+            letterSpacing: '0.05em'
+          }}
+        >
           {title}
         </p>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', fontWeight: 800, color: 'var(--navy)', margin: 0 }}>
-          {prefix}{typeof value === 'number' ? value.toLocaleString() : value}{suffix}
+
+        <h2
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: '1.75rem',
+            fontWeight: 800,
+            color: 'var(--navy)',
+            margin: 0
+          }}
+        >
+          {prefix}
+          {typeof value === 'number'
+            ? value.toLocaleString()
+            : value}
+          {suffix}
         </h2>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.75rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', color: isNeutral ? 'var(--gray-400)' : isPositive ? 'var(--green)' : 'var(--red)', fontSize: '0.85rem', fontWeight: 600 }}>
-          {isNeutral ? <Minus size={14} /> : isPositive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-          <span style={{ marginLeft: '2px' }}>{Math.abs(delta)}%</span>
-        </div>
-        <span style={{ fontSize: '0.75rem', color: 'var(--gray-400)', fontWeight: 400 }}>vs last period</span>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          marginTop: '0.75rem'
+        }}
+      >
+        {hasDelta ? (
+          <>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                color: neutral
+                  ? 'var(--gray-400)'
+                  : positive
+                  ? 'var(--green)'
+                  : 'var(--red)',
+                fontSize: '0.85rem',
+                fontWeight: 600
+              }}
+            >
+              {neutral ? (
+                <Minus size={14} />
+              ) : positive ? (
+                <TrendingUp size={14} />
+              ) : (
+                <TrendingDown size={14} />
+              )}
+
+              <span style={{ marginLeft: 2 }}>
+                {Math.abs(delta)}%
+              </span>
+            </div>
+
+            <span
+              style={{
+                fontSize: '0.75rem',
+                color: 'var(--gray-400)'
+              }}
+            >
+              {comparisonLabel}
+            </span>
+          </>
+        ) : (
+          <span
+            style={{
+              fontSize: '0.75rem',
+              color: 'var(--gray-400)'
+            }}
+          >
+            {comparisonLabel}
+          </span>
+        )}
       </div>
 
-      <div style={{ position: 'absolute', bottom: '1.25rem', right: '1.25rem' }}>
-        {isRetention ? (
-          <RetentionArc value={value} color="var(--blue)" />
+      <div
+        style={{
+          position: 'absolute',
+          bottom: '1.25rem',
+          right: '1.25rem'
+        }}
+      >
+        {percentage ? (
+          <PercentArc value={value} />
         ) : (
-          <Sparkline data={spark} color={isPositive ? 'var(--green)' : 'var(--blue)'} />
+          <Sparkline
+            data={spark}
+            color={
+              hasDelta && positive
+                ? 'var(--green)'
+                : 'var(--blue)'
+            }
+          />
         )}
       </div>
     </motion.div>
@@ -123,37 +248,60 @@ export default function KPIRow({ data }) {
   if (!data) return null;
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.25rem', width: '100%' }}>
-      <KPICard 
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns:
+          'repeat(auto-fit, minmax(240px, 1fr))',
+        gap: '1.25rem',
+        width: '100%'
+      }}
+    >
+      <KPICard
         index={0}
-        title="Total Revenue" 
-        value={data.totalRevenue.value} 
-        delta={data.totalRevenue.delta} 
-        spark={data.totalRevenue.spark} 
-        prefix="PKR " 
+        title="Recorded Sales"
+        value={data.recordedSales.value}
+        delta={data.recordedSales.delta}
+        spark={data.recordedSales.spark}
+        prefix={
+          typeof data.recordedSales.value === 'number'
+            ? 'PKR '
+            : ''
+        }
       />
-      <KPICard 
+
+      <KPICard
         index={1}
-        title="Total Orders" 
-        value={data.totalOrders.value} 
-        delta={data.totalOrders.delta} 
-        spark={data.totalOrders.spark} 
+        title="Invoices / Orders"
+        value={data.orders.value}
+        delta={data.orders.delta}
+        spark={data.orders.spark}
       />
-      <KPICard 
+
+      <KPICard
         index={2}
-        title="Avg. Order Value" 
-        value={data.avgOrderValue.value} 
-        delta={data.avgOrderValue.delta} 
-        spark={data.avgOrderValue.spark} 
-        prefix="PKR " 
+        title="Avg. Invoice Value"
+        value={data.avgInvoiceValue.value}
+        delta={data.avgInvoiceValue.delta}
+        spark={data.avgInvoiceValue.spark}
+        prefix={
+          typeof data.avgInvoiceValue.value === 'number'
+            ? 'PKR '
+            : ''
+        }
       />
-      <KPICard 
+
+      <KPICard
         index={3}
-        title="Customer Retention" 
-        value={data.customerRetention.value} 
-        delta={data.customerRetention.delta} 
-        suffix="%" 
-        isRetention={true} 
+        title="Observed Funnel Conversion"
+        value={data.funnelConversion.value}
+        suffix={
+          typeof data.funnelConversion.value === 'number'
+            ? '%'
+            : ''
+        }
+        percentage={true}
+        comparisonLabel="all-time observed storefront sessions"
       />
     </div>
   );
