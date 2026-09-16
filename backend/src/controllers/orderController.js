@@ -1081,6 +1081,19 @@ exports.createOrder = async (req, res) => {
           cart_id: cartId,
           occurred_at: new Date().toISOString(),
           data_origin: 'partner_real',
+          ...(
+            Number.isSafeInteger(
+              Number(req.customerUser?.id)
+            ) &&
+            Number(req.customerUser.id) > 0
+              ? {
+                  customer_id:
+                    String(
+                      Number(req.customerUser.id)
+                    )
+                }
+              : {}
+          ),
           product_ids: funnelProductIds,
           order_id: String(invoice_id)
         }).catch((funnelError) => {

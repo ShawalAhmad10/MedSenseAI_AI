@@ -29,12 +29,21 @@ class LiveEventName(StrEnum):
     ORDER_CREATED = EventName.ORDER_CREATED.value
 
 
+class LiveObservedEventName(StrEnum):
+    PRODUCT_VIEWED = EventName.PRODUCT_VIEWED.value
+    CART_ITEM_ADDED = EventName.CART_ITEM_ADDED.value
+    CART_ITEM_REMOVED = EventName.CART_ITEM_REMOVED.value
+    CHECKOUT_STARTED = 'checkout_started'
+    ORDER_CREATED = EventName.ORDER_CREATED.value
+
+
 class LiveEvent(CanonicalModel):
     schema_version: Literal['storefront-funnel-v1'] = 'storefront-funnel-v1'
     event_id: OpaqueID
-    event_name: LiveEventName
+    event_name: LiveObservedEventName
     session_id: OpaqueID
     cart_id: OpaqueID
+    customer_id: OpaqueID | None = None
     occurred_at: Instant
     data_origin: Literal[DataOrigin.PARTNER_REAL, DataOrigin.SYNTHETIC_DEVELOPMENT]
     product_ids: tuple[StrictInt, ...] = Field(min_length=1, max_length=100)
@@ -47,12 +56,39 @@ class LiveEvent(CanonicalModel):
             raise ValueError('Product IDs must be positive safe integers')
         if len(set(self.product_ids)) != len(self.product_ids):
             raise ValueError('Product IDs must be unique')
-        if self.event_name in (LiveEventName.PRODUCT_VIEWED, LiveEventName.CART_ITEM_ADDED) and len(self.product_ids) != 1:
-            raise ValueError('Product events require exactly one product')
-        if (self.event_name == LiveEventName.CART_ITEM_ADDED) != (self.quantity is not None):
-            raise ValueError('Only cart additions require quantity')
-        if (self.event_name == LiveEventName.ORDER_CREATED) != (self.order_id is not None):
-            raise ValueError('Only successful order submissions require order_id')
+        product_events = (
+            LiveObservedEventName.PRODUCT_VIEWED,
+            LiveObservedEventName.CART_ITEM_ADDED,
+            LiveObservedEventName.CART_ITEM_REMOVED,
+        )
+        quantity_events = (
+            LiveObservedEventName.CART_ITEM_ADDED,
+            LiveObservedEventName.CART_ITEM_REMOVED,
+        )
+
+        if (
+            self.event_name in product_events
+            and len(self.product_ids) != 1
+        ):
+            raise ValueError(
+                'Product events require exactly one product'
+            )
+
+        if (
+            (self.event_name in quantity_events)
+            != (self.quantity is not None)
+        ):
+            raise ValueError(
+                'Only cart add/remove events require quantity'
+            )
+
+        if (
+            (self.event_name == LiveObservedEventName.ORDER_CREATED)
+            != (self.order_id is not None)
+        ):
+            raise ValueError(
+                'Only successful order submissions require order_id'
+            )
         return self
 
 
@@ -124,11 +160,18 @@ def live_funnel(database: Database, origin: DataOrigin) -> LiveFunnelReport:
     with database.session() as session:
         events = [LiveEvent.model_validate(row.payload) for row in session.scalars(
             select(LiveEventRow).where(LiveEventRow.data_origin == origin.value))]
-    counts = Counter(event.event_name for event in events)
+    counts = Counter(
+        event.event_name.value
+        for event in events
+    )
     sessions = defaultdict(list)
     for event in events:
         sessions[event.session_id].append(event)
     names = list(LiveEventName)
+    stage_index = {
+        name.value: index
+        for index, name in enumerate(names)
+    }
     reached = [0] * len(names)
     for events_in_session in sessions.values():
         # Evaluate each cart separately: never join an order to another cart's checkout.
@@ -138,15 +181,29 @@ def live_funnel(database: Database, origin: DataOrigin) -> LiveFunnelReport:
         highest = 0
         for cart_events in carts.values():
             progress = 0
-            for event in sorted(cart_events, key=lambda item: (item.occurred_at, names.index(item.event_name), item.event_id)):
-                if progress < len(names) and event.event_name == names[progress]:
+            for event in sorted(
+                cart_events,
+                key=lambda item: (
+                    item.occurred_at,
+                    stage_index.get(
+                        item.event_name.value,
+                        len(names)
+                    ),
+                    item.event_id,
+                ),
+            ):
+                if (
+                    progress < len(names)
+                    and event.event_name.value
+                    == names[progress].value
+                ):
                     progress += 1
             highest = max(highest, progress)
         for index in range(highest):
             reached[index] += 1
     pct = lambda n, d: round(100 * n / d, 2) if d else None
     return LiveFunnelReport(data_origin=origin.value, total_events=sum(counts.values()),
-        stages=tuple(StageMetric(event_name=name, event_count=counts[name], sessions=reached[index],
+        stages=tuple(StageMetric(event_name=name, event_count=counts[name.value], sessions=reached[index],
             conversion_from_previous_pct=pct(reached[index], reached[index-1]) if index else None)
             for index, name in enumerate(names)),
         overall_conversion_pct=pct(reached[-1], reached[0]))

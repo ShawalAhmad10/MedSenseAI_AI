@@ -57,3 +57,52 @@ exports.verifyCustomerToken = (req, res, next) => {
     });
   }
 };
+
+// Optional customer identity for public storefront requests.
+// Anonymous requests remain valid. Identity is trusted only
+// after customer JWT verification.
+exports.optionalCustomerToken = (req, res, next) => {
+  req.customerUser = null;
+
+  const authHeader =
+    req.headers.authorization;
+
+  if (
+    !authHeader ||
+    !authHeader.startsWith('Bearer ')
+  ) {
+    return next();
+  }
+
+  try {
+    const token =
+      authHeader.substring(7);
+
+    const decoded =
+      jwt.verify(token, JWT_SECRET);
+
+    if (decoded.type !== 'customer') {
+      return next();
+    }
+
+    const customerId =
+      Number(decoded.id);
+
+    if (
+      !Number.isSafeInteger(customerId) ||
+      customerId <= 0
+    ) {
+      return next();
+    }
+
+    req.customerUser = {
+      id: customerId,
+      email: decoded.email,
+      type: 'customer'
+    };
+  } catch {
+    req.customerUser = null;
+  }
+
+  return next();
+};

@@ -3,6 +3,7 @@ const FUNNEL_API =
 
 const SESSION_ID_KEY = 'medsense_session_id';
 const CART_ID_KEY = 'medsense_funnel_cart_id';
+const CUSTOMER_AUTH_KEY = 'medsense_customer_auth';
 
 function randomId(prefix) {
   if (
@@ -16,6 +17,24 @@ function randomId(prefix) {
     `${prefix}-${Date.now()}-` +
     Math.random().toString(36).slice(2)
   );
+}
+
+function getCustomerToken() {
+  try {
+    const raw =
+      localStorage.getItem(CUSTOMER_AUTH_KEY);
+
+    if (!raw) {
+      return null;
+    }
+
+    const parsed =
+      JSON.parse(raw);
+
+    return parsed?.token || null;
+  } catch {
+    return null;
+  }
 }
 
 export function getFunnelSessionId() {
@@ -165,13 +184,24 @@ export async function trackFunnelEvent(
       payload.quantity = Number(quantity);
     }
 
+    const customerToken =
+      getCustomerToken();
+
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(customerToken
+        ? {
+            Authorization:
+              `Bearer ${customerToken}`
+          }
+        : {})
+    };
+
     const response = await fetch(
       FUNNEL_API,
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers,
         body: JSON.stringify(payload),
         keepalive: true
       }

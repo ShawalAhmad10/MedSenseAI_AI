@@ -2,10 +2,43 @@ import axios from 'axios';
 
 const API_URL = 'http://localhost:5005/api/orders';
 
+const CUSTOMER_AUTH_KEY = 'medsense_customer_auth';
+
+function getCustomerToken() {
+  try {
+    const raw =
+      localStorage.getItem(CUSTOMER_AUTH_KEY);
+
+    if (!raw) {
+      return null;
+    }
+
+    const parsed =
+      JSON.parse(raw);
+
+    return parsed?.token || null;
+  } catch {
+    return null;
+  }
+}
+
 // Create order from cart
 export async function createOrder(orderData) {
   try {
-    const response = await axios.post(API_URL, orderData);
+    const customerToken = getCustomerToken();
+
+    const response = await axios.post(
+      API_URL,
+      orderData,
+      {
+        headers: customerToken
+          ? {
+              Authorization:
+                `Bearer ${customerToken}`
+            }
+          : {}
+      }
+    );
     return response.data;
   } catch (error) {
     console.error('Error creating order:', error);
@@ -57,13 +90,13 @@ export async function getOrderById(orderId, customerId, customerEmail, customerP
   try {
     const response = await axios.get(`${API_URL}/${orderId}`);
     const order = response.data?.data;
-    
+
     if (!order) {
       throw new Error('Order not found');
     }
 
     // Verify this order belongs to the logged-in customer
-    const isOwner = 
+    const isOwner =
       (customerId && order.customer_id === customerId) ||
       (customerEmail && order.customer_email === customerEmail) ||
       (customerPhone && order.customer_phone === customerPhone);

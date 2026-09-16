@@ -169,8 +169,31 @@ export function CartProvider({ children }) {
 
   const removeItem = async (id) => {
     try {
-      // Remove from cart state
-      setItems((current) => current.filter((item) => item.id !== id));
+      const currentItem =
+        items.find((item) => item.id === id);
+
+      if (!currentItem) {
+        return;
+      }
+
+      const removedQuantity =
+        Math.max(
+          1,
+          Number(currentItem.quantity) || 1
+        );
+
+      setItems(
+        (current) =>
+          current.filter(
+            (item) => item.id !== id
+          )
+      );
+
+      void trackFunnelEvent(
+        'cart_item_removed',
+        [id],
+        removedQuantity
+      );
     } catch (error) {
       console.error('Error removing item from cart:', error);
     }
@@ -201,6 +224,18 @@ export function CartProvider({ children }) {
             item.id === id ? { ...item, quantity: newQuantity, stockQty: currentStock } : item,
           ),
         );
+
+        const addedQuantity =
+          newQuantity - currentItem.quantity;
+
+        if (addedQuantity > 0) {
+          void trackFunnelEvent(
+            'cart_item_added',
+            [id],
+            addedQuantity
+          );
+        }
+
         return;
       }
 
@@ -208,6 +243,17 @@ export function CartProvider({ children }) {
       setItems((current) =>
         current.map((item) => (item.id === id ? { ...item, quantity: newQuantity } : item)),
       );
+
+      const removedQuantity =
+        currentItem.quantity - newQuantity;
+
+      if (removedQuantity > 0) {
+        void trackFunnelEvent(
+          'cart_item_removed',
+          [id],
+          removedQuantity
+        );
+      }
     } catch (error) {
       console.error('Error updating quantity:', error);
     }

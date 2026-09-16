@@ -5,6 +5,7 @@ const funnelService = require('../services/funnelService');
 const PUBLIC_EVENTS = new Set([
   'product_viewed',
   'cart_item_added',
+  'cart_item_removed',
   'checkout_started'
 ]);
 
@@ -112,7 +113,8 @@ exports.captureEvent = async (req, res) => {
     if (
       (
         eventName === 'product_viewed' ||
-        eventName === 'cart_item_added'
+        eventName === 'cart_item_added' ||
+        eventName === 'cart_item_removed'
       ) &&
       productIds.length !== 1
     ) {
@@ -126,7 +128,10 @@ exports.captureEvent = async (req, res) => {
 
     let quantity = null;
 
-    if (eventName === 'cart_item_added') {
+    if (
+      eventName === 'cart_item_added' ||
+      eventName === 'cart_item_removed'
+    ) {
       quantity = Number(req.body?.quantity);
 
       if (
@@ -137,7 +142,7 @@ exports.captureEvent = async (req, res) => {
           success: false,
           code: 'INVALID_FUNNEL_QUANTITY',
           message:
-            'Cart addition requires positive integer quantity'
+            'Cart changes require positive integer quantity'
         });
       }
     }
@@ -167,6 +172,17 @@ exports.captureEvent = async (req, res) => {
 
     if (quantity !== null) {
       payload.quantity = quantity;
+    }
+
+    const authenticatedCustomerId =
+      Number(req.customerUser?.id);
+
+    if (
+      Number.isSafeInteger(authenticatedCustomerId) &&
+      authenticatedCustomerId > 0
+    ) {
+      payload.customer_id =
+        String(authenticatedCustomerId);
     }
 
     const upstream =
