@@ -23,6 +23,41 @@ function cleanOpaqueId(value) {
   return cleaned;
 }
 
+function cleanOccurredAt(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  const now = Date.now();
+  const timestamp = parsed.getTime();
+
+  // Storefront telemetry should describe a recent browser action.
+  if (
+    timestamp > now + (5 * 60 * 1000) ||
+    timestamp < now - (24 * 60 * 60 * 1000)
+  ) {
+    return null;
+  }
+
+  return parsed.toISOString();
+}
+
+function namespacePublicEventId(value) {
+  return (
+    'amna-client-' +
+    crypto
+      .createHash('sha256')
+      .update(value)
+      .digest('hex')
+  );
+}
+
 function cleanProductIds(value) {
   if (!Array.isArray(value)) {
     return [];
@@ -84,6 +119,40 @@ exports.captureEvent = async (req, res) => {
         success: false,
         code: 'INVALID_FUNNEL_EVENT',
         message: 'Unsupported storefront funnel event'
+      });
+    }
+
+    const hasClientEventId =
+      req.body?.event_id !== undefined;
+
+    const hasClientOccurredAt =
+      req.body?.occurred_at !== undefined;
+
+    const clientEventId =
+      hasClientEventId
+        ? cleanOpaqueId(req.body?.event_id)
+        : null;
+
+    const clientOccurredAt =
+      hasClientOccurredAt
+        ? cleanOccurredAt(req.body?.occurred_at)
+        : null;
+
+    if (
+      hasClientEventId !== hasClientOccurredAt ||
+      (
+        hasClientEventId &&
+        (
+          !clientEventId ||
+          !clientOccurredAt
+        )
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        code: 'INVALID_FUNNEL_EVENT_IDENTITY',
+        message:
+          'event_id and occurred_at must be supplied together and be valid'
       });
     }
 
@@ -161,11 +230,14 @@ exports.captureEvent = async (req, res) => {
 
     const payload = {
       schema_version: 'storefront-funnel-v1',
-      event_id: `amna-${crypto.randomUUID()}`,
+      event_id:
+        clientEventId
+          ? namespacePublicEventId(clientEventId)
+          : `amna-${crypto.randomUUID()}`,
       event_name: eventName,
       session_id: sessionId,
       cart_id: cartId,
-      occurred_at: new Date().toISOString(),
+      occurred_at: clientOccurredAt || new Date().toISOString(),
       data_origin: 'partner_real',
       product_ids: productIds
     };

@@ -1,5 +1,5 @@
 const FUNNEL_API =
-  'http://localhost:5005/api/funnel/events';
+  '/api/funnel/events';
 
 const SESSION_ID_KEY = 'medsense_session_id';
 const CART_ID_KEY = 'medsense_funnel_cart_id';
@@ -19,9 +19,17 @@ function randomId(prefix) {
   );
 }
 
+function newEventEnvelope() {
+  return {
+    event_id: randomId('event'),
+    occurred_at: new Date().toISOString()
+  };
+}
+
 function getCustomerToken() {
   try {
     const raw =
+      sessionStorage.getItem(CUSTOMER_AUTH_KEY) ||
       localStorage.getItem(CUSTOMER_AUTH_KEY);
 
     if (!raw) {
@@ -106,28 +114,97 @@ export async function trackFunnelEventOnce(
     const onceKey =
       `medsense_funnel_once:${eventName}:${cartId}:${ids.join(',')}`;
 
-    if (
-      sessionStorage.getItem(onceKey) === 'done' ||
-      sessionStorage.getItem(onceKey) === 'pending'
-    ) {
+    const pendingAtKey =
+      `${onceKey}:pending_at`;
+
+    const eventKey =
+      `${onceKey}:event`;
+
+    const state =
+      sessionStorage.getItem(onceKey);
+
+    if (state === 'done') {
       return null;
     }
 
-    sessionStorage.setItem(onceKey, 'pending');
+    if (state === 'pending') {
+      const pendingAt =
+        Number(
+          sessionStorage.getItem(
+            pendingAtKey
+          )
+        );
+
+      if (
+        Number.isFinite(pendingAt) &&
+        Date.now() - pendingAt < 30000
+      ) {
+        return null;
+      }
+
+      // Recover from abandoned/stale pending telemetry.
+      sessionStorage.removeItem(onceKey);
+      sessionStorage.removeItem(pendingAtKey);
+    }
+
+    let envelope = null;
+
+    try {
+      const rawEnvelope =
+        sessionStorage.getItem(eventKey);
+
+      if (rawEnvelope) {
+        const parsed =
+          JSON.parse(rawEnvelope);
+
+        if (
+          typeof parsed?.event_id === 'string' &&
+          typeof parsed?.occurred_at === 'string'
+        ) {
+          envelope = parsed;
+        }
+      }
+    } catch {
+      envelope = null;
+    }
+
+    if (!envelope) {
+      envelope = newEventEnvelope();
+
+      sessionStorage.setItem(
+        eventKey,
+        JSON.stringify(envelope)
+      );
+    }
+
+    sessionStorage.setItem(
+      onceKey,
+      'pending'
+    );
+
+    sessionStorage.setItem(
+      pendingAtKey,
+      String(Date.now())
+    );
 
     const result =
       await trackFunnelEvent(
         eventName,
         ids,
-        quantity
+        quantity,
+        envelope
       );
 
     if (result?.success === true) {
       sessionStorage.setItem(onceKey, 'done');
+      sessionStorage.removeItem(pendingAtKey);
+      sessionStorage.removeItem(eventKey);
       return result;
     }
 
+    // Keep eventKey so a retry reuses the same event identity.
     sessionStorage.removeItem(onceKey);
+    sessionStorage.removeItem(pendingAtKey);
     return result;
 
   } catch (error) {
@@ -143,7 +220,8 @@ export async function trackFunnelEventOnce(
 export async function trackFunnelEvent(
   eventName,
   productIds,
-  quantity = null
+  quantity = null,
+  eventEnvelope = null
 ) {
   try {
     const ids = [
@@ -169,7 +247,18 @@ export async function trackFunnelEvent(
       return null;
     }
 
+    const envelope =
+      (
+        eventEnvelope &&
+        typeof eventEnvelope.event_id === 'string' &&
+        typeof eventEnvelope.occurred_at === 'string'
+      )
+        ? eventEnvelope
+        : newEventEnvelope();
+
     const payload = {
+      event_id: envelope.event_id,
+      occurred_at: envelope.occurred_at,
       event_name: eventName,
       session_id: getFunnelSessionId(),
       cart_id: getFunnelCartId(),
@@ -177,7 +266,10 @@ export async function trackFunnelEvent(
     };
 
     if (
-      eventName === 'cart_item_added' &&
+      (
+        eventName === 'cart_item_added' ||
+        eventName === 'cart_item_removed'
+      ) &&
       Number.isSafeInteger(Number(quantity)) &&
       Number(quantity) > 0
     ) {
