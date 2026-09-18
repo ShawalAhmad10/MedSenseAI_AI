@@ -1,15 +1,59 @@
 const { sequelize } = require('../config/database');
 
+function invalidAnalyticsParameter(name, min, max) {
+  const error = new Error(
+    `${name} must be an integer between ${min} and ${max}`
+  );
+  error.code = 'INVALID_ANALYTICS_PARAMETER';
+  return error;
+}
+
+function readBoundedInteger(req, name, fallback, max) {
+  const raw = req.query?.[name];
+
+  if (
+    raw === undefined ||
+    raw === null ||
+    raw === ''
+  ) {
+    return fallback;
+  }
+
+  const text = String(raw);
+
+  if (!/^\d+$/.test(text)) {
+    throw invalidAnalyticsParameter(name, 1, max);
+  }
+
+  const parsed = Number(text);
+
+  if (
+    !Number.isSafeInteger(parsed) ||
+    parsed < 1 ||
+    parsed > max
+  ) {
+    throw invalidAnalyticsParameter(name, 1, max);
+  }
+
+  return parsed;
+}
+
 function readDays(req, fallback = 30) {
-  const raw = Number(req.query.days);
-  if (!Number.isInteger(raw) || raw <= 0) return fallback;
-  return Math.min(raw, 365);
+  return readBoundedInteger(
+    req,
+    'days',
+    fallback,
+    365
+  );
 }
 
 function readLimit(req, fallback = 10) {
-  const raw = Number(req.query.limit);
-  if (!Number.isInteger(raw) || raw <= 0) return fallback;
-  return Math.min(raw, 100);
+  return readBoundedInteger(
+    req,
+    'limit',
+    fallback,
+    100
+  );
 }
 
 function number(value) {
@@ -17,12 +61,22 @@ function number(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function activeInvoiceCondition(alias = '') {
+  const prefix = alias ? `${alias}.` : '';
+
+  return (
+    `${prefix}status = 1 ` +
+    `AND COALESCE(LOWER(${prefix}delivery_status), '') ` +
+    `NOT IN ('cancelled', 'refunded')`
+  );
+}
+
 function pctChange(current, previous) {
   const c = number(current);
   const p = number(previous);
 
   if (p === 0) {
-    return c === 0 ? 0 : 100;
+    return c === 0 ? 0 : null;
   }
 
   return Number((((c - p) / p) * 100).toFixed(2));
@@ -129,7 +183,7 @@ exports.getSummary = async (req, res) => {
         ) AS previous_sales
 
       FROM invoice
-      WHERE status = 1
+      WHERE ${activeInvoiceCondition()}
         AND invoice_date::date >=
           CURRENT_DATE - ((CAST(:days AS INTEGER) * 2) - 1)
       `,
@@ -211,10 +265,18 @@ exports.getSummary = async (req, res) => {
         },
 
         measurement:
-          'Recorded Sales is the sum of active invoice totals. It is not cash collected. Paid and due amounts are reported separately.'
+          'Recorded Sales is the sum of active, non-cancelled, non-refunded invoice totals. It is not cash collected. Paid and due amounts are reported separately.'
       }
     });
   } catch (error) {
+    if (error?.code === 'INVALID_ANALYTICS_PARAMETER') {
+      return res.status(400).json({
+        success: false,
+        code: error.code,
+        message: error.message
+      });
+    }
+
     console.error(
       'Analytics summary error:',
       error
@@ -264,7 +326,7 @@ exports.getTrend = async (req, res) => {
 
       LEFT JOIN invoice i
         ON i.invoice_date::date = d.day
-       AND i.status = 1
+       AND ${activeInvoiceCondition('i')}
 
       GROUP BY d.day
       ORDER BY d.day ASC
@@ -327,10 +389,18 @@ exports.getTrend = async (req, res) => {
         weekly,
         monthly,
         measurement:
-          'Current selected period compared with the immediately preceding equal-length period. Values are active invoice totals.'
+          'Current selected period compared with the immediately preceding equal-length period. Values are active, non-cancelled, non-refunded invoice totals.'
       }
     });
   } catch (error) {
+    if (error?.code === 'INVALID_ANALYTICS_PARAMETER') {
+      return res.status(400).json({
+        success: false,
+        code: error.code,
+        message: error.message
+      });
+    }
+
     console.error(
       'Analytics trend error:',
       error
@@ -370,7 +440,7 @@ exports.getTopMedicines = async (req, res) => {
           ON i.invoice_id = ir.invoice_id
 
         WHERE ir.status = 1
-          AND i.status = 1
+          AND ${activeInvoiceCondition('i')}
           AND i.invoice_date::date >=
             CURRENT_DATE -
               (CAST(:days AS INTEGER) - 1)
@@ -433,6 +503,14 @@ exports.getTopMedicines = async (req, res) => {
 
           units,
 
+          recordedSales:
+            Number(
+              number(
+                row.recorded_sales
+              ).toFixed(2)
+            ),
+
+          // Temporary compatibility alias for older consumers.
           revenue:
             Number(
               number(
@@ -456,9 +534,17 @@ exports.getTopMedicines = async (req, res) => {
       success: true,
       data,
       measurement:
-        'Medicine demand is ranked by units sold from active invoice line items. Recorded sales values are invoice line totals.'
+        'Medicine demand is ranked by units sold from active invoice line items attached to active, non-cancelled, non-refunded invoices. Product Recorded Sales values are invoice line totals and exclude invoice-level charges.'
     });
   } catch (error) {
+    if (error?.code === 'INVALID_ANALYTICS_PARAMETER') {
+      return res.status(400).json({
+        success: false,
+        code: error.code,
+        message: error.message
+      });
+    }
+
     console.error(
       'Analytics top medicines error:',
       error

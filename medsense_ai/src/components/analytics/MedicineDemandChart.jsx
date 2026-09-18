@@ -54,7 +54,7 @@ const CustomTooltip = ({ active, payload }) => {
         <span>
           Recorded sales:{' '}
           <strong>
-            PKR {Number(data.revenue || 0).toLocaleString()}
+            PKR {Number(data.recordedSales ?? data.revenue ?? 0).toLocaleString()}
           </strong>
         </span>
 
