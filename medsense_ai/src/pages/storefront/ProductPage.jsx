@@ -1,18 +1,20 @@
 // SRS EUC-03 / EUC-05: Product detail page with usage info and suggested alternatives.
 import React, { useEffect, useState } from 'react';
 import { ChevronRight, ShieldCheck } from 'lucide-react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import InteractionBadge from '../../components/storefront/InteractionBadge';
 import ProductCard from '../../components/storefront/ProductCard';
 import QuickViewModal from '../../components/storefront/QuickViewModal';
 import { getProductBySlug } from '../../services/storefrontProductService';
 import { trackFunnelEventOnce } from '../../services/storefrontFunnelService';
 import { useCart } from '../../context/CartContext';
+import { startBuyNowCheckout } from '../../services/storefrontCheckoutSession';
 
 const tabs = ['Description', 'Usage', 'Side Effects', 'Interaction Info'];
 
 export default function ProductPage() {
   const { slug } = useParams();
+  const navigate = useNavigate();
   const { addItem } = useCart();
   const [product, setProduct] = useState(null);
   const [alternatives, setAlternatives] = useState([]);
@@ -157,17 +159,21 @@ export default function ProductPage() {
               >
                 {(!product.stockQty || product.stockQty <= 0) ? 'Out of Stock' : 'Add to Cart'}
               </button>
-              <Link 
-                className="sf-button-secondary" 
-                style={{ 
-                  textDecoration: 'none',
+              <button
+                className="sf-button-secondary"
+                disabled={!product.stockQty || product.stockQty <= 0}
+                onClick={() => {
+                  startBuyNowCheckout(product);
+                  navigate('/checkout?mode=buy-now');
+                }}
+                style={{
                   opacity: (!product.stockQty || product.stockQty <= 0) ? 0.5 : 1,
-                  pointerEvents: (!product.stockQty || product.stockQty <= 0) ? 'none' : 'auto'
-                }} 
-                to="/checkout"
+                  cursor: (!product.stockQty || product.stockQty <= 0) ? 'not-allowed' : 'pointer'
+                }}
+                type="button"
               >
                 Buy Now
-              </Link>
+              </button>
             </div>
           </div>
         </div>

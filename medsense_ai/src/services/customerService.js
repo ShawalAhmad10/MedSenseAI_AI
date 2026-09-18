@@ -1,16 +1,16 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5005/api';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 // Helper to get auth token
 function getAuthToken() {
   try {
-    const sessionValue = sessionStorage.getItem('medsense_auth_user');
+    const sessionValue = sessionStorage.getItem('medsense_customer_auth');
     if (sessionValue) {
       const parsed = JSON.parse(sessionValue);
       if (parsed?.token) return parsed.token;
     }
-    const localValue = localStorage.getItem('medsense_auth_user');
+    const localValue = localStorage.getItem('medsense_customer_auth');
     if (localValue) {
       const parsed = JSON.parse(localValue);
       if (parsed?.token) return parsed.token;

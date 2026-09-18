@@ -1,0 +1,135 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+);
+
+function read(relativePath) {
+  return fs.readFileSync(path.join(root, relativePath), 'utf8');
+}
+
+const cartContext = read('src/context/CartContext.jsx');
+const checkout = read('src/pages/storefront/CheckoutPage.jsx');
+const productPage = read('src/pages/storefront/ProductPage.jsx');
+const cartPage = read('src/pages/storefront/CartPage.jsx');
+const cartDrawer = read('src/components/storefront/CartDrawer.jsx');
+const badge = read('src/components/storefront/InteractionBadge.jsx');
+const ddiService = read('src/services/storefrontDdiService.js');
+const orderService = read('src/services/storefrontOrderService.js');
+const customerService = read('src/services/customerService.js');
+const productService = read('src/services/storefrontProductService.js');
+const main = read('src/main.jsx');
+
+test('cart DDI identity includes account ownership and current item set', () => {
+  assert.match(cartContext, /function buildCartIdentity\(items, userId\)/);
+  assert.match(cartContext, /owner:\s*userId \? String\(userId\) : 'guest'/);
+  assert.match(cartContext, /buildCartIdentity\(items, userId\)/);
+  assert.match(cartContext, /\[items, userId\]/);
+});
+
+test('cart clearance is bound to current identity', () => {
+  assert.match(cartContext, /ddiIdentity === cartIdentity/);
+  assert.match(cartContext, /setDdiIdentity\(null\)/);
+  assert.match(cartContext, /const requestIdentity = cartIdentity/);
+  assert.match(cartContext, /setDdiIdentity\(requestIdentity\)/);
+});
+
+test('BUY_NOW and CART use explicit isolated item sets', () => {
+  assert.match(checkout, /checkoutMode === 'BUY_NOW' \? buyNowItems : cartItems/);
+  assert.match(checkout, /checkoutMode === 'BUY_NOW'/);
+  assert.match(checkout, /getBuyNowCheckoutItems\(\)/);
+});
+
+test('BUY_NOW DDI clearance is account-scoped', () => {
+  assert.match(checkout, /buyNowDdiOwnerScope === buyNowOwnerScope/);
+  assert.match(checkout, /\[checkoutMode, buyNowItems, buyNowOwnerScope\]/);
+  assert.match(checkout, /const requestOwnerScope = buyNowOwnerScope/);
+});
+
+test('successful checkout cleanup differs by explicit mode', () => {
+  assert.match(checkout, /if \(checkoutMode === 'CART'\)/);
+  assert.match(checkout, /clearCart\(\)/);
+  assert.match(checkout, /if \(checkoutMode === 'BUY_NOW'\)/);
+  assert.match(checkout, /clearBuyNowCheckout\(\)/);
+});
+
+test('ProductPage Buy Now explicitly starts isolated session', () => {
+  const start = productPage.indexOf('startBuyNowCheckout(product)');
+  const navigate = productPage.indexOf("navigate('/checkout?mode=buy-now')");
+
+  assert.ok(start >= 0);
+  assert.ok(navigate >= 0);
+  assert.ok(start < navigate);
+});
+
+test('blocking DDI uses disabled checkout and exposes escalation', () => {
+  assert.match(cartPage, /Escalate to Pharmacist/);
+  assert.match(cartPage, /Checkout blocked - review required/);
+  assert.match(cartPage, /\sdisabled\s/);
+  assert.match(cartDrawer, /Checkout blocked - review required/);
+  assert.match(cartDrawer, /\sdisabled\s/);
+});
+
+test('DDI callers use factual workflow state names instead of severity names', () => {
+  const semanticExpression =
+    "level={ddiLoading ? 'checking' : ddiCheckoutAllowed ? 'clear' : 'review'}";
+
+  assert.ok(cartPage.includes(semanticExpression));
+  assert.ok(cartDrawer.includes(semanticExpression));
+  assert.ok(!cartPage.includes(
+    "level={ddiLoading ? 'moderate' : ddiCheckoutAllowed ? 'low' : 'moderate'}"
+  ));
+  assert.ok(!cartDrawer.includes(
+    "level={ddiLoading ? 'moderate' : ddiCheckoutAllowed ? 'low' : 'moderate'}"
+  ));
+
+  assert.match(badge, /level === 'checking' \|\| level === 'review'/);
+});
+
+test('storefront browser APIs use same-origin /api paths', () => {
+  assert.match(ddiService, /const DDI_URL = '\/api\/orders\/ddi-check'/);
+  assert.match(orderService, /const API_URL = '\/api\/orders'/);
+  assert.match(productService, /const API_URL = '\/api\/products'/);
+  assert.match(customerService, /VITE_API_URL \|\| '\/api'/);
+});
+
+test('customer auth storage key is aligned', () => {
+  assert.match(customerService, /medsense_customer_auth/);
+  assert.match(orderService, /medsense_customer_auth/);
+});
+
+test('127 development host canonicalizes to localhost', () => {
+  assert.match(main, /window\.location\.hostname === '127\.0\.0\.1'/);
+  assert.match(main, /canonicalUrl\.hostname = 'localhost'/);
+  assert.match(main, /window\.location\.replace\(canonicalUrl\.toString\(\)\)/);
+});
+
+test('forbidden storefront DDI claims remain absent', () => {
+  const combined = [
+    cartPage,
+    cartDrawer,
+    checkout,
+    ddiService,
+  ].join('\n');
+
+  assert.doesNotMatch(combined, /High priority/i);
+  assert.doesNotMatch(combined, /Moderate priority/i);
+  assert.doesNotMatch(combined, /Checked - no interactions found/i);
+});
+
+test('Checkout submit remains gated by current DDI authorization', () => {
+  assert.match(
+    checkout,
+    /disabled=\{isSubmitting \|\| ddiLoading \|\| !ddiCheckoutAllowed\}/,
+  );
+
+  assert.match(
+    checkout,
+    /if \(ddiLoading \|\| !ddiCheckoutAllowed\)/,
+  );
+});

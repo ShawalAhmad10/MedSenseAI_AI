@@ -15,7 +15,8 @@
     "db:migrate:undo": "sequelize-cli db:migrate:undo --migrations-path src/migrations",
     "db:seed:all": "node src/seeders/run-all-seeders.js",
     "db:seed:undo": "node src/seeders/run-all-seeders.js --undo",
-    "admin:create": "node src/utils/create-admin.js"
+    "admin:create": "node src/utils/create-admin.js",
+    "test:d1": "node --test"
   },
   "dependencies": {
     "axios": "^1.19.0",

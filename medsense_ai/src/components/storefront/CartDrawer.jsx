@@ -91,12 +91,12 @@ export default function CartDrawer({ isOpen, onClose }) {
               {items.length > 0 && (
                 <div style={{ marginBottom: '0.8rem' }}>
                   <InteractionBadge
-                    level={ddiLoading ? 'moderate' : ddiCheckoutAllowed ? 'low' : 'moderate'}
+                    level={ddiLoading ? 'checking' : ddiCheckoutAllowed ? 'clear' : 'review'}
                     text={
                       ddiLoading
                         ? 'Checking drug interactions...'
                         : ddiCheckoutAllowed
-                          ? 'DDI review completed - no governed warning found'
+                          ? 'Governed DDI check completed; checkout cleared for the current cart'
                           : `Interaction review required${ddiWarnings.length ? ` (${ddiWarnings.length})` : ''}`
                     }
                   />
@@ -107,20 +107,26 @@ export default function CartDrawer({ isOpen, onClose }) {
                 <span>PKR {subtotal}</span>
               </div>
               <div style={{ display: 'grid', gap: '0.65rem' }}>
-                <Link
-                  className={ddiCheckoutAllowed ? 'sf-button' : 'sf-button-secondary'}
-                  onClick={(event) => {
-                    if (!ddiCheckoutAllowed) {
-                      event.preventDefault();
-                      return;
-                    }
-                    onClose();
-                  }}
-                  style={{ textAlign: 'center', textDecoration: 'none' }}
-                  to="/checkout"
-                >
-                  Proceed to Checkout
-                </Link>
+                {ddiCheckoutAllowed ? (
+                  <Link
+                    className="sf-button"
+                    onClick={onClose}
+                    style={{ textAlign: 'center', textDecoration: 'none' }}
+                    to="/checkout"
+                  >
+                    Proceed to Checkout
+                  </Link>
+                ) : (
+                  <button
+                    aria-disabled="true"
+                    className="sf-button-secondary"
+                    disabled
+                    style={{ opacity: 0.45, cursor: 'not-allowed' }}
+                    type="button"
+                  >
+                    {ddiLoading ? 'Checking DDI...' : 'Checkout blocked - review required'}
+                  </button>
+                )}
                 <Link className="sf-button-secondary" onClick={onClose} style={{ textAlign: 'center', textDecoration: 'none' }} to="/cart">
                   View Full Cart
                 </Link>

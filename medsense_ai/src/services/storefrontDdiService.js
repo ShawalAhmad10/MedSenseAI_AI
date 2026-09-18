@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const DDI_URL = 'http://localhost:5005/api/orders/ddi-check';
+const DDI_URL = '/api/orders/ddi-check';
 
 function authoritativeProductId(value) {
   const raw = typeof value === 'string'
@@ -53,7 +53,7 @@ export function extractDdiWarnings(result, fallbackMessage = '') {
 
     warnings.push({
       id: `pair-${(pair.product_ids_a || []).join('-')}-${(pair.product_ids_b || []).join('-')}`,
-      severity: pair.warning_triggered ? 'high' : 'moderate',
+      label: pair.warning_triggered ? 'Known interaction detected' : 'Pharmacist review required',
       title: `${pair.ingredient_a} + ${pair.ingredient_b}`,
       detail:
         evidence ||
@@ -74,7 +74,7 @@ export function extractDdiWarnings(result, fallbackMessage = '') {
 
     warnings.push({
       id: `product-${product.product_id}`,
-      severity: 'moderate',
+      label: 'Ingredient identity unresolved',
       title: product.product_title || `Product ${product.product_id}`,
       detail:
         ingredientState && ingredientState !== 'RESOLVED'
@@ -90,7 +90,7 @@ export function extractDdiWarnings(result, fallbackMessage = '') {
   ) {
     warnings.push({
       id: 'ddi-review-required',
-      severity: 'moderate',
+      label: 'Pharmacist review required',
       title: 'Drug interaction review required',
       detail:
         result.message ||
@@ -101,7 +101,7 @@ export function extractDdiWarnings(result, fallbackMessage = '') {
   if (warnings.length === 0 && fallbackMessage) {
     warnings.push({
       id: 'ddi-service-error',
-      severity: 'moderate',
+      label: 'DDI service unavailable',
       title: 'Interaction check unavailable',
       detail: fallbackMessage,
     });

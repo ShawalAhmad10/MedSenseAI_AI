@@ -1,6 +1,6 @@
 // Checkout with real-time data and customer information
 import React, { useMemo, useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import CheckoutStepper from '../../components/storefront/CheckoutStepper';
 import InteractionWarningModal from '../../components/storefront/InteractionWarningModal';
 import { useAuth } from '../../context/AuthContext';
@@ -8,23 +8,132 @@ import { useCart } from '../../context/CartContext';
 import { createOrder } from '../../services/storefrontOrderService';
 import { getCustomerDetails } from '../../services/customerService';
 import { getFunnelContext, resetFunnelCartId, trackFunnelEventOnce } from '../../services/storefrontFunnelService';
+import { checkCartDDI, extractDdiWarnings } from '../../services/storefrontDdiService';
+import { clearBuyNowCheckout, getBuyNowCheckoutItems } from '../../services/storefrontCheckoutSession';
 
 const steps = ['address', 'prescription', 'payment', 'review'];
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const checkoutMode =
+    new URLSearchParams(location.search).get('mode') === 'buy-now'
+      ? 'BUY_NOW'
+      : 'CART';
   const { isAuthenticated, openAuthModal, user } = useAuth();
   const {
     clearCart,
-    items,
-    prescriptionItems,
-    subtotal,
-    ddiResult,
-    ddiLoading,
-    ddiError,
-    ddiWarnings,
-    ddiCheckoutAllowed,
+    items: cartItems,
+    prescriptionItems: cartPrescriptionItems,
+    subtotal: cartSubtotal,
+    ddiResult: cartDdiResult,
+    ddiLoading: cartDdiLoading,
+    ddiError: cartDdiError,
+    ddiWarnings: cartDdiWarnings,
+    ddiCheckoutAllowed: cartDdiCheckoutAllowed,
   } = useCart();
+
+  const [buyNowItems] = useState(() =>
+    checkoutMode === 'BUY_NOW' ? getBuyNowCheckoutItems() : [],
+  );
+  const [buyNowDdiResult, setBuyNowDdiResult] = useState(null);
+  const [buyNowDdiLoading, setBuyNowDdiLoading] = useState(
+    checkoutMode === 'BUY_NOW',
+  );
+  const [buyNowDdiError, setBuyNowDdiError] = useState(null);
+  const [buyNowDdiOwnerScope, setBuyNowDdiOwnerScope] = useState(null);
+
+  const buyNowOwnerScope =
+    isAuthenticated && user?.id ? String(user.id) : 'guest';
+
+  const items = checkoutMode === 'BUY_NOW' ? buyNowItems : cartItems;
+
+  const prescriptionItems = useMemo(
+    () => checkoutMode === 'BUY_NOW'
+      ? items.filter((item) => item.requiresPrescription)
+      : cartPrescriptionItems,
+    [checkoutMode, items, cartPrescriptionItems],
+  );
+
+  const subtotal = useMemo(
+    () => checkoutMode === 'BUY_NOW'
+      ? items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+      : cartSubtotal,
+    [checkoutMode, items, cartSubtotal],
+  );
+
+  useEffect(() => {
+    if (checkoutMode !== 'BUY_NOW') {
+      return undefined;
+    }
+
+    if (buyNowItems.length === 0) {
+      setBuyNowDdiResult(null);
+      setBuyNowDdiError(null);
+      setBuyNowDdiOwnerScope(null);
+      setBuyNowDdiLoading(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const requestOwnerScope = buyNowOwnerScope;
+    setBuyNowDdiResult(null);
+    setBuyNowDdiError(null);
+    setBuyNowDdiOwnerScope(null);
+    setBuyNowDdiLoading(true);
+
+    void checkCartDDI(buyNowItems)
+      .then((result) => {
+        if (!cancelled) {
+          setBuyNowDdiResult(result);
+          setBuyNowDdiError(null);
+          setBuyNowDdiOwnerScope(requestOwnerScope);
+        }
+      })
+      .catch((requestError) => {
+        if (!cancelled) {
+          const upstreamResult = requestError.response?.data?.data ?? null;
+          const message =
+            requestError.response?.data?.message ||
+            requestError.message ||
+            'Drug interaction review could not be completed.';
+
+          setBuyNowDdiResult(upstreamResult);
+          setBuyNowDdiError(message);
+          setBuyNowDdiOwnerScope(requestOwnerScope);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setBuyNowDdiLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [checkoutMode, buyNowItems, buyNowOwnerScope]);
+
+  const buyNowDdiWarnings = useMemo(
+    () => extractDdiWarnings(buyNowDdiResult, buyNowDdiError || ''),
+    [buyNowDdiResult, buyNowDdiError],
+  );
+
+  const buyNowDdiCheckoutAllowed =
+    buyNowItems.length > 0 &&
+    buyNowDdiOwnerScope === buyNowOwnerScope &&
+    !buyNowDdiLoading &&
+    !buyNowDdiError &&
+    buyNowDdiResult?.checkout_allowed === true;
+
+  const ddiResult = checkoutMode === 'BUY_NOW' ? buyNowDdiResult : cartDdiResult;
+  const ddiLoading = checkoutMode === 'BUY_NOW' ? buyNowDdiLoading : cartDdiLoading;
+  const ddiError = checkoutMode === 'BUY_NOW' ? buyNowDdiError : cartDdiError;
+  const ddiWarnings = checkoutMode === 'BUY_NOW' ? buyNowDdiWarnings : cartDdiWarnings;
+  const ddiCheckoutAllowed =
+    checkoutMode === 'BUY_NOW'
+      ? buyNowDdiCheckoutAllowed
+      : cartDdiCheckoutAllowed;
   const [stepIndex, setStepIndex] = useState(0);
   const [showWarnings, setShowWarnings] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -183,7 +292,7 @@ export default function CheckoutPage() {
         <section className="sf-card sf-section-card">
           <div className="sf-page-header">
             <div>
-              <h1>Checkout</h1>
+              <h1>{checkoutMode === 'BUY_NOW' ? 'Buy Now Checkout' : 'Checkout'}</h1>
               <p className="sf-section-subcopy" style={{ marginBottom: 0 }}>
                 Complete your order in a few simple steps
               </p>
@@ -302,17 +411,13 @@ export default function CheckoutPage() {
                   ? `${prescriptionItems.length} prescription-required item(s) will be held until verification is complete.`
                   : 'No prescription-required medicines in this order.'}
               </p>
-              {prescriptionItems.length === 0 && (
-                <div style={{ marginBottom: '0.9rem' }}>
-                  <span className="sf-badge-success">Checked - no interactions found</span>
-                </div>
-              )}
+
               <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap' }}>
                 <Link className="sf-button-secondary" style={{ textDecoration: 'none' }} to="/prescription/upload">
                   Upload or review prescription
                 </Link>
                 <button className="sf-button-ghost" onClick={() => setShowWarnings(true)} type="button">
-                  Run interaction review
+                  View interaction review
                 </button>
               </div>
             </div>
@@ -485,8 +590,14 @@ export default function CheckoutPage() {
                     const response = await createOrder(orderData);
                     
                     if (response.success) {
-                      clearCart();
-                      resetFunnelCartId();
+                      if (checkoutMode === 'CART') {
+                        clearCart();
+                        resetFunnelCartId();
+                      }
+
+                      if (checkoutMode === 'BUY_NOW') {
+                        clearBuyNowCheckout();
+                      }
 
                       navigate('/order-confirmation', { 
                         state: { 
@@ -532,7 +643,7 @@ export default function CheckoutPage() {
                 {ddiLoading
                   ? 'Checking medicines against the governed DDI service...'
                   : ddiCheckoutAllowed
-                    ? 'DDI review completed - no governed warning found.'
+                    ? 'Governed DDI check completed; checkout cleared for this medicine set.'
                     : ddiError ||
                       ddiResult?.message ||
                       'Interaction review is required before checkout.'}

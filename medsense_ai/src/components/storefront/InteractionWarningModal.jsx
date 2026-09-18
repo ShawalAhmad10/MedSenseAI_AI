@@ -44,9 +44,9 @@ export default function InteractionWarningModal({ isOpen, onClose, warnings }) {
                 )}
                 {warnings.map((warning) => (
                   <div className="sf-summary-block" key={warning.title}>
-                    <div className={warning.severity === 'high' ? 'sf-badge-danger' : 'sf-badge-warning'}>
+                    <div className="sf-badge-warning">
                       <ShieldAlert size={14} />
-                      {warning.severity === 'high' ? 'High priority' : 'Moderate priority'}
+                      {warning.label || 'Review required'}
                     </div>
                     <strong style={{ display: 'block', marginTop: '0.7rem' }}>{warning.title}</strong>
                     <p className="sf-muted" style={{ marginBottom: 0 }}>

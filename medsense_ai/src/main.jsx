@@ -40,6 +40,14 @@ import BrandManagement from './pages/dashboard/BrandManagement'
 import ProductManagement from './pages/dashboard/ProductManagement'
 import SupplierManagement from './pages/dashboard/SupplierManagement'
 
+// Keep development on one browser origin so auth/cart storage cannot split
+// between localhost and 127.0.0.1. Production hosts are unaffected.
+if (import.meta.env.DEV && window.location.hostname === '127.0.0.1' && window.location.port === '5173') {
+  const canonicalUrl = new URL(window.location.href);
+  canonicalUrl.hostname = 'localhost';
+  window.location.replace(canonicalUrl.toString());
+}
+
 function LegacyDashboardRedirect() {
   const location = useLocation();
   return <Navigate to={location.pathname.replace('/dashboard', '/pharmacist/dashboard')} replace />;

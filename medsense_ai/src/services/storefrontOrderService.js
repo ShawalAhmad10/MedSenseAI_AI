@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5005/api/orders';
+const API_URL = '/api/orders';
 
 const CUSTOMER_AUTH_KEY = 'medsense_customer_auth';
 

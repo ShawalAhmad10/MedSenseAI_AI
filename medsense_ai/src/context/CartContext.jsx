@@ -7,7 +7,7 @@ import { useAuth } from './AuthContext';
 const CartContext = createContext(null);
 
 const CART_KEY_PREFIX = 'medsense_storefront_cart_v3_';
-const API_URL = 'http://localhost:5005/api/products';
+const API_URL = '/api/products';
 
 function getStoredCart(userId) {
   try {
@@ -37,6 +37,18 @@ function clearOldGuestCarts() {
   } catch {}
 }
 
+function buildCartIdentity(items, userId) {
+  return JSON.stringify({
+    owner: userId ? String(userId) : 'guest',
+    items: items
+      .map((item) => ({
+        id: String(item.id ?? '').replace(/^prod-/, ''),
+        quantity: Math.max(1, Number(item.quantity) || 1),
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id)),
+  });
+}
+
 export function CartProvider({ children }) {
   const { user, isAuthenticated } = useAuth();
   const userId = user?.id;
@@ -49,6 +61,9 @@ export function CartProvider({ children }) {
   const [ddiResult, setDdiResult] = useState(null);
   const [ddiLoading, setDdiLoading] = useState(false);
   const [ddiError, setDdiError] = useState(null);
+  const [ddiIdentity, setDdiIdentity] = useState(null);
+
+  const cartIdentity = useMemo(() => buildCartIdentity(items, userId), [items, userId]);
 
   // Load cart when user changes (login/logout)
   useEffect(() => {
@@ -69,9 +84,20 @@ export function CartProvider({ children }) {
     if (items.length === 0) {
       setDdiResult(null);
       setDdiError(null);
+      setDdiIdentity(null);
       setDdiLoading(false);
       return undefined;
     }
+
+    const requestIdentity = cartIdentity;
+
+    // Invalidate the previous clearance immediately when cart identity changes.
+    // ddiCheckoutAllowed also requires the committed result identity to match
+    // the currently rendered cart, so an old result cannot authorize new items.
+    setDdiResult(null);
+    setDdiError(null);
+    setDdiIdentity(null);
+    setDdiLoading(true);
 
     const timer = window.setTimeout(async () => {
       setDdiLoading(true);
@@ -83,6 +109,7 @@ export function CartProvider({ children }) {
         if (!cancelled) {
           setDdiResult(result);
           setDdiError(null);
+          setDdiIdentity(requestIdentity);
         }
       } catch (error) {
         if (!cancelled) {
@@ -94,6 +121,7 @@ export function CartProvider({ children }) {
 
           setDdiResult(upstreamResult);
           setDdiError(message);
+          setDdiIdentity(requestIdentity);
         }
       } finally {
         if (!cancelled) {
@@ -106,7 +134,7 @@ export function CartProvider({ children }) {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [items]);
+  }, [items, cartIdentity]);
 
   // ── Live stock fetch ──────────────────────────────────────────
   const fetchLiveStock = async (productId) => {
@@ -310,6 +338,7 @@ export function CartProvider({ children }) {
 
   const ddiCheckoutAllowed =
     items.length > 0 &&
+    ddiIdentity === cartIdentity &&
     !ddiLoading &&
     !ddiError &&
     ddiResult?.checkout_allowed === true;

@@ -9,7 +9,14 @@ const config = {
 };
 
 export default function InteractionBadge({ level = 'low', text }) {
-  const entry = config[level] || config.low;
+  // DDI callers use factual workflow states rather than clinical severity labels.
+  const visualLevel =
+    level === 'clear'
+      ? 'low'
+      : level === 'checking' || level === 'review'
+        ? 'moderate'
+        : level;
+  const entry = config[visualLevel] || config.low;
   const Icon = entry.icon;
 
   return (

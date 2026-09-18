@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5005/api/products';
+const API_URL = '/api/products';
 
 // Delay helper for smooth transitions
 const delay = (payload, timeout = 150) =>

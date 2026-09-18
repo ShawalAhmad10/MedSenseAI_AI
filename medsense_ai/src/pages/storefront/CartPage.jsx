@@ -36,14 +36,14 @@ export default function CartPage() {
               </p>
             </div>
             <InteractionBadge
-              level={ddiLoading ? 'moderate' : ddiCheckoutAllowed ? 'low' : 'moderate'}
+              level={ddiLoading ? 'checking' : ddiCheckoutAllowed ? 'clear' : 'review'}
               text={
                 items.length === 0
                   ? 'Add medicines to begin DDI review'
                   : ddiLoading
                     ? 'Checking drug interactions...'
                     : ddiCheckoutAllowed
-                      ? 'DDI review completed - no governed warning found'
+                      ? 'Governed DDI check completed; checkout cleared for the current cart'
                       : 'Interaction review required'
               }
             />
@@ -124,12 +124,12 @@ export default function CartPage() {
           {items.length > 0 && (
             <div className="sf-summary-block" style={{ marginTop: '1rem' }}>
               <InteractionBadge
-                level={ddiLoading ? 'moderate' : ddiCheckoutAllowed ? 'low' : 'moderate'}
+                level={ddiLoading ? 'checking' : ddiCheckoutAllowed ? 'clear' : 'review'}
                 text={
                   ddiLoading
                     ? 'Checking drug interactions...'
                     : ddiCheckoutAllowed
-                      ? 'DDI review completed - no governed warning found'
+                      ? 'Governed DDI check completed; checkout cleared for the current cart'
                       : ddiError || `${ddiWarnings.length || 1} interaction review item(s) require attention`
                 }
               />
@@ -153,22 +153,34 @@ export default function CartPage() {
             <button className="sf-button-secondary" onClick={() => setShowWarnings(true)} type="button">
               Review Interaction Check
             </button>
-            <button className="sf-button-secondary" onClick={() => setShowEscalation(true)} type="button">
-              Escalate to Pharmacist
-            </button>
-            <Link
-              className={ddiCheckoutAllowed ? 'sf-button' : 'sf-button-secondary'}
-              onClick={(event) => {
-                if (!ddiCheckoutAllowed) {
-                  event.preventDefault();
-                  setShowWarnings(true);
-                }
-              }}
-              style={{ textAlign: 'center', textDecoration: 'none' }}
-              to="/checkout"
-            >
-              Continue to Checkout <ArrowRight size={15} style={{ marginLeft: 4, verticalAlign: 'text-bottom' }} />
-            </Link>
+            {!ddiLoading && !ddiCheckoutAllowed && (
+              <button
+                className="sf-button-secondary"
+                onClick={() => setShowEscalation(true)}
+                type="button"
+              >
+                Escalate to Pharmacist
+              </button>
+            )}
+            {ddiCheckoutAllowed ? (
+              <Link
+                className="sf-button"
+                style={{ textAlign: 'center', textDecoration: 'none' }}
+                to="/checkout"
+              >
+                Continue to Checkout <ArrowRight size={15} style={{ marginLeft: 4, verticalAlign: 'text-bottom' }} />
+              </Link>
+            ) : (
+              <button
+                aria-disabled="true"
+                className="sf-button-secondary"
+                disabled
+                style={{ opacity: 0.45, cursor: 'not-allowed' }}
+                type="button"
+              >
+                {ddiLoading ? 'Checking DDI...' : 'Checkout blocked - review required'}
+              </button>
+            )}
           </div>
         </aside>
       </div>
