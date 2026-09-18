@@ -100,6 +100,8 @@ async function loadCustomerSnapshot(customerId) {
      FROM invoice
      WHERE customer_id = :customer_id
        AND status = 1
+       AND COALESCE(LOWER(delivery_status), '')
+         NOT IN ('cancelled', 'refunded')
      ORDER BY created_at ASC, invoice_id ASC`,
     {
       replacements: {
@@ -201,13 +203,24 @@ async function listActiveCustomerIds(limit = 100) {
   const parsed =
     Number(limit);
 
+  if (
+    !Number.isSafeInteger(parsed) ||
+    parsed < 1 ||
+    parsed > 100
+  ) {
+    const error =
+      new Error(
+        'Lead list limit must be an integer from 1 to 100'
+      );
+
+    error.code =
+      'LEAD_INVALID_LIMIT';
+
+    throw error;
+  }
+
   const safeLimit =
-    Number.isSafeInteger(parsed)
-      ? Math.min(
-          Math.max(parsed, 1),
-          100
-        )
-      : 100;
+    parsed;
 
   const rows = await sequelize.query(
     `SELECT customer_id

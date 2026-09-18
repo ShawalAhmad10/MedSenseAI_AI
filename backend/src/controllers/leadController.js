@@ -51,6 +51,17 @@ function localFailure(res, error) {
 
   if (
     error.code ===
+      'LEAD_INVALID_LIMIT'
+  ) {
+    return res.status(400).json({
+      success: false,
+      code: error.code,
+      message: error.message
+    });
+  }
+
+  if (
+    error.code ===
       'LEAD_INVALID_CUSTOMER_ID' ||
     error.code ===
       'LEAD_INVALID_TIMESTAMP' ||
