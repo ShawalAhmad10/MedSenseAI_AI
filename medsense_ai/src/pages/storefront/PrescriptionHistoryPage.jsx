@@ -20,6 +20,10 @@ import {
 } from '../../services/storefrontPrescriptionService';
 
 import {
+  getPrescriptionRecommendations,
+} from '../../services/storefrontRecommendationService';
+
+import {
   useAuth,
 } from '../../context/AuthContext';
 
@@ -73,6 +77,21 @@ export default function PrescriptionHistoryPage() {
     setDetailLoadingId,
   ] = useState(null);
 
+  const [
+    recommendationById,
+    setRecommendationById,
+  ] = useState({});
+
+  const [
+    recommendationLoadingId,
+    setRecommendationLoadingId,
+  ] = useState(null);
+
+  const [
+    recommendationErrorById,
+    setRecommendationErrorById,
+  ] = useState({});
+
   useEffect(
     () => {
       let active =
@@ -82,6 +101,9 @@ export default function PrescriptionHistoryPage() {
         !isAuthenticated
       ) {
         setPrescriptions([]);
+        setRecommendationById({});
+        setRecommendationErrorById({});
+        setRecommendationLoadingId(null);
         setLoading(false);
 
         return () => {
@@ -172,6 +194,58 @@ export default function PrescriptionHistoryPage() {
               detail,
           })
         );
+
+        if (
+          detail
+            ?.customer_verification_status ===
+            'confirmed' &&
+          detail
+            ?.confirmation_required ===
+            false
+        ) {
+          setRecommendationLoadingId(
+            prescriptionId
+          );
+
+          setRecommendationErrorById(
+            (current) => ({
+              ...current,
+              [prescriptionId]: '',
+            })
+          );
+
+          void getPrescriptionRecommendations(
+            prescriptionId
+          )
+            .then((result) => {
+              setRecommendationById(
+                (current) => ({
+                  ...current,
+                  [prescriptionId]:
+                    result,
+                })
+              );
+            })
+            .catch((requestError) => {
+              setRecommendationErrorById(
+                (current) => ({
+                  ...current,
+                  [prescriptionId]:
+                    requestError.message ||
+                    'Could not load prescription recommendations.',
+                })
+              );
+            })
+            .finally(() => {
+              setRecommendationLoadingId(
+                (current) =>
+                  current ===
+                  prescriptionId
+                    ? null
+                    : current
+              );
+            });
+        }
       } catch (requestError) {
         setError(
           requestError.message ||
@@ -332,6 +406,20 @@ export default function PrescriptionHistoryPage() {
                       ?.ai_result
                       ?.prescription_analysis
                       ?.candidates;
+
+                  const recommendation =
+                    recommendationById[
+                      item.prescription_id
+                    ];
+
+                  const recommendationError =
+                    recommendationErrorById[
+                      item.prescription_id
+                    ] || '';
+
+                  const recommendationLoading =
+                    recommendationLoadingId ===
+                    item.prescription_id;
 
                   return (
                     <article
@@ -554,6 +642,179 @@ export default function PrescriptionHistoryPage() {
                                 </div>
                               </div>
                             )}
+
+                          {verified && (
+                            <div>
+                              <strong>
+                                Medicine recommendations
+                              </strong>
+
+                              <p
+                                className="sf-muted"
+                                style={{
+                                  fontSize:
+                                    '0.84rem',
+                                  marginBottom:
+                                    '0.55rem',
+                                }}
+                              >
+                                Only same-ingredient catalogue matches are shown. These suggestions do not establish dose or clinical equivalence.
+                              </p>
+
+                              {recommendationLoading && (
+                                <div className="sf-loading">
+                                  Loading catalogue recommendations...
+                                </div>
+                              )}
+
+                              {!recommendationLoading &&
+                                recommendationError && (
+                                  <div className="sf-badge-warning">
+                                    {recommendationError}
+                                  </div>
+                                )}
+
+                              {!recommendationLoading &&
+                                !recommendationError &&
+                                recommendation?.status ===
+                                  'NO_ALTERNATIVES' && (
+                                  <div className="sf-empty">
+                                    No eligible same-ingredient active, in-stock alternative is currently available.
+                                  </div>
+                                )}
+
+                              {!recommendationLoading &&
+                                !recommendationError &&
+                                Array.isArray(
+                                  recommendation?.groups
+                                ) &&
+                                recommendation.groups.map(
+                                  (group, groupIndex) => (
+                                    <div
+                                      className="sf-summary-block"
+                                      key={
+                                        group.candidate_id ||
+                                        `${group.name || 'medicine'}-${groupIndex}`
+                                      }
+                                      style={{
+                                        marginTop:
+                                          '0.7rem',
+                                      }}
+                                    >
+                                      <strong>
+                                        {group.name ||
+                                          'Confirmed medicine'}
+                                        {group.strength
+                                          ? ` ${group.strength}`
+                                          : ''}
+                                      </strong>
+
+                                      {Array.isArray(
+                                        group.recommendations
+                                      ) &&
+                                      group.recommendations.length > 0 ? (
+                                        <div
+                                          style={{
+                                            display:
+                                              'grid',
+                                            gap:
+                                              '0.55rem',
+                                            marginTop:
+                                              '0.6rem',
+                                          }}
+                                        >
+                                          {group.recommendations.map(
+                                            (product) => (
+                                              <div
+                                                className="sf-card"
+                                                key={product.id}
+                                                style={{
+                                                  padding:
+                                                    '0.75rem',
+                                                }}
+                                              >
+                                                <strong>
+                                                  {product.name}
+                                                </strong>
+
+                                                <div className="sf-muted">
+                                                  {product.salt ||
+                                                    product.genericName ||
+                                                    'Ingredient not specified'}
+                                                  {' - '}
+                                                  {product.stockLabel}
+                                                </div>
+
+                                                <div
+                                                  style={{
+                                                    marginTop:
+                                                      '0.45rem',
+                                                  }}
+                                                >
+                                                  PKR {product.price}
+                                                </div>
+
+                                                <Link
+                                                  className="sf-link"
+                                                  to={`/product/${product.slug}`}
+                                                >
+                                                  View product
+                                                </Link>
+                                              </div>
+                                            )
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <div
+                                          className="sf-muted"
+                                          style={{
+                                            marginTop:
+                                              '0.45rem',
+                                          }}
+                                        >
+                                          No same-ingredient catalogue option is available for this confirmed medicine.
+                                        </div>
+                                      )}
+                                    </div>
+                                  )
+                                )}
+
+                              {recommendation?.limitations?.map(
+                                (note, index) => (
+                                  <p
+                                    className="sf-muted"
+                                    key={`rx-recommendation-limit-${index}`}
+                                    style={{
+                                      fontSize:
+                                        '0.8rem',
+                                      marginBottom:
+                                        0,
+                                      marginTop:
+                                        '0.5rem',
+                                    }}
+                                  >
+                                    {note}
+                                  </p>
+                                )
+                              )}
+
+                              {recommendation && (
+                                <p
+                                  className="sf-muted"
+                                  style={{
+                                    fontSize:
+                                      '0.8rem',
+                                    marginBottom:
+                                      0,
+                                    marginTop:
+                                      '0.5rem',
+                                  }}
+                                >
+                                  Opening or adding a suggested product does not bypass the cart interaction check.
+                                </p>
+                              )}
+                            </div>
+                          )}
 
                           {!verified &&
                             Array.isArray(

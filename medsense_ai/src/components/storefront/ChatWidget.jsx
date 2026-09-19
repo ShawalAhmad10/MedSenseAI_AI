@@ -7,7 +7,7 @@ import { chatQuickReplies } from '../../services/storefrontData';
 const botReplies = {
   'Do I need a prescription?': 'Prescription medicines will show an Rx tag and we will prompt you to upload a valid prescription before dispatch.',
   'When will my order arrive?': 'Fast-moving items can usually be dispatched the same day. Track live status from the Orders page.',
-  'Suggest an alternative': 'On each product page and checkout review we show suggested alternatives and pharmacist-reviewed substitutes.',
+  'Suggest an alternative': 'Product pages can show active, in-stock catalogue options matched to the same recorded ingredient when available. These suggestions do not establish clinical equivalence, and cart interaction checks still apply.',
 };
 
 export default function ChatWidget() {

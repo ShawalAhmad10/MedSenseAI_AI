@@ -6,6 +6,7 @@ import InteractionBadge from '../../components/storefront/InteractionBadge';
 import ProductCard from '../../components/storefront/ProductCard';
 import QuickViewModal from '../../components/storefront/QuickViewModal';
 import { getProductBySlug } from '../../services/storefrontProductService';
+import { getProductRecommendations } from '../../services/storefrontRecommendationService';
 import { trackFunnelEventOnce } from '../../services/storefrontFunnelService';
 import { useCart } from '../../context/CartContext';
 import { startBuyNowCheckout } from '../../services/storefrontCheckoutSession';
@@ -17,7 +18,9 @@ export default function ProductPage() {
   const navigate = useNavigate();
   const { addItem } = useCart();
   const [product, setProduct] = useState(null);
-  const [alternatives, setAlternatives] = useState([]);
+  const [recommendation, setRecommendation] = useState(null);
+  const [recommendationLoading, setRecommendationLoading] = useState(false);
+  const [recommendationError, setRecommendationError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('Description');
@@ -27,6 +30,9 @@ export default function ProductPage() {
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setRecommendation(null);
+    setRecommendationError('');
+    setRecommendationLoading(false);
 
     getProductBySlug(slug)
       .then((item) => {
@@ -44,10 +50,39 @@ export default function ProductPage() {
           [item.id]
         );
         
-        // Load alternatives from the item itself
-        if (item.alternativeProducts && item.alternativeProducts.length > 0) {
-          setAlternatives(item.alternativeProducts);
-        }
+        setRecommendationLoading(true);
+
+        void getProductRecommendations(
+          item.id
+        )
+          .then((result) => {
+            if (!active) return;
+
+            setRecommendation(
+              result
+            );
+
+            setRecommendationError('');
+          })
+          .catch((requestError) => {
+            if (!active) return;
+
+            setRecommendation(
+              null
+            );
+
+            setRecommendationError(
+              requestError.message ||
+              'Unable to load medicine recommendations.'
+            );
+          })
+          .finally(() => {
+            if (active) {
+              setRecommendationLoading(
+                false
+              );
+            }
+          });
       })
       .catch(() => {
         if (active) setError('Unable to load this storefront product.');
@@ -204,20 +239,109 @@ export default function ProductPage() {
           <div>
             <h2 className="sf-section-heading">Suggested Alternatives</h2>
             <p className="sf-section-subcopy" style={{ marginBottom: 0 }}>
-              Mock alternative recommendation logic for safer substitutions and upsell opportunities.
+              Catalogue suggestions are limited to the same recorded active ingredient when an active, in-stock option exists.
             </p>
           </div>
         </div>
-        {alternatives.length === 0 ? (
-          <div className="sf-empty">No alternatives are configured for this product yet.</div>
-        ) : (
-          <div className="sf-carousel">
-            {alternatives.map((item) => (
-              <ProductCard key={item.id} onQuickView={setQuickViewProduct} product={item} />
-            ))}
+
+        {recommendationLoading && (
+          <div className="sf-loading">
+            Loading same-ingredient catalogue options...
           </div>
         )}
-        <Link className="sf-link" style={{ display: 'inline-flex', alignItems: 'center', marginTop: '1rem' }} to="/search">
+
+        {!recommendationLoading &&
+          recommendationError && (
+            <div
+              className="sf-badge-warning"
+              style={{
+                display: 'inline-block',
+              }}
+            >
+              {recommendationError}
+            </div>
+          )}
+
+        {!recommendationLoading &&
+          !recommendationError &&
+          recommendation?.status ===
+            'SOURCE_IDENTITY_UNAVAILABLE' && (
+            <div className="sf-empty">
+              This product does not have enough recorded ingredient information to derive catalogue alternatives.
+            </div>
+          )}
+
+        {!recommendationLoading &&
+          !recommendationError &&
+          recommendation &&
+          recommendation.status !==
+            'SOURCE_IDENTITY_UNAVAILABLE' &&
+          recommendation.recommendations.length ===
+            0 && (
+            <div className="sf-empty">
+              No same-ingredient active, in-stock alternative is currently available.
+            </div>
+          )}
+
+        {!recommendationLoading &&
+          !recommendationError &&
+          recommendation?.recommendations?.length >
+            0 && (
+            <div className="sf-carousel">
+              {recommendation.recommendations.map(
+                (item) => (
+                  <ProductCard
+                    key={item.id}
+                    onQuickView={
+                      setQuickViewProduct
+                    }
+                    product={item}
+                  />
+                )
+              )}
+            </div>
+          )}
+
+        {recommendation?.limitations?.map(
+          (note, index) => (
+            <p
+              className="sf-muted"
+              key={`recommendation-limit-${index}`}
+              style={{
+                fontSize: '0.82rem',
+                marginBottom:
+                  index ===
+                  recommendation.limitations.length - 1
+                    ? 0
+                    : '0.35rem',
+                marginTop: '0.8rem',
+              }}
+            >
+              {note}
+            </p>
+          )
+        )}
+
+        <p
+          className="sf-muted"
+          style={{
+            fontSize: '0.82rem',
+            marginBottom: 0,
+            marginTop: '0.55rem',
+          }}
+        >
+          Choosing an option does not bypass interaction checking. Cart and checkout safety checks remain authoritative.
+        </p>
+
+        <Link
+          className="sf-link"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            marginTop: '1rem',
+          }}
+          to="/search"
+        >
           Browse more products <ChevronRight size={14} />
         </Link>
       </section>

@@ -51,7 +51,6 @@ function transformProduct(product) {
     strengths: [product.salt || product.genericName],
     tags: product.discount > 15 ? ['Hot Deal'] : stockQty < minThreshold && stockQty > 0 ? ['Low Stock'] : [],
     warningLevel: product.requiresRx ? 'high' : 'low',
-    alternatives: [], // Will be populated with related products
     // Additional fields
     brandName: product.brandName,
     supplierName: product.supplierName,
@@ -146,40 +145,7 @@ export async function getProductBySlug(slug) {
   
   const transformed = transformProduct(product);
   
-  // Find alternatives (same category, different product)
-  const alternatives = products
-    .filter(p => 
-      p.status === 'active' && 
-      p.category === product.category && 
-      p.id !== product.id
-    )
-    .slice(0, 4)
-    .map(transformProduct);
-  
-  transformed.alternatives = alternatives.map(a => a.id);
-  
-  return delay({...transformed, alternativeProducts: alternatives});
-}
-
-// Get alternatives for a product
-export async function getAlternatives(productId) {
-  const products = await fetchAllProducts();
-  
-  // Find the original product
-  const originalProduct = products.find(p => p.id === productId);
-  if (!originalProduct) return delay([]);
-  
-  // Find products in same category
-  const alternatives = products
-    .filter(p => 
-      p.status === 'active' && 
-      p.category === originalProduct.category && 
-      p.id !== productId
-    )
-    .slice(0, 4)
-    .map(transformProduct);
-  
-  return delay(alternatives);
+  return delay(transformed);
 }
 
 // Get product by ID
