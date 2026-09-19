@@ -398,3 +398,83 @@ test('DDI and createOrder remain before staff read wall', () => {
   assert.ok(ddi >= 0 && ddi < wall);
   assert.ok(create >= 0 && create < wall);
 });
+
+// ORDER_SORT_SAFETY_V1
+test('order list uses an explicit sort column allowlist before SQL interpolation', () => {
+  const start = source.indexOf(
+    'exports.getAllOrders = async (req, res) => {'
+  );
+
+  const end = source.indexOf(
+    'exports.getOrderById = async (req, res) => {'
+  );
+
+  const scope = source.slice(start, end);
+
+  assert.match(
+    scope,
+    /const validSortColumns = \[/
+  );
+
+  for (const column of [
+    'created_at',
+    'invoice_date',
+    'invoice_id',
+    'total_amount',
+    'customer_name'
+  ]) {
+    assert.match(scope, new RegExp(`'${column}'`));
+  }
+
+  assert.match(
+    scope,
+    /validSortColumns\.includes\(sortBy\)/
+  );
+
+  assert.match(
+    scope,
+    /: 'created_at'/
+  );
+});
+
+test('order sort direction is normalized to ASC or DESC only', () => {
+  const start = source.indexOf(
+    'exports.getAllOrders = async (req, res) => {'
+  );
+
+  const end = source.indexOf(
+    'exports.getOrderById = async (req, res) => {'
+  );
+
+  const scope = source.slice(start, end);
+
+  assert.match(
+    scope,
+    /String\(sortDir\)\.toUpperCase\(\) === 'ASC'/
+  );
+
+  assert.match(scope, /\? 'ASC'/);
+  assert.match(scope, /: 'DESC'/);
+});
+
+test('raw request sort values are never interpolated into order SQL', () => {
+  const start = source.indexOf(
+    'exports.getAllOrders = async (req, res) => {'
+  );
+
+  const end = source.indexOf(
+    'exports.getOrderById = async (req, res) => {'
+  );
+
+  const scope = source.slice(start, end);
+
+  assert.doesNotMatch(
+    scope,
+    /ORDER BY i\.\$\{sortBy\} \$\{sortDir\}/
+  );
+
+  assert.match(
+    scope,
+    /ORDER BY i\.\$\{sortColumn\} \$\{sortDirection\}/
+  );
+});

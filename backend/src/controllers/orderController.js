@@ -21,6 +21,26 @@ exports.getAllOrders = async (req, res) => {
       storefront_only // 'true' = only show storefront orders (exclude POS)
     } = req.query;
 
+    // ORDER_SORT_SAFETY_V1
+    // Keep dynamic ORDER BY values inside the existing partner-safe contract.
+    const validSortColumns = [
+      'created_at',
+      'invoice_date',
+      'invoice_id',
+      'total_amount',
+      'customer_name'
+    ];
+
+    const sortColumn =
+      validSortColumns.includes(sortBy)
+        ? sortBy
+        : 'created_at';
+
+    const sortDirection =
+      String(sortDir).toUpperCase() === 'ASC'
+        ? 'ASC'
+        : 'DESC';
+
     // ORDER_READ_PRIVACY_V1
     // Verified customer identity overrides caller-supplied ownership filters.
     const authenticatedCustomerId =
@@ -118,7 +138,7 @@ exports.getAllOrders = async (req, res) => {
       LEFT JOIN invoice_report ii ON i.invoice_id = ii.invoice_id
       ${whereClause}
       GROUP BY i.invoice_id
-      ORDER BY i.${sortBy} ${sortDir}
+      ORDER BY i.${sortColumn} ${sortDirection}
       LIMIT :limit OFFSET :offset
     `;
 
