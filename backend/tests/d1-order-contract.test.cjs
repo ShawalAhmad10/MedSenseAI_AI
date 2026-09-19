@@ -291,3 +291,110 @@ test('createOrder keeps stock allocation inside transaction rollback boundary', 
     'Allocation failure must remain covered by a transaction rollback path',
   );
 });
+
+// ORDER_READ_PRIVACY_V1
+test('customer reads require verified JWT before staff wall', () => {
+  const routeSource = fs.readFileSync(
+    path.join(__dirname, '../src/routes/orderRoutes.js'),
+    'utf8'
+  );
+
+  const list = routeSource.indexOf("'/my-orders'");
+  const detail = routeSource.indexOf("'/my-orders/:id'");
+  const wall = routeSource.indexOf('router.use(authenticate);');
+
+  assert.ok(list >= 0 && list < wall);
+  assert.ok(detail >= 0 && detail < wall);
+  assert.match(routeSource, /verifyCustomerToken/);
+  assert.match(routeSource, /bindAuthenticatedCustomerOrderRead/);
+});
+
+test('staff reads preserve existing URLs behind auth and role wall', () => {
+  const routeSource = fs.readFileSync(
+    path.join(__dirname, '../src/routes/orderRoutes.js'),
+    'utf8'
+  );
+
+  const authWall = routeSource.indexOf('router.use(authenticate);');
+  const roleWall = routeSource.indexOf('router.use(requireOrderStaffRole);');
+
+  const list = routeSource.indexOf(
+    "router.get('/', orderController.getAllOrders);",
+    roleWall
+  );
+
+  const stats = routeSource.indexOf(
+    "router.get('/stats', orderController.getOrderStats);",
+    roleWall
+  );
+
+  const detail = routeSource.indexOf(
+    "router.get('/:id', orderController.getOrderById);",
+    roleWall
+  );
+
+  assert.ok(authWall >= 0);
+  assert.ok(roleWall > authWall);
+  assert.ok(list > roleWall);
+  assert.ok(stats > roleWall);
+  assert.ok(detail > roleWall);
+  assert.match(routeSource, /\['pharmacist', 'admin'\]/);
+});
+
+test('customer list is bound to server verified customer identity', () => {
+  assert.match(source, /req\.customerOrderCustomerId/);
+  assert.match(source, /const effectiveCustomerId =/);
+  assert.match(
+    source,
+    /replacements\.customer_id = parseInt\(effectiveCustomerId\)/
+  );
+});
+
+test('customer detail ownership is enforced in invoice SQL', () => {
+  assert.match(source, /enforceCustomerOwnership/);
+  assert.match(source, /AND i\.customer_id = :customer_id/);
+  assert.match(source, /customer_id: authenticatedCustomerId/);
+
+  const itemStart = source.indexOf('const itemsQuery = `');
+  const itemEnd = source.indexOf('res.json({', itemStart);
+  const itemScope = source.slice(itemStart, itemEnd);
+
+  assert.match(itemScope, /replacements: \{ id \}/);
+});
+
+test('storefront customer reads send JWT to owned order routes', () => {
+  const storefrontSource = fs.readFileSync(
+    path.join(
+      __dirname,
+      '../../medsense_ai/src/services/storefrontOrderService.js'
+    ),
+    'utf8'
+  );
+
+  assert.match(
+    storefrontSource,
+    /API_URL}\/my-orders\?limit=100/
+  );
+
+  assert.match(
+    storefrontSource,
+    /API_URL}\/my-orders\/\$\{orderId\}/
+  );
+
+  const headers = storefrontSource.match(/Authorization:/g) || [];
+  assert.ok(headers.length >= 3);
+});
+
+test('DDI and createOrder remain before staff read wall', () => {
+  const routeSource = fs.readFileSync(
+    path.join(__dirname, '../src/routes/orderRoutes.js'),
+    'utf8'
+  );
+
+  const ddi = routeSource.indexOf("router.post('/ddi-check'");
+  const create = routeSource.indexOf("router.post('/', optionalCustomerToken");
+  const wall = routeSource.indexOf('router.use(authenticate);');
+
+  assert.ok(ddi >= 0 && ddi < wall);
+  assert.ok(create >= 0 && create < wall);
+});

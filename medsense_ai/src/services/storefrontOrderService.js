@@ -56,10 +56,21 @@ export async function getCustomerOrders(customerId, customerEmail, customerPhone
     }
 
     // Server-side filter: only this customer's orders (storefront_only excludes POS invoices)
-    let url = `${API_URL}?limit=100&sortBy=created_at&sortDir=desc&storefront_only=true`;
-    if (customerId) url += `&customer_id=${customerId}`;
+    const url = `${API_URL}/my-orders?limit=100&sortBy=created_at&sortDir=desc`;
 
-    const response = await axios.get(url);
+    const customerToken = getCustomerToken();
+
+    const response = await axios.get(
+      url,
+      {
+        headers: customerToken
+          ? {
+              Authorization:
+                `Bearer ${customerToken}`
+            }
+          : {}
+      }
+    );
     let orders = response.data?.data?.orders || [];
 
     // Extra client-side safety: if server returned more (edge case), filter again
@@ -88,7 +99,19 @@ export async function getCustomerOrders(customerId, customerEmail, customerPhone
 // Get order by ID - with customer verification
 export async function getOrderById(orderId, customerId, customerEmail, customerPhone) {
   try {
-    const response = await axios.get(`${API_URL}/${orderId}`);
+    const customerToken = getCustomerToken();
+
+    const response = await axios.get(
+      `${API_URL}/my-orders/${orderId}`,
+      {
+        headers: customerToken
+          ? {
+              Authorization:
+                `Bearer ${customerToken}`
+            }
+          : {}
+      }
+    );
     const order = response.data?.data;
 
     if (!order) {

@@ -21,22 +21,41 @@ exports.getAllOrders = async (req, res) => {
       storefront_only // 'true' = only show storefront orders (exclude POS)
     } = req.query;
 
+    // ORDER_READ_PRIVACY_V1
+    // Verified customer identity overrides caller-supplied ownership filters.
+    const authenticatedCustomerId =
+      Number(req.customerOrderCustomerId);
+
+    const hasAuthenticatedCustomer =
+      Number.isSafeInteger(authenticatedCustomerId) &&
+      authenticatedCustomerId > 0;
+
+    const effectiveCustomerId =
+      hasAuthenticatedCustomer
+        ? authenticatedCustomerId
+        : customer_id;
+
+    const effectiveStorefrontOnly =
+      hasAuthenticatedCustomer
+        ? 'true'
+        : storefront_only;
+
     const offset = (page - 1) * limit;
     
     let whereConditions = ['i.status = 1'];
     let replacements = { limit: parseInt(limit), offset: parseInt(offset) };
 
     // Filter by specific customer (for storefront My Orders page)
-    if (customer_id) {
+    if (effectiveCustomerId) {
       whereConditions.push('i.customer_id = :customer_id');
-      replacements.customer_id = parseInt(customer_id);
+      replacements.customer_id = parseInt(effectiveCustomerId);
     }
 
     // Exclude POS invoices — storefront orders have created_by starting with 'customer-'
-    if (storefront_only === 'true' && customer_id) {
+    if (effectiveStorefrontOnly === 'true' && effectiveCustomerId) {
       whereConditions.push(`(i.created_by = :createdBy OR i.customer_id = :customer_id2)`);
-      replacements.createdBy = `customer-${customer_id}`;
-      replacements.customer_id2 = parseInt(customer_id);
+      replacements.createdBy = `customer-${effectiveCustomerId}`;
+      replacements.customer_id2 = parseInt(effectiveCustomerId);
     }
 
     if (status) {
@@ -136,6 +155,13 @@ exports.getOrderById = async (req, res) => {
   try {
     const { id } = req.params;
 
+    const authenticatedCustomerId =
+      Number(req.customerOrderCustomerId);
+
+    const enforceCustomerOwnership =
+      Number.isSafeInteger(authenticatedCustomerId) &&
+      authenticatedCustomerId > 0;
+
     // Get order details (customer info is in invoice table directly)
     const orderQuery = `
       SELECT i.*, 
@@ -151,10 +177,18 @@ exports.getOrderById = async (req, res) => {
         END as card_details
       FROM invoice i
       WHERE i.invoice_id = :id
+        ${enforceCustomerOwnership
+          ? 'AND i.customer_id = :customer_id'
+          : ''}
     `;
 
     const [order] = await sequelize.query(orderQuery, {
-      replacements: { id },
+      replacements: enforceCustomerOwnership
+        ? {
+            id,
+            customer_id: authenticatedCustomerId
+          }
+        : { id },
       type: sequelize.QueryTypes.SELECT
     });
 
