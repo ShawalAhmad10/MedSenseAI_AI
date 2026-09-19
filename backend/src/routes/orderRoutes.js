@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 const orderController = require('../controllers/orderController');
 const { authenticate } = require('../middleware/auth');
-const { optionalCustomerToken } = require('../middleware/customerAuth');
+const { optionalCustomerToken, enforceAuthenticatedCustomerOrderIdentity } = require('../middleware/customerAuth');
 
 // Public routes
 router.get('/', orderController.getAllOrders);
@@ -14,7 +14,7 @@ router.get('/stats/daily', orderController.getDailyStats);
 router.get('/stats/top-medicines', orderController.getTopMedicines);
 router.post('/ddi-check', orderController.checkCartDDI);
 router.get('/:id', orderController.getOrderById);
-router.post('/', optionalCustomerToken, orderController.createOrder); // Public for storefront orders
+router.post('/', optionalCustomerToken, enforceAuthenticatedCustomerOrderIdentity, orderController.createOrder); // Public for storefront orders
 
 // Protected routes (admin only)
 router.use(authenticate);

@@ -106,3 +106,46 @@ exports.optionalCustomerToken = (req, res, next) => {
 
   return next();
 };
+
+// AUTHENTICATED_ORDER_IDENTITY_GUARD_V1
+// Preserve anonymous storefront compatibility, but never allow a
+// verified customer JWT to place an order under another customer ID.
+exports.enforceAuthenticatedCustomerOrderIdentity = (req, res, next) => {
+  const authenticatedCustomerId =
+    Number(req.customerUser?.id);
+
+  if (
+    !Number.isSafeInteger(authenticatedCustomerId) ||
+    authenticatedCustomerId <= 0
+  ) {
+    return next();
+  }
+
+  const suppliedCustomerId =
+    req.body?.customer_id == null
+      ? null
+      : Number(req.body.customer_id);
+
+  if (
+    suppliedCustomerId !== null &&
+    (
+      !Number.isSafeInteger(suppliedCustomerId) ||
+      suppliedCustomerId !== authenticatedCustomerId
+    )
+  ) {
+    return res.status(403).json({
+      success: false,
+      code: 'CUSTOMER_IDENTITY_MISMATCH',
+      message:
+        'Authenticated customer identity does not match the order customer.'
+    });
+  }
+
+  if (!req.body || typeof req.body !== 'object') {
+    req.body = {};
+  }
+
+  req.body.customer_id = authenticatedCustomerId;
+
+  return next();
+};

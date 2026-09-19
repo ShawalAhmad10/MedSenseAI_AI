@@ -90,3 +90,117 @@ test('invalid order item and unavailable stock fail before invoice insert', () =
   assert.ok(unavailableProduct >= 0 && unavailableProduct < invoiceInsert);
   assert.ok(insufficientStock >= 0 && insufficientStock < invoiceInsert);
 });
+
+// AUTHENTICATED_ORDER_IDENTITY_GUARD_V1
+test('authenticated storefront order is bound to verified customer identity', () => {
+  const { enforceAuthenticatedCustomerOrderIdentity } =
+    require('../src/middleware/customerAuth');
+
+  const req = {
+    customerUser: { id: 42 },
+    body: { customer_id: 42 }
+  };
+
+  let nextCalled = false;
+  const res = {};
+
+  enforceAuthenticatedCustomerOrderIdentity(
+    req,
+    res,
+    () => { nextCalled = true; }
+  );
+
+  assert.equal(nextCalled, true);
+  assert.equal(req.body.customer_id, 42);
+});
+
+test('authenticated storefront order fills missing body customer identity from JWT', () => {
+  const { enforceAuthenticatedCustomerOrderIdentity } =
+    require('../src/middleware/customerAuth');
+
+  const req = {
+    customerUser: { id: 42 },
+    body: {}
+  };
+
+  let nextCalled = false;
+
+  enforceAuthenticatedCustomerOrderIdentity(
+    req,
+    {},
+    () => { nextCalled = true; }
+  );
+
+  assert.equal(nextCalled, true);
+  assert.equal(req.body.customer_id, 42);
+});
+
+test('authenticated storefront order rejects forged customer identity', () => {
+  const { enforceAuthenticatedCustomerOrderIdentity } =
+    require('../src/middleware/customerAuth');
+
+  const req = {
+    customerUser: { id: 42 },
+    body: { customer_id: 99 }
+  };
+
+  let nextCalled = false;
+  const res = {
+    statusCode: null,
+    payload: null,
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload) {
+      this.payload = payload;
+      return this;
+    }
+  };
+
+  enforceAuthenticatedCustomerOrderIdentity(
+    req,
+    res,
+    () => { nextCalled = true; }
+  );
+
+  assert.equal(nextCalled, false);
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.payload.code, 'CUSTOMER_IDENTITY_MISMATCH');
+});
+
+test('anonymous storefront order compatibility remains unchanged', () => {
+  const { enforceAuthenticatedCustomerOrderIdentity } =
+    require('../src/middleware/customerAuth');
+
+  const req = {
+    customerUser: null,
+    body: { customer_id: 99 }
+  };
+
+  let nextCalled = false;
+
+  enforceAuthenticatedCustomerOrderIdentity(
+    req,
+    {},
+    () => { nextCalled = true; }
+  );
+
+  assert.equal(nextCalled, true);
+  assert.equal(req.body.customer_id, 99);
+});
+
+test('order POST applies optional JWT then identity guard before existing controller', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+
+  const routeSource = fs.readFileSync(
+    path.join(__dirname, '../src/routes/orderRoutes.js'),
+    'utf8'
+  );
+
+  assert.match(
+    routeSource,
+    /router\.post\('\/'\s*,\s*optionalCustomerToken\s*,\s*enforceAuthenticatedCustomerOrderIdentity\s*,\s*orderController\.createOrder\)/
+  );
+});
