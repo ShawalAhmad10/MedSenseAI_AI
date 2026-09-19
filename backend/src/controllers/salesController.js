@@ -1,385 +1,730 @@
-// Sales Controller - Real Data from Invoices
+const { QueryTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
 
-// Sales Overview
+const SCHEMA_VERSION = 'sales-optimization-v1';
+
+function parameterError(name, min, max) {
+  const error = new Error(
+    `${name} must be an integer between ${min} and ${max}`
+  );
+  error.code = 'INVALID_SALES_PARAMETER';
+  return error;
+}
+
+function boundedInteger(rawValue, { name, defaultValue, min, max }) {
+  if (
+    rawValue === undefined ||
+    rawValue === null ||
+    String(rawValue).trim() === ''
+  ) {
+    return defaultValue;
+  }
+
+  const text = String(rawValue).trim();
+
+  if (!/^\d+$/.test(text)) {
+    throw parameterError(name, min, max);
+  }
+
+  const value = Number(text);
+
+  if (
+    !Number.isSafeInteger(value) ||
+    value < min ||
+    value > max
+  ) {
+    throw parameterError(name, min, max);
+  }
+
+  return value;
+}
+
+function parseDays(rawValue) {
+  return boundedInteger(rawValue, {
+    name: 'days',
+    defaultValue: 30,
+    min: 1,
+    max: 365,
+  });
+}
+
+function parseLimit(rawValue, defaultValue) {
+  return boundedInteger(rawValue, {
+    name: 'limit',
+    defaultValue,
+    min: 1,
+    max: 100,
+  });
+}
+
+function activeInvoiceCondition(alias = 'i') {
+  const prefix = alias ? `${alias}.` : '';
+
+  return (
+    `${prefix}status = 1 ` +
+    `AND COALESCE(LOWER(${prefix}delivery_status), '') ` +
+    `NOT IN ('cancelled', 'refunded')`
+  );
+}
+
+function number(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function money(value) {
+  return Number(number(value).toFixed(2));
+}
+
+function pctChange(current, previous) {
+  const currentValue = number(current);
+  const previousValue = number(previous);
+
+  if (previousValue === 0) {
+    return 0;
+  }
+
+  return Number(
+    (((currentValue - previousValue) / previousValue) * 100).toFixed(1)
+  );
+}
+
+function sendFailure(res, error, label) {
+  if (error?.code === 'INVALID_SALES_PARAMETER') {
+    return res.status(400).json({
+      success: false,
+      code: error.code,
+      message: error.message,
+    });
+  }
+
+  console.error(label, error);
+
+  return res.status(500).json({
+    success: false,
+    code: 'SALES_OPTIMIZATION_UNAVAILABLE',
+    message: 'Sales optimization data is temporarily unavailable',
+  });
+}
+
 exports.getSalesOverview = async (req, res) => {
   try {
-    const { days = 30 } = req.query;
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - parseInt(days));
+    const days = parseDays(req.query?.days);
 
-    // Current period stats
-    const currentStats = await sequelize.query(`
-      SELECT 
-        COUNT(DISTINCT i.invoice_id) as total_orders,
-        COALESCE(SUM(i.total_amount), 0) as total_revenue,
-        COALESCE(AVG(i.total_amount), 0) as avg_order_value
+    const [row = {}] = await sequelize.query(
+      `
+      SELECT
+        COUNT(DISTINCT i.invoice_id) FILTER (
+          WHERE i.invoice_date::date >=
+            CURRENT_DATE - (CAST(:days AS INTEGER) - 1)
+        )::int AS current_orders,
+
+        COALESCE(
+          SUM(i.total_amount) FILTER (
+            WHERE i.invoice_date::date >=
+              CURRENT_DATE - (CAST(:days AS INTEGER) - 1)
+          ),
+          0
+        )::numeric AS current_sales,
+
+        COUNT(DISTINCT i.invoice_id) FILTER (
+          WHERE i.invoice_date::date >=
+            CURRENT_DATE - ((CAST(:days AS INTEGER) * 2) - 1)
+          AND i.invoice_date::date <
+            CURRENT_DATE - (CAST(:days AS INTEGER) - 1)
+        )::int AS previous_orders,
+
+        COALESCE(
+          SUM(i.total_amount) FILTER (
+            WHERE i.invoice_date::date >=
+              CURRENT_DATE - ((CAST(:days AS INTEGER) * 2) - 1)
+            AND i.invoice_date::date <
+              CURRENT_DATE - (CAST(:days AS INTEGER) - 1)
+          ),
+          0
+        )::numeric AS previous_sales
+
       FROM invoice i
-      WHERE i.created_at >= :startDate
-    `, {
-      replacements: { startDate: startDate.toISOString() },
-      type: sequelize.QueryTypes.SELECT
-    });
 
-    // Previous period stats for comparison
-    const prevStartDate = new Date(startDate);
-    prevStartDate.setDate(prevStartDate.getDate() - parseInt(days));
-    
-    const prevStats = await sequelize.query(`
-      SELECT 
-        COUNT(DISTINCT i.invoice_id) as total_orders,
-        COALESCE(SUM(i.total_amount), 0) as total_revenue,
-        COALESCE(AVG(i.total_amount), 0) as avg_order_value
-      FROM invoice i
-      WHERE i.created_at >= :prevStartDate AND i.created_at < :startDate
-    `, {
-      replacements: { prevStartDate: prevStartDate.toISOString(), startDate: startDate.toISOString() },
-      type: sequelize.QueryTypes.SELECT
-    });
+      WHERE ${activeInvoiceCondition('i')}
+        AND i.invoice_date::date >=
+          CURRENT_DATE - ((CAST(:days AS INTEGER) * 2) - 1)
+      `,
+      {
+        replacements: { days },
+        type: QueryTypes.SELECT,
+      }
+    );
 
-    const current = currentStats[0];
-    const previous = prevStats[0];
+    const currentOrders = number(row.current_orders);
+    const previousOrders = number(row.previous_orders);
+    const recordedSales = money(row.current_sales);
+    const previousSales = money(row.previous_sales);
 
-    // Calculate deltas
-    const revenueDelta = previous.total_revenue > 0 
-      ? (((current.total_revenue - previous.total_revenue) / previous.total_revenue) * 100).toFixed(1)
-      : 0;
-    
-    const ordersDelta = previous.total_orders > 0 
-      ? (((current.total_orders - previous.total_orders) / previous.total_orders) * 100).toFixed(1)
-      : 0;
-    
-    const avgOrderValueDelta = previous.avg_order_value > 0 
-      ? (((current.avg_order_value - previous.avg_order_value) / previous.avg_order_value) * 100).toFixed(1)
-      : 0;
+    const averageInvoiceValue =
+      currentOrders > 0
+        ? money(recordedSales / currentOrders)
+        : 0;
 
-    res.json({
+    const previousAverageInvoiceValue =
+      previousOrders > 0
+        ? money(previousSales / previousOrders)
+        : 0;
+
+    return res.json({
       success: true,
       data: {
-        revenue: {
-          value: parseFloat(current.total_revenue),
-          delta: parseFloat(revenueDelta)
+        schema_version: SCHEMA_VERSION,
+        period_days: days,
+
+        recordedSales: {
+          value: recordedSales,
+          delta: pctChange(
+            recordedSales,
+            previousSales
+          ),
         },
+
         orders: {
-          value: parseInt(current.total_orders),
-          delta: parseFloat(ordersDelta)
+          value: currentOrders,
+          delta: pctChange(
+            currentOrders,
+            previousOrders
+          ),
         },
-        avgOrderValue: {
-          value: parseFloat(current.avg_order_value.toFixed(2)),
-          delta: parseFloat(avgOrderValueDelta)
-        }
-      }
+
+        averageInvoiceValue: {
+          value: averageInvoiceValue,
+          delta: pctChange(
+            averageInvoiceValue,
+            previousAverageInvoiceValue
+          ),
+        },
+
+        semantics: {
+          recordedSales:
+            'Sum of active, non-cancelled, non-refunded invoice totals. It is not cash collected.',
+          comparison:
+            'Current selected period compared with the immediately preceding equal-length period.',
+        },
+      },
     });
   } catch (error) {
-    console.error('Sales overview error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch sales overview',
-      error: error.message
-    });
+    return sendFailure(
+      res,
+      error,
+      'Sales overview error:'
+    );
   }
 };
 
-// Top Selling Products
 exports.getTopProducts = async (req, res) => {
   try {
-    const { days = 30, limit = 8 } = req.query;
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - parseInt(days));
+    const days = parseDays(req.query?.days);
+    const limit = parseLimit(req.query?.limit, 8);
 
-    const products = await sequelize.query(`
-      SELECT 
-        ii.product_id as "medicineId",
-        ii.product_title as "medicineName",
-        'General' as category,
-        SUM(ii.quantity) as "totalQty",
-        SUM(ii.total_price) as "totalRevenue",
-        COUNT(DISTINCT i.invoice_id) as "orderCount",
-        ROW_NUMBER() OVER (ORDER BY SUM(ii.total_price) DESC) as rank
-      FROM invoice_report ii
-      INNER JOIN invoice i ON ii.invoice_id = i.invoice_id
-      WHERE i.created_at >= :startDate
-      GROUP BY ii.product_id, ii.product_title
-      ORDER BY "totalRevenue" DESC
+    const rows = await sequelize.query(
+      `
+      SELECT
+        ir.product_id AS "medicineId",
+
+        COALESCE(
+          NULLIF(ir.product_title, ''),
+          p.product_title,
+          'Unknown product'
+        ) AS "medicineName",
+
+        COALESCE(
+          NULLIF(p.product_category, ''),
+          'Uncategorized'
+        ) AS category,
+
+        COALESCE(SUM(ir.quantity), 0)::int
+          AS "totalQty",
+
+        COALESCE(SUM(ir.total_price), 0)::numeric
+          AS "recordedSales",
+
+        COUNT(DISTINCT i.invoice_id)::int
+          AS "orderCount",
+
+        ROW_NUMBER() OVER (
+          ORDER BY
+            SUM(ir.quantity) DESC,
+            SUM(ir.total_price) DESC,
+            ir.product_id ASC
+        )::int AS rank
+
+      FROM invoice_report ir
+
+      JOIN invoice i
+        ON i.invoice_id = ir.invoice_id
+
+      LEFT JOIN product p
+        ON p.product_id = ir.product_id
+
+      WHERE ir.status = 1
+        AND ${activeInvoiceCondition('i')}
+        AND i.invoice_date::date >=
+          CURRENT_DATE - (CAST(:days AS INTEGER) - 1)
+
+      GROUP BY
+        ir.product_id,
+        ir.product_title,
+        p.product_title,
+        p.product_category
+
+      ORDER BY
+        "totalQty" DESC,
+        "recordedSales" DESC,
+        "medicineId" ASC
+
       LIMIT :limit
-    `, {
-      replacements: { startDate: startDate.toISOString(), limit: parseInt(limit) },
-      type: sequelize.QueryTypes.SELECT
-    });
+      `,
+      {
+        replacements: {
+          days,
+          limit,
+        },
+        type: QueryTypes.SELECT,
+      }
+    );
 
-    res.json({
+    return res.json({
       success: true,
-      data: products.map(p => ({
-        ...p,
-        totalRevenue: parseFloat(p.totalRevenue),
-        totalQty: parseInt(p.totalQty),
-        orderCount: parseInt(p.orderCount),
-        rank: parseInt(p.rank)
-      }))
+
+      data: rows.map((row) => ({
+        medicineId: number(row.medicineId),
+        medicineName: row.medicineName,
+        category: row.category,
+        totalQty: number(row.totalQty),
+        recordedSales: money(row.recordedSales),
+        orderCount: number(row.orderCount),
+        rank: number(row.rank),
+      })),
+
+      meta: {
+        schema_version: SCHEMA_VERSION,
+        period_days: days,
+        limit,
+        ranking:
+          'Units sold descending, then Product Recorded Sales descending.',
+        sales_semantics:
+          'Product Recorded Sales are active invoice-line totals and exclude invoice-level charges.',
+      },
     });
   } catch (error) {
-    console.error('Top products error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch top products',
-      error: error.message
-    });
+    return sendFailure(
+      res,
+      error,
+      'Top products error:'
+    );
   }
 };
 
-// Slow Movers
 exports.getSlowMovers = async (req, res) => {
   try {
-    const rawDays = Number.parseInt(req.query.days, 10);
-    const rawLimit = Number.parseInt(req.query.limit, 10);
+    const days = parseDays(req.query?.days);
+    const limit = parseLimit(req.query?.limit, 6);
 
-    const days =
-      Number.isFinite(rawDays) && rawDays > 0
-        ? Math.min(rawDays, 3650)
-        : 30;
-
-    const limit =
-      Number.isFinite(rawLimit) && rawLimit > 0
-        ? Math.min(rawLimit, 100)
-        : 6;
-
-    /*
-     * Latest DB contract:
-     * product = product master
-     * stock_history = batch-level authoritative current stock
-     * invoice/invoice_report = real completed sales records
-     *
-     * product.product_stock_qty does NOT exist.
-     */
-    const slowMovers = await sequelize.query(`
+    const rows = await sequelize.query(
+      `
       WITH live_stock AS (
         SELECT
           product_id,
-          COALESCE(SUM(remaining_quantity), 0)::int AS stock_qty
+          COALESCE(
+            SUM(remaining_quantity),
+            0
+          )::int AS stock_qty
         FROM stock_history
         WHERE status = 1
         GROUP BY product_id
       ),
-      last_sales AS (
+
+      last_active_sale AS (
         SELECT
           ir.product_id,
-          MAX(i.created_at) AS last_sale_date
+          MAX(i.invoice_date) AS last_sale_date
         FROM invoice_report ir
-        INNER JOIN invoice i
+        JOIN invoice i
           ON i.invoice_id = ir.invoice_id
         WHERE ir.status = 1
-          AND i.status = 1
+          AND ${activeInvoiceCondition('i')}
         GROUP BY ir.product_id
       )
+
       SELECT
         p.product_id AS "medicineId",
         p.product_title AS "medicineName",
-        COALESCE(NULLIF(p.product_category, ''), 'General') AS category,
-        COALESCE(ls.stock_qty, 0)::int AS quantity,
+
+        COALESCE(
+          NULLIF(p.product_category, ''),
+          'Uncategorized'
+        ) AS category,
+
+        COALESCE(ls.stock_qty, 0)::int
+          AS quantity,
+
         sx.last_sale_date
+
       FROM product p
+
       LEFT JOIN live_stock ls
         ON ls.product_id = p.product_id
-      LEFT JOIN last_sales sx
+
+      LEFT JOIN last_active_sale sx
         ON sx.product_id = p.product_id
+
       WHERE COALESCE(p.product_status, 1) = 1
         AND COALESCE(ls.stock_qty, 0) > 0
+
         AND NOT EXISTS (
           SELECT 1
           FROM invoice_report ir2
-          INNER JOIN invoice i2
+          JOIN invoice i2
             ON i2.invoice_id = ir2.invoice_id
           WHERE ir2.product_id = p.product_id
             AND ir2.status = 1
-            AND i2.status = 1
-            AND i2.created_at >=
-                NOW() - (:days * INTERVAL '1 day')
+            AND ${activeInvoiceCondition('i2')}
+            AND i2.invoice_date::date >=
+              CURRENT_DATE - (CAST(:days AS INTEGER) - 1)
         )
+
       ORDER BY
         COALESCE(ls.stock_qty, 0) DESC,
         p.product_title ASC
+
       LIMIT :limit
-    `, {
-      replacements: {
-        days,
-        limit
-      },
-      type: sequelize.QueryTypes.SELECT
-    });
+      `,
+      {
+        replacements: {
+          days,
+          limit,
+        },
+        type: QueryTypes.SELECT,
+      }
+    );
 
-    res.json({
+    return res.json({
       success: true,
-      data: slowMovers.map(row => ({
-        ...row,
-        quantity: Number(row.quantity || 0),
-        daysNoSales: row.last_sale_date
-          ? Math.max(
-              0,
-              Math.floor(
-                (Date.now() - new Date(row.last_sale_date).getTime()) /
-                (1000 * 60 * 60 * 24)
-              )
-            )
-          : days
-      }))
-    });
 
+      data: rows.map((row) => {
+        const hasLastSale =
+          Boolean(row.last_sale_date);
+
+        return {
+          medicineId:
+            number(row.medicineId),
+
+          medicineName:
+            row.medicineName,
+
+          category:
+            row.category,
+
+          quantity:
+            number(row.quantity),
+
+          lastSaleDate:
+            hasLastSale
+              ? new Date(
+                  row.last_sale_date
+                ).toISOString()
+              : null,
+
+          daysNoSales:
+            hasLastSale
+              ? Math.max(
+                  0,
+                  Math.floor(
+                    (
+                      Date.now() -
+                      new Date(
+                        row.last_sale_date
+                      ).getTime()
+                    ) /
+                    (1000 * 60 * 60 * 24)
+                  )
+                )
+              : null,
+
+          neverSold:
+            !hasLastSale,
+        };
+      }),
+
+      meta: {
+        schema_version:
+          SCHEMA_VERSION,
+
+        period_days:
+          days,
+
+        limit,
+
+        definition:
+          'Active products with positive live stock and no active invoice-line sales in the selected period.',
+      },
+    });
   } catch (error) {
-    console.error("Slow movers error:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch slow movers",
-      error: error.message
-    });
+    return sendFailure(
+      res,
+      error,
+      'Slow movers error:'
+    );
   }
 };
 
-// AI Recommendations
 exports.getRecommendations = async (req, res) => {
   try {
-    const rawDays = Number.parseInt(req.query.days, 10);
-
-    const days =
-      Number.isFinite(rawDays) && rawDays > 0
-        ? Math.min(rawDays, 3650)
-        : 30;
-
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-
+    const days = parseDays(req.query?.days);
     const recommendations = [];
 
-    /*
-     * Real current stock is derived from stock_history.
-     * No synthetic product_stock_qty field is used.
-     */
-    const lowStockBestSellers = await sequelize.query(`
-      WITH live_stock AS (
+    const replenishmentRows =
+      await sequelize.query(
+        `
+        WITH live_stock AS (
+          SELECT
+            product_id,
+            COALESCE(
+              SUM(remaining_quantity),
+              0
+            )::int AS stock_qty
+          FROM stock_history
+          WHERE status = 1
+          GROUP BY product_id
+        ),
+
+        period_sales AS (
+          SELECT
+            ir.product_id,
+            COALESCE(
+              SUM(ir.quantity),
+              0
+            )::int AS sold_qty
+          FROM invoice_report ir
+          JOIN invoice i
+            ON i.invoice_id = ir.invoice_id
+          WHERE ir.status = 1
+            AND ${activeInvoiceCondition('i')}
+            AND i.invoice_date::date >=
+              CURRENT_DATE - (CAST(:days AS INTEGER) - 1)
+          GROUP BY ir.product_id
+        )
+
         SELECT
-          product_id,
-          COALESCE(SUM(remaining_quantity), 0)::int AS stock_qty
-        FROM stock_history
-        WHERE status = 1
-        GROUP BY product_id
-      )
-      SELECT
-        p.product_id,
-        p.product_title,
-        COALESCE(ls.stock_qty, 0)::int AS stock_qty,
-        COALESCE(SUM(ir.quantity), 0)::int AS sold_qty
-      FROM product p
-      INNER JOIN invoice_report ir
-        ON ir.product_id = p.product_id
-       AND ir.status = 1
-      INNER JOIN invoice i
-        ON i.invoice_id = ir.invoice_id
-       AND i.status = 1
-      LEFT JOIN live_stock ls
-        ON ls.product_id = p.product_id
-      WHERE i.created_at >= :startDate
-        AND COALESCE(p.product_status, 1) = 1
-        AND COALESCE(ls.stock_qty, 0) < 10
-      GROUP BY
-        p.product_id,
-        p.product_title,
-        ls.stock_qty
-      HAVING COALESCE(SUM(ir.quantity), 0) > 5
-      ORDER BY
-        SUM(ir.quantity) DESC
-      LIMIT 1
-    `, {
-      replacements: {
-        startDate: startDate.toISOString()
-      },
-      type: sequelize.QueryTypes.SELECT
-    });
+          p.product_id,
+          p.product_title,
+          COALESCE(ls.stock_qty, 0)::int
+            AS stock_qty,
+          COALESCE(
+            p.product_min_threshold,
+            0
+          )::int AS minimum_threshold,
+          COALESCE(ps.sold_qty, 0)::int
+            AS sold_qty
 
-    if (lowStockBestSellers.length > 0) {
-      const item = lowStockBestSellers[0];
+        FROM product p
 
+        LEFT JOIN live_stock ls
+          ON ls.product_id = p.product_id
+
+        JOIN period_sales ps
+          ON ps.product_id = p.product_id
+
+        WHERE COALESCE(p.product_status, 1) = 1
+          AND ps.sold_qty > 0
+          AND COALESCE(ls.stock_qty, 0) <=
+              COALESCE(
+                p.product_min_threshold,
+                0
+              )
+
+        ORDER BY
+          ps.sold_qty DESC,
+          p.product_id ASC
+
+        LIMIT 3
+        `,
+        {
+          replacements: { days },
+          type: QueryTypes.SELECT,
+        }
+      );
+
+    for (const row of replenishmentRows) {
       recommendations.push({
-        priority: "high",
-        title: `Restock ${item.product_title}`,
+        kind:
+          'REPLENISHMENT_REVIEW',
+
+        priority:
+          'high',
+
+        productId:
+          number(row.product_id),
+
+        title:
+          `Review replenishment for ${row.product_title}`,
+
         description:
-          `${Number(item.stock_qty || 0)} units currently available; ` +
-          `${Number(item.sold_qty || 0)} units sold in the last ${days} days.`
+          `${number(row.stock_qty)} unit(s) currently in live stock versus configured minimum threshold ${number(row.minimum_threshold)}; ` +
+          `${number(row.sold_qty)} unit(s) recorded sold during the selected ${days}-day period.`,
+
+        evidence: {
+          stockQuantity:
+            number(row.stock_qty),
+
+          minimumThreshold:
+            number(row.minimum_threshold),
+
+          unitsSold:
+            number(row.sold_qty),
+
+          periodDays:
+            days,
+        },
       });
     }
 
-    const slowMoversHighStock = await sequelize.query(`
-      WITH live_stock AS (
-        SELECT
-          product_id,
-          COALESCE(SUM(remaining_quantity), 0)::int AS stock_qty
-        FROM stock_history
-        WHERE status = 1
-        GROUP BY product_id
-      )
-      SELECT
-        p.product_id,
-        p.product_title,
-        COALESCE(ls.stock_qty, 0)::int AS stock_qty
-      FROM product p
-      INNER JOIN live_stock ls
-        ON ls.product_id = p.product_id
-      WHERE COALESCE(p.product_status, 1) = 1
-        AND COALESCE(ls.stock_qty, 0) > 50
-        AND NOT EXISTS (
-          SELECT 1
-          FROM invoice_report ir
-          INNER JOIN invoice i
-            ON i.invoice_id = ir.invoice_id
-          WHERE ir.product_id = p.product_id
-            AND ir.status = 1
-            AND i.status = 1
-            AND i.created_at >=
-                NOW() - (:days * INTERVAL '1 day')
+    const slowMoverRows =
+      await sequelize.query(
+        `
+        WITH live_stock AS (
+          SELECT
+            product_id,
+            COALESCE(
+              SUM(remaining_quantity),
+              0
+            )::int AS stock_qty
+          FROM stock_history
+          WHERE status = 1
+          GROUP BY product_id
         )
-      ORDER BY
-        ls.stock_qty DESC,
-        p.product_title ASC
-      LIMIT 1
-    `, {
-      replacements: { days },
-      type: sequelize.QueryTypes.SELECT
-    });
 
-    if (slowMoversHighStock.length > 0) {
-      const item = slowMoversHighStock[0];
+        SELECT
+          p.product_id,
+          p.product_title,
+          COALESCE(ls.stock_qty, 0)::int
+            AS stock_qty
 
+        FROM product p
+
+        JOIN live_stock ls
+          ON ls.product_id = p.product_id
+
+        WHERE COALESCE(p.product_status, 1) = 1
+          AND COALESCE(ls.stock_qty, 0) > 0
+
+          AND NOT EXISTS (
+            SELECT 1
+            FROM invoice_report ir
+            JOIN invoice i
+              ON i.invoice_id = ir.invoice_id
+            WHERE ir.product_id = p.product_id
+              AND ir.status = 1
+              AND ${activeInvoiceCondition('i')}
+              AND i.invoice_date::date >=
+                CURRENT_DATE - (CAST(:days AS INTEGER) - 1)
+          )
+
+        ORDER BY
+          ls.stock_qty DESC,
+          p.product_id ASC
+
+        LIMIT 3
+        `,
+        {
+          replacements: { days },
+          type: QueryTypes.SELECT,
+        }
+      );
+
+    for (const row of slowMoverRows) {
       recommendations.push({
-        priority: "medium",
-        title: `Consider promotion for ${item.product_title}`,
+        kind:
+          'SLOW_MOVING_STOCK_REVIEW',
+
+        priority:
+          'medium',
+
+        productId:
+          number(row.product_id),
+
+        title:
+          `Review slow-moving stock for ${row.product_title}`,
+
         description:
-          `${Number(item.stock_qty || 0)} units in stock with no sales during the last ${days} days.`
+          `${number(row.stock_qty)} unit(s) are currently in live stock with no active invoice-line sales during the selected ${days}-day period.`,
+
+        evidence: {
+          stockQuantity:
+            number(row.stock_qty),
+
+          periodDays:
+            days,
+        },
       });
     }
 
     if (recommendations.length === 0) {
       recommendations.push({
-        priority: "low",
-        title: "Inventory is balanced",
+        kind:
+          'NO_CURRENT_FLAG',
+
+        priority:
+          'low',
+
+        productId:
+          null,
+
+        title:
+          'No current sales optimization flag',
+
         description:
-          "No high-stock slow mover or low-stock high-selling product was detected for the selected period."
+          `No product met the governed replenishment-review or slow-moving-stock criteria during the selected ${days}-day period.`,
+
+        evidence: {
+          periodDays:
+            days,
+        },
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
-      data: recommendations
-    });
+      data: recommendations,
 
+      meta: {
+        schema_version:
+          SCHEMA_VERSION,
+
+        period_days:
+          days,
+
+        read_only:
+          true,
+
+        limitations: [
+          'These are deterministic operational review flags, not automatic purchasing, pricing, discount, or promotion actions.',
+          'No forecast model or synthetic sales dataset is used.',
+          'Replenishment review uses current live stock, configured product minimum threshold, and observed active invoice-line sales.',
+        ],
+      },
+    });
   } catch (error) {
-    console.error("Recommendations error:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to generate recommendations",
-      error: error.message
-    });
+    return sendFailure(
+      res,
+      error,
+      'Sales recommendations error:'
+    );
   }
 };
 
-
-module.exports = exports;
+module.exports = {
+  ...exports,
+  activeInvoiceCondition,
+  boundedInteger,
+  parseDays,
+  parseLimit,
+  pctChange,
+};
