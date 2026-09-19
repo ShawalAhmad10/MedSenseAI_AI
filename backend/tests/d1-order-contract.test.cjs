@@ -204,3 +204,90 @@ test('order POST applies optional JWT then identity guard before existing contro
     /router\.post\('\/'\s*,\s*optionalCustomerToken\s*,\s*enforceAuthenticatedCustomerOrderIdentity\s*,\s*orderController\.createOrder\)/
   );
 });
+
+// STOCK_INTEGRITY_REGRESSION_V1
+test('final stock allocation uses row locks before deducting stock', () => {
+  const createOrderStart =
+    source.indexOf('exports.createOrder = async (req, res) => {');
+
+  const nextExport =
+    source.indexOf('exports.', createOrderStart + 10);
+
+  const scope =
+    nextExport > createOrderStart
+      ? source.slice(createOrderStart, nextExport)
+      : source.slice(createOrderStart);
+
+  const lock = scope.indexOf('FOR UPDATE');
+  const stockUpdate = scope.indexOf(
+    'SET remaining_quantity = remaining_quantity - :qty'
+  );
+
+  assert.ok(lock >= 0);
+  assert.ok(stockUpdate >= 0);
+  assert.ok(
+    lock < stockUpdate,
+    'Stock rows must be locked before stock deduction',
+  );
+});
+
+test('incomplete batch allocation fails before stock deduction', () => {
+  const createOrderStart =
+    source.indexOf('exports.createOrder = async (req, res) => {');
+
+  const nextExport =
+    source.indexOf('exports.', createOrderStart + 10);
+
+  const scope =
+    nextExport > createOrderStart
+      ? source.slice(createOrderStart, nextExport)
+      : source.slice(createOrderStart);
+
+  const allocationFailure =
+    scope.indexOf('STOCK_ALLOCATION_FAILED: product ');
+
+  const stockUpdate =
+    scope.indexOf(
+      'SET remaining_quantity = remaining_quantity - :qty'
+    );
+
+  assert.ok(allocationFailure >= 0);
+  assert.ok(stockUpdate >= 0);
+  assert.ok(
+    allocationFailure < stockUpdate,
+    'Incomplete allocation must fail before that allocation mutates stock',
+  );
+});
+
+test('createOrder keeps stock allocation inside transaction rollback boundary', () => {
+  const createOrderStart =
+    source.indexOf('exports.createOrder = async (req, res) => {');
+
+  const nextExport =
+    source.indexOf('exports.', createOrderStart + 10);
+
+  const scope =
+    nextExport > createOrderStart
+      ? source.slice(createOrderStart, nextExport)
+      : source.slice(createOrderStart);
+
+  const transactionStart =
+    scope.indexOf('const transaction = await sequelize.transaction()');
+
+  const allocationFailure =
+    scope.indexOf('STOCK_ALLOCATION_FAILED: product ');
+
+  const commit =
+    scope.indexOf('await transaction.commit()');
+
+  const rollbackAfterFailure =
+    scope.indexOf('await transaction.rollback()', allocationFailure);
+
+  assert.ok(transactionStart >= 0);
+  assert.ok(allocationFailure > transactionStart);
+  assert.ok(commit > allocationFailure);
+  assert.ok(
+    rollbackAfterFailure > allocationFailure,
+    'Allocation failure must remain covered by a transaction rollback path',
+  );
+});
