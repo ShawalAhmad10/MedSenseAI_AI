@@ -25,6 +25,7 @@ const funnelRoutes = require('./routes/funnelRoutes');
 const leadRoutes = require('./routes/leadRoutes');
 const consultationRoutes = require('./routes/consultationRoutes');
 const prescriptionRoutes = require('./routes/prescriptionRoutes');
+const customerRefillRoutes = require('./routes/customerRefillRoutes');
 const medicineRecommendationRoutes = require('./routes/medicineRecommendationRoutes');
 const alertRoutes  = require('./routes/alertRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
@@ -118,6 +119,7 @@ app.use('/api/funnel', funnelRoutes);
 app.use('/api/leads', leadRoutes);
 app.use('/api/consultations', consultationRoutes);
 app.use('/api/prescriptions', prescriptionRoutes);
+app.use('/api/refills', customerRefillRoutes);
 app.use('/api/recommendations', medicineRecommendationRoutes);
 app.use('/api/alerts', alertRoutes);
 
