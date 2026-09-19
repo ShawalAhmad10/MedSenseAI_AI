@@ -153,7 +153,7 @@ export default function CartPage() {
             <button className="sf-button-secondary" onClick={() => setShowWarnings(true)} type="button">
               Review Interaction Check
             </button>
-            {!ddiLoading && !ddiCheckoutAllowed && (
+            {items.length > 0 && !ddiLoading && !ddiCheckoutAllowed && (
               <button
                 className="sf-button-secondary"
                 onClick={() => setShowEscalation(true)}
@@ -186,7 +186,11 @@ export default function CartPage() {
       </div>
 
       <InteractionWarningModal isOpen={showWarnings} onClose={() => setShowWarnings(false)} warnings={ddiWarnings} />
-      <EscalateToPharmacistModal isOpen={showEscalation} onClose={() => setShowEscalation(false)} />
+      <EscalateToPharmacistModal
+        isOpen={showEscalation}
+        items={items}
+        onClose={() => setShowEscalation(false)}
+      />
     </div>
   );
 }

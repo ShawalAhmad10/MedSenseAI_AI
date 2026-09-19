@@ -1,216 +1,1058 @@
-﻿// src/pages/dashboard/Consultations.jsx
-import React, { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useWindowSize } from '../../hooks/useWindowSize';
-import { queueData as initialQueue } from '../../utils/consultationData';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 
-// Sub-components
-import ConsultationQueue from '../../components/consultations/ConsultationQueue';
-import ConsultationChat from '../../components/consultations/ConsultationChat';
-import PatientContextPanel from '../../components/consultations/PatientContextPanel';
+import {
+  CheckCircle2,
+  Clock3,
+  RefreshCw,
+  Send,
+  ShieldAlert,
+} from 'lucide-react';
+
+import {
+  consultationService,
+} from '../../services/consultationService';
+
+function formatDate(value) {
+  if (!value) {
+    return '—';
+  }
+
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return '—';
+  }
+
+  return date.toLocaleString();
+}
+
+function reviewTitle(
+  consultation
+) {
+  if (
+    consultation?.ddi_status ===
+    'WARNING_REVIEW_REQUIRED'
+  ) {
+    return 'Interaction warning review';
+  }
+
+  if (
+    consultation?.ddi_status ===
+    'UNRESOLVED_REVIEW_REQUIRED'
+  ) {
+    return 'Ingredient identity review';
+  }
+
+  return 'Medicine safety review';
+}
 
 export default function Consultations() {
-  const [queue, setQueue] = useState(initialQueue);
-  const [activeId, setActiveId] = useState(initialQueue[0]?.id || null);
-  const [isQueueOpen, setIsQueueOpen] = useState(true);
-  const [isProfileOpen, setIsProfileOpen] = useState(true);
-  const { width } = useWindowSize();
+  const [queue, setQueue] =
+    useState([]);
 
-  const isTablet = width < 1280;
-  const isMobile = width < 900;
+  const [activeId, setActiveId] =
+    useState(null);
 
-  useEffect(() => {
-    if (isMobile) {
-      setIsQueueOpen(false);
-      setIsProfileOpen(false);
-    } else if (isTablet) {
-      setIsQueueOpen(true);
-      setIsProfileOpen(false);
-    } else {
-      setIsQueueOpen(true);
-      setIsProfileOpen(true);
-    }
-  }, [isTablet, isMobile]);
+  const [guidance, setGuidance] =
+    useState('');
 
-  const activePatient = queue.find(p => p.id === activeId);
+  const [loading, setLoading] =
+    useState(true);
 
-  const playBeep = useCallback(() => {
-    try {
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const oscillator = audioCtx.createOscillator();
-      const gainNode = audioCtx.createGain();
-      oscillator.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
-      gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-      gainNode.gain.linearRampToValueAtTime(0.1, audioCtx.currentTime + 0.01);
-      gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.3);
-      oscillator.start();
-      oscillator.stop(audioCtx.currentTime + 0.3);
-    } catch (e) {
-      console.warn("Audio play failed", e);
-    }
-  }, []);
+  const [submitting, setSubmitting] =
+    useState(false);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const newPatient = {
-        id: `p${Date.now()}`,
-        name: 'Usman Ghani',
-        age: 29,
-        gender: 'Male',
-        urgency: 'medium',
-        waitStart: new Date(),
-        preview: 'Hi, I received my order but one item is missing...',
-        unread: true,
-        source: 'Direct',
-        handoff: {
-          summary: 'Missing item in order',
-          query: 'Hi, I received my order but one item is missing...',
-          confidence: 100,
-          attempted: 'Direct escalation',
+  const [error, setError] =
+    useState('');
+
+  const loadQueue =
+    useCallback(
+      async ({
+        silent = false,
+      } = {}) => {
+        if (!silent) {
+          setLoading(true);
         }
-      };
-      setQueue(prev => [newPatient, ...prev]);
-      playBeep();
-    }, 15000);
-    return () => clearTimeout(timer);
-  }, [playBeep]);
 
-  const handleResolve = (id) => {
-    setQueue(prev => prev.filter(p => p.id !== id));
-    if (activeId === id) {
-      setActiveId(null);
-    }
-  };
+        setError('');
 
-  const handleSelectPatient = (id) => {
-    setActiveId(id);
-    setQueue(prev => prev.map(p => p.id === id ? { ...p, unread: false } : p));
-    if (isMobile) setIsQueueOpen(false);
-  };
+        try {
+          const rows =
+            await consultationService
+              .getQueue(100);
+
+          setQueue(
+            rows
+          );
+
+          setActiveId(
+            (current) => {
+              if (
+                current &&
+                rows.some(
+                  (row) =>
+                    row.consultation_id ===
+                    current
+                )
+              ) {
+                return current;
+              }
+
+              const pending =
+                rows.find(
+                  (row) =>
+                    row.status ===
+                    'pending'
+                );
+
+              return (
+                pending
+                  ?.consultation_id ||
+                rows[0]
+                  ?.consultation_id ||
+                null
+              );
+            }
+          );
+        } catch (requestError) {
+          setError(
+            requestError?.response?.data?.message ||
+            requestError?.message ||
+            'Consultation queue could not be loaded.'
+          );
+        } finally {
+          if (!silent) {
+            setLoading(false);
+          }
+        }
+      },
+      []
+    );
+
+  useEffect(() => {
+    loadQueue();
+
+    const timer =
+      window.setInterval(
+        () => {
+          loadQueue({
+            silent:
+              true,
+          });
+        },
+        15000
+      );
+
+    return () =>
+      window.clearInterval(
+        timer
+      );
+  }, [loadQueue]);
+
+  const activeConsultation =
+    useMemo(
+      () =>
+        queue.find(
+          (item) =>
+            item.consultation_id ===
+            activeId
+        ) ||
+        null,
+      [
+        activeId,
+        queue,
+      ]
+    );
+
+  useEffect(() => {
+    setGuidance('');
+  }, [activeId]);
+
+  const pendingCount =
+    queue.filter(
+      (item) =>
+        item.status ===
+        'pending'
+    ).length;
+
+  const handleGuidance =
+    async () => {
+      if (
+        !activeConsultation ||
+        activeConsultation.status !==
+          'pending'
+      ) {
+        return;
+      }
+
+      const trimmed =
+        guidance.trim();
+
+      if (!trimmed) {
+        setError(
+          'Enter pharmacist guidance before submitting.'
+        );
+
+        return;
+      }
+
+      setSubmitting(true);
+      setError('');
+
+      try {
+        const updated =
+          await consultationService
+            .addGuidance(
+              activeConsultation
+                .consultation_id,
+              trimmed
+            );
+
+        setQueue(
+          (current) =>
+            current.map(
+              (row) =>
+                row.consultation_id ===
+                updated
+                  .consultation_id
+                  ? {
+                      ...row,
+                      ...updated,
+                    }
+                  : row
+            )
+        );
+
+        setGuidance('');
+      } catch (requestError) {
+        setError(
+          requestError?.response?.data?.message ||
+          requestError?.message ||
+          'Guidance could not be saved.'
+        );
+      } finally {
+        setSubmitting(false);
+      }
+    };
 
   return (
-    <div style={{ 
-      height: 'calc(100vh - 64px)', // Adjust for dashboard header
-      display: 'flex', 
-      background: 'white',
-      overflow: 'hidden',
-      position: 'relative'
-    }}>
-      
-      {/* ZONE A: ESCALATED QUEUE (300px) */}
-      <AnimatePresence mode="wait">
-        {(isQueueOpen || !isMobile) && (
-          <motion.div
-            initial={isMobile ? { x: -300 } : { width: 0, opacity: 0 }}
-            animate={isMobile ? { x: 0 } : { width: 300, opacity: 1 }}
-            exit={isMobile ? { x: -300 } : { width: 0, opacity: 0 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            style={{ 
-              height: '100%',
-              background: 'white',
-              borderRight: '1px solid var(--dash-border)',
-              zIndex: 40,
-              position: isMobile ? 'absolute' : 'relative',
-              left: 0, top: 0,
-              boxShadow: isMobile ? '10px 0 30px rgba(0,0,0,0.05)' : 'none',
-              flexShrink: 0
+    <div
+      style={{
+        minHeight:
+          'calc(100vh - 64px)',
+        background:
+          'var(--dash-bg)',
+        padding:
+          '1.25rem',
+      }}
+    >
+      <div
+        style={{
+          maxWidth:
+            1400,
+          margin:
+            '0 auto',
+        }}
+      >
+        <div
+          style={{
+            display:
+              'flex',
+            justifyContent:
+              'space-between',
+            alignItems:
+              'flex-start',
+            gap:
+              '1rem',
+            marginBottom:
+              '1rem',
+            flexWrap:
+              'wrap',
+          }}
+        >
+          <div>
+            <h1
+              style={{
+                margin:
+                  0,
+                color:
+                  'var(--navy)',
+              }}
+            >
+              Pharmacist Consultations
+            </h1>
+
+            <p
+              style={{
+                color:
+                  'var(--gray-400)',
+                marginBottom:
+                  0,
+              }}
+            >
+              Real EUC-08 queue for governed medicine-interaction guidance.
+            </p>
+          </div>
+
+          <button
+            onClick={() =>
+              loadQueue()
+            }
+            disabled={loading}
+            style={{
+              display:
+                'flex',
+              alignItems:
+                'center',
+              gap:
+                8,
+              border:
+                '1px solid var(--dash-border)',
+              background:
+                'white',
+              borderRadius:
+                10,
+              padding:
+                '0.7rem 1rem',
+              cursor:
+                'pointer',
+            }}
+            type="button"
+          >
+            <RefreshCw
+              size={16}
+            />
+
+            Refresh
+          </button>
+        </div>
+
+        <div
+          style={{
+            display:
+              'grid',
+            gridTemplateColumns:
+              'minmax(280px, 340px) minmax(0, 1fr)',
+            gap:
+              '1rem',
+            alignItems:
+              'start',
+          }}
+        >
+          <aside
+            style={{
+              background:
+                'white',
+              border:
+                '1px solid var(--dash-border)',
+              borderRadius:
+                14,
+              overflow:
+                'hidden',
             }}
           >
-            <ConsultationQueue 
-              queue={queue} 
-              activeId={activeId} 
-              onSelect={handleSelectPatient} 
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <div
+              style={{
+                padding:
+                  '1rem',
+                borderBottom:
+                  '1px solid var(--dash-border)',
+              }}
+            >
+              <strong>
+                Consultation Queue
+              </strong>
 
-      {/* ZONE B: ACTIVE CONSULTATION (FLUID) */}
-      <div style={{ 
-        flex: 1, 
-        display: 'flex', 
-        flexDirection: 'column', 
-        minWidth: 0,
-        background: 'white',
-        position: 'relative',
-        zIndex: 10
-      }}>
-        {activePatient ? (
-          <ConsultationChat 
-            patient={activePatient} 
-            onResolve={handleResolve}
-            onToggleQueue={() => setIsQueueOpen(!isQueueOpen)}
-            isTablet={isTablet || isMobile}
-            isProfileOpen={isProfileOpen}
-            onToggleProfile={() => setIsProfileOpen(!isProfileOpen)}
-          />
-        ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--dash-bg)' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'white', border: '1px solid var(--dash-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
-                <span style={{ fontSize: '2rem' }}>OK</span>
-              </div>
-              <h2 style={{ color: 'var(--navy)', fontWeight: 700, margin: 0 }}>All Caught Up</h2>
-              <p style={{ color: 'var(--gray-400)', marginTop: '0.5rem' }}>Select a patient from the queue to start</p>
-              {!isQueueOpen && (
-                <button 
-                  onClick={() => setIsQueueOpen(true)}
-                  style={{ marginTop: '1.5rem', padding: '0.75rem 1.5rem', background: 'var(--navy)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 600, cursor: 'pointer' }}
+              <div
+                style={{
+                  display:
+                    'flex',
+                  gap:
+                    '0.5rem',
+                  marginTop:
+                    '0.6rem',
+                  flexWrap:
+                    'wrap',
+                }}
+              >
+                <span
+                  style={{
+                    fontSize:
+                      12,
+                    background:
+                      'var(--amber-light)',
+                    padding:
+                      '4px 8px',
+                    borderRadius:
+                      999,
+                  }}
                 >
-                  View Queue ({queue.length})
-                </button>
+                  {pendingCount} pending
+                </span>
+
+                <span
+                  style={{
+                    fontSize:
+                      12,
+                    background:
+                      'var(--dash-bg)',
+                    padding:
+                      '4px 8px',
+                    borderRadius:
+                      999,
+                  }}
+                >
+                  {queue.length} total
+                </span>
+              </div>
+            </div>
+
+            {loading && (
+              <div
+                style={{
+                  padding:
+                    '1rem',
+                  color:
+                    'var(--gray-400)',
+                }}
+              >
+                Loading real consultation queue...
+              </div>
+            )}
+
+            {!loading &&
+              queue.length ===
+                0 && (
+                <div
+                  style={{
+                    padding:
+                      '1.5rem',
+                    textAlign:
+                      'center',
+                    color:
+                      'var(--gray-400)',
+                  }}
+                >
+                  No consultations in queue.
+                </div>
+              )}
+
+            <div
+              style={{
+                maxHeight:
+                  '70vh',
+                overflowY:
+                  'auto',
+              }}
+            >
+              {queue.map(
+                (item) => {
+                  const active =
+                    activeId ===
+                    item.consultation_id;
+
+                  const pending =
+                    item.status ===
+                    'pending';
+
+                  return (
+                    <button
+                      key={
+                        item.consultation_id
+                      }
+                      onClick={() =>
+                        setActiveId(
+                          item.consultation_id
+                        )
+                      }
+                      style={{
+                        width:
+                          '100%',
+                        textAlign:
+                          'left',
+                        border:
+                          'none',
+                        borderBottom:
+                          '1px solid var(--dash-border)',
+                        background:
+                          active
+                            ? 'rgba(37, 99, 235, 0.08)'
+                            : 'white',
+                        padding:
+                          '0.9rem 1rem',
+                        cursor:
+                          'pointer',
+                      }}
+                      type="button"
+                    >
+                      <div
+                        style={{
+                          display:
+                            'flex',
+                          justifyContent:
+                            'space-between',
+                          gap:
+                            '0.5rem',
+                        }}
+                      >
+                        <strong>
+                          {item.customer_name ||
+                            `Customer ${item.customer_id}`}
+                        </strong>
+
+                        {pending
+                          ? (
+                            <Clock3
+                              size={15}
+                            />
+                            )
+                          : (
+                            <CheckCircle2
+                              size={15}
+                            />
+                            )}
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize:
+                            13,
+                          color:
+                            'var(--gray-400)',
+                          marginTop:
+                            4,
+                        }}
+                      >
+                        Consultation #
+                        {
+                          item.consultation_id
+                        }
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize:
+                            12,
+                          color:
+                            pending
+                              ? 'var(--amber)'
+                              : 'var(--green)',
+                          marginTop:
+                            5,
+                          fontWeight:
+                            600,
+                        }}
+                      >
+                        {pending
+                          ? 'PENDING'
+                          : 'RESPONDED'}
+                      </div>
+                    </button>
+                  );
+                }
               )}
             </div>
-          </div>
-        )}
-      </div>
+          </aside>
 
-      {/* ZONE C: PATIENT PROFILE (300px) */}
-      <AnimatePresence>
-        {isProfileOpen && activePatient && (
-          <motion.div
-            initial={isTablet ? { x: 300 } : { width: 0, opacity: 0 }}
-            animate={isTablet ? { x: 0 } : { width: 300, opacity: 1 }}
-            exit={isTablet ? { x: 300 } : { width: 0, opacity: 0 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            style={{ 
-              height: '100%',
-              background: 'white',
-              borderLeft: '1px solid var(--dash-border)',
-              zIndex: 30,
-              position: isTablet ? 'absolute' : 'relative',
-              right: 0, top: 0,
-              boxShadow: isTablet ? '-10px 0 30px rgba(0,0,0,0.05)' : 'none',
-              flexShrink: 0
+          <main
+            style={{
+              background:
+                'white',
+              border:
+                '1px solid var(--dash-border)',
+              borderRadius:
+                14,
+              padding:
+                '1.25rem',
+              minHeight:
+                500,
             }}
           >
-            <PatientContextPanel patient={activePatient} isOpen={true} />
-          </motion.div>
-        )}
-      </AnimatePresence>
+            {error && (
+              <div
+                style={{
+                  marginBottom:
+                    '1rem',
+                  padding:
+                    '0.8rem',
+                  borderRadius:
+                    10,
+                  background:
+                    'var(--amber-light)',
+                }}
+              >
+                {error}
+              </div>
+            )}
 
-      {/* OVERLAYS FOR MOBILE/TABLET DRAWERS */}
-      <AnimatePresence>
-        {((isMobile && isQueueOpen) || (isTablet && isProfileOpen)) && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => {
-              if (isMobile) setIsQueueOpen(false);
-              if (isTablet) setIsProfileOpen(false);
-            }}
-            style={{ 
-              position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.15)', 
-              backdropFilter: 'blur(2px)', zIndex: 25 
-            }}
-          />
-        )}
-      </AnimatePresence>
+            {!activeConsultation && (
+              <div
+                style={{
+                  minHeight:
+                    400,
+                  display:
+                    'flex',
+                  alignItems:
+                    'center',
+                  justifyContent:
+                    'center',
+                  color:
+                    'var(--gray-400)',
+                }}
+              >
+                Select a consultation from the queue.
+              </div>
+            )}
+
+            {activeConsultation && (
+              <>
+                <div
+                  style={{
+                    display:
+                      'flex',
+                    justifyContent:
+                      'space-between',
+                    gap:
+                      '1rem',
+                    alignItems:
+                      'flex-start',
+                    flexWrap:
+                      'wrap',
+                  }}
+                >
+                  <div>
+                    <h2
+                      style={{
+                        margin:
+                          0,
+                        color:
+                          'var(--navy)',
+                      }}
+                    >
+                      {activeConsultation.customer_name ||
+                        `Customer ${activeConsultation.customer_id}`}
+                    </h2>
+
+                    <p
+                      style={{
+                        color:
+                          'var(--gray-400)',
+                      }}
+                    >
+                      {reviewTitle(
+                        activeConsultation
+                      )}
+                    </p>
+                  </div>
+
+                  <span
+                    style={{
+                      padding:
+                        '5px 10px',
+                      borderRadius:
+                        999,
+                      fontWeight:
+                        700,
+                      fontSize:
+                        12,
+                      background:
+                        activeConsultation.status ===
+                        'pending'
+                          ? 'var(--amber-light)'
+                          : 'var(--green-light)',
+                    }}
+                  >
+                    {
+                      activeConsultation.status
+                    }
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    display:
+                      'grid',
+                    gridTemplateColumns:
+                      'repeat(auto-fit, minmax(180px, 1fr))',
+                    gap:
+                      '0.75rem',
+                    margin:
+                      '1rem 0',
+                  }}
+                >
+                  <div
+                    style={{
+                      padding:
+                        '0.8rem',
+                      background:
+                        'var(--dash-bg)',
+                      borderRadius:
+                        10,
+                    }}
+                  >
+                    <small>
+                      Consultation
+                    </small>
+
+                    <div>
+                      <strong>
+                        #
+                        {
+                          activeConsultation.consultation_id
+                        }
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      padding:
+                        '0.8rem',
+                      background:
+                        'var(--dash-bg)',
+                      borderRadius:
+                        10,
+                    }}
+                  >
+                    <small>
+                      Created
+                    </small>
+
+                    <div>
+                      {formatDate(
+                        activeConsultation.created_at
+                      )}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      padding:
+                        '0.8rem',
+                      background:
+                        'var(--dash-bg)',
+                      borderRadius:
+                        10,
+                    }}
+                  >
+                    <small>
+                      DDI Status
+                    </small>
+
+                    <div>
+                      {
+                        activeConsultation.ddi_status
+                      }
+                    </div>
+                  </div>
+                </div>
+
+                <section>
+                  <h3>
+                    Medicines Reviewed
+                  </h3>
+
+                  <div
+                    style={{
+                      display:
+                        'grid',
+                      gap:
+                        '0.65rem',
+                    }}
+                  >
+                    {(activeConsultation.cart_snapshot ||
+                      []).map(
+                      (product) => (
+                        <div
+                          key={
+                            product.product_id
+                          }
+                          style={{
+                            border:
+                              '1px solid var(--dash-border)',
+                            borderRadius:
+                              10,
+                            padding:
+                              '0.75rem',
+                          }}
+                        >
+                          <strong>
+                            {product.product_title ||
+                              `Product ${product.product_id}`}
+                          </strong>
+
+                          <div
+                            style={{
+                              color:
+                                'var(--gray-400)',
+                              marginTop:
+                                4,
+                            }}
+                          >
+                            {product.product_salt ||
+                              product.product_generic_name ||
+                              'Ingredient not resolved'}
+                          </div>
+                        </div>
+                      )
+                    )}
+                  </div>
+                </section>
+
+                <section
+                  style={{
+                    marginTop:
+                      '1.25rem',
+                  }}
+                >
+                  <h3>
+                    Governed Interaction Review
+                  </h3>
+
+                  <div
+                    style={{
+                      display:
+                        'grid',
+                      gap:
+                        '0.65rem',
+                    }}
+                  >
+                    {(activeConsultation.interaction_details ||
+                      []).map(
+                      (
+                        item,
+                        index
+                      ) => (
+                        <div
+                          key={index}
+                          style={{
+                            border:
+                              '1px solid var(--dash-border)',
+                            borderRadius:
+                              10,
+                            padding:
+                              '0.8rem',
+                          }}
+                        >
+                          <div
+                            style={{
+                              display:
+                                'flex',
+                              alignItems:
+                                'center',
+                              gap:
+                                7,
+                            }}
+                          >
+                            <ShieldAlert
+                              size={16}
+                            />
+
+                            <strong>
+                              {item.label ||
+                                'Review required'}
+                            </strong>
+                          </div>
+
+                          {(item.substance_a ||
+                            item.substance_b) && (
+                            <p
+                              style={{
+                                marginBottom:
+                                  '0.35rem',
+                              }}
+                            >
+                              {item.substance_a ||
+                                'Unknown'}
+                              {' + '}
+                              {item.substance_b ||
+                                'Unknown'}
+                            </p>
+                          )}
+
+                          <p
+                            style={{
+                              color:
+                                'var(--gray-400)',
+                              marginBottom:
+                                0,
+                            }}
+                          >
+                            {item.message}
+                          </p>
+                        </div>
+                      )
+                    )}
+                  </div>
+                </section>
+
+                {activeConsultation.customer_message && (
+                  <section
+                    style={{
+                      marginTop:
+                        '1.25rem',
+                    }}
+                  >
+                    <h3>
+                      Customer Message
+                    </h3>
+
+                    <p>
+                      {
+                        activeConsultation.customer_message
+                      }
+                    </p>
+                  </section>
+                )}
+
+                <section
+                  style={{
+                    marginTop:
+                      '1.25rem',
+                    paddingTop:
+                      '1.25rem',
+                    borderTop:
+                      '1px solid var(--dash-border)',
+                  }}
+                >
+                  <h3>
+                    Pharmacist Guidance
+                  </h3>
+
+                  {activeConsultation.status ===
+                  'responded' ? (
+                    <div
+                      style={{
+                        padding:
+                          '1rem',
+                        background:
+                          'var(--green-light)',
+                        borderRadius:
+                          10,
+                      }}
+                    >
+                      <p
+                        style={{
+                          marginTop:
+                            0,
+                        }}
+                      >
+                        {
+                          activeConsultation.pharmacist_guidance
+                        }
+                      </p>
+
+                      <small>
+                        Responded{' '}
+                        {formatDate(
+                          activeConsultation.responded_at
+                        )}
+                      </small>
+                    </div>
+                  ) : (
+                    <>
+                      <textarea
+                        maxLength={3000}
+                        onChange={(event) =>
+                          setGuidance(
+                            event.target.value
+                          )
+                        }
+                        placeholder="Enter factual pharmacist guidance for this verified interaction review..."
+                        style={{
+                          width:
+                            '100%',
+                          minHeight:
+                            130,
+                          padding:
+                            '0.85rem',
+                          border:
+                            '1px solid var(--dash-border)',
+                          borderRadius:
+                            10,
+                          resize:
+                            'vertical',
+                          boxSizing:
+                            'border-box',
+                        }}
+                        value={guidance}
+                      />
+
+                      <button
+                        disabled={
+                          submitting ||
+                          !guidance.trim()
+                        }
+                        onClick={
+                          handleGuidance
+                        }
+                        style={{
+                          marginTop:
+                            '0.75rem',
+                          display:
+                            'flex',
+                          alignItems:
+                            'center',
+                          gap:
+                            7,
+                          background:
+                            'var(--navy)',
+                          color:
+                            'white',
+                          border:
+                            'none',
+                          borderRadius:
+                            10,
+                          padding:
+                            '0.75rem 1rem',
+                          fontWeight:
+                            700,
+                          cursor:
+                            'pointer',
+                        }}
+                        type="button"
+                      >
+                        <Send
+                          size={16}
+                        />
+
+                        {submitting
+                          ? 'Saving Guidance...'
+                          : 'Send Guidance'}
+                      </button>
+                    </>
+                  )}
+
+                  <p
+                    style={{
+                      color:
+                        'var(--gray-400)',
+                      fontSize:
+                        12,
+                      marginBottom:
+                        0,
+                      marginTop:
+                        '0.75rem',
+                    }}
+                  >
+                    Guidance is recorded for the customer but does not bypass the governed DDI checkout gate.
+                  </p>
+                </section>
+              </>
+            )}
+          </main>
+        </div>
+      </div>
     </div>
   );
 }
-
