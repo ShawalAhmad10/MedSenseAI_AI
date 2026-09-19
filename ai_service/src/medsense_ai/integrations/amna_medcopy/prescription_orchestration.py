@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -10,9 +12,15 @@ from medsense_ai.integrations.amna_medcopy.contracts import (
 )
 from medsense_ai.integrations.amna_medcopy.prescription_product_matcher import (
     PrescriptionProductMatchResult,
+    PrescriptionProductMatchStatus,
     match_prescription_candidate_to_products,
 )
+from medsense_ai.integrations.amna_medcopy.prescription_product_suggestions import (
+    PrescriptionProductSuggestionResult,
+    suggest_prescription_candidate_products,
+)
 from medsense_ai.ocr.contracts import (
+    OCREngine,
     OCRResult,
     OCRRuntimeMetadata,
     OCRStatus,
@@ -21,6 +29,10 @@ from medsense_ai.ocr.contracts import (
 from medsense_ai.ocr.engines.paddleocr import (
     PaddleOCRAdapter,
     PaddleOCRExecution,
+)
+from medsense_ai.ocr.engines.rapidocr import (
+    RapidOCRAdapter,
+    RapidOCRExecution,
 )
 from medsense_ai.ocr.input_validation import (
     validate_image_bytes,
@@ -42,7 +54,7 @@ class PrescriptionOCRAdapter(Protocol):
     def recognize(
         self,
         image: PreprocessedImage,
-    ) -> PaddleOCRExecution:
+    ) -> PaddleOCRExecution | RapidOCRExecution:
         ...
 
 
@@ -61,6 +73,10 @@ class PartnerPrescriptionAnalysis:
         PrescriptionCandidateProductMatch,
         ...
     ]
+    product_suggestions: tuple[
+        PrescriptionProductSuggestionResult,
+        ...
+    ] = ()
 
 
 def _apply_frozen_review_policy(
@@ -75,6 +91,21 @@ def _apply_frozen_review_policy(
 
     if result.status is not OCRStatus.SUCCESS:
         return result
+
+    if result.engine is OCREngine.RAPIDOCR:
+        return OCRResult(
+            engine=result.engine,
+            preprocess_mode=result.preprocess_mode,
+            status=OCRStatus.REVIEW_REQUIRED,
+            raw_text=result.raw_text,
+            lines=result.lines,
+            review_required=True,
+            warnings=(
+                *result.warnings,
+                "RAPIDOCR_REVIEW_REQUIRED_UNTIL_CALIBRATED",
+            ),
+            verification_status=result.verification_status,
+        )
 
     confidences = tuple(
         line.confidence
@@ -128,6 +159,24 @@ def _apply_frozen_review_policy(
     )
 
 
+def _default_ocr_adapter() -> PrescriptionOCRAdapter:
+    requested = os.getenv(
+        "MEDSENSE_PRESCRIPTION_OCR_ENGINE",
+        "rapidocr",
+    ).strip().lower()
+
+    if requested == "rapidocr":
+        return RapidOCRAdapter()
+
+    if requested == "paddleocr":
+        return PaddleOCRAdapter()
+
+    raise ValueError(
+        "MEDSENSE_PRESCRIPTION_OCR_ENGINE must be "
+        "'rapidocr' or 'paddleocr'."
+    )
+
+
 class PartnerPrescriptionOrchestrationService:
     """
     Image -> frozen OCR -> Prescription Analysis -> Product candidates.
@@ -143,7 +192,7 @@ class PartnerPrescriptionOrchestrationService:
         self._ocr_adapter = (
             ocr_adapter
             if ocr_adapter is not None
-            else PaddleOCRAdapter()
+            else _default_ocr_adapter()
         )
 
     def analyze(
@@ -184,6 +233,10 @@ class PartnerPrescriptionOrchestrationService:
             PrescriptionCandidateProductMatch
         ] = []
 
+        suggestions: list[
+            PrescriptionProductSuggestionResult
+        ] = []
+
         for candidate in analysis.candidates:
             product_match = (
                 match_prescription_candidate_to_products(
@@ -191,6 +244,17 @@ class PartnerPrescriptionOrchestrationService:
                     products,
                 )
             )
+
+            if product_match.status in {
+                PrescriptionProductMatchStatus.UNMAPPED,
+                PrescriptionProductMatchStatus.SOURCE_REVIEW_REQUIRED,
+            }:
+                suggestions.append(
+                    suggest_prescription_candidate_products(
+                        candidate,
+                        products,
+                    )
+                )
 
             matches.append(
                 PrescriptionCandidateProductMatch(
@@ -206,4 +270,5 @@ class PartnerPrescriptionOrchestrationService:
             ocr_metadata=execution.metadata,
             prescription_analysis=analysis,
             product_matches=tuple(matches),
+            product_suggestions=tuple(suggestions),
         )

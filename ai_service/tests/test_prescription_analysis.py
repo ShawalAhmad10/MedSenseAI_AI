@@ -562,3 +562,133 @@ def test_instruction_missing_confidence_requires_review() -> None:
         is PrescriptionAnalysisStatus.REVIEW_REQUIRED
     )
     assert analysis.review_required is True
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Sig: 5 mL tid",
+        "Signa: 5 mL twice daily",
+        "Seg: 5ml tid a.c.",
+    ],
+)
+def test_sig_style_instruction_labels_are_not_medications(
+    line: str,
+) -> None:
+    analysis = analyze_prescription_ocr(
+        make_result(
+            OCRLine(
+                line,
+                0.99,
+            )
+        )
+    )
+
+    assert analysis.candidates == ()
+    assert len(analysis.instructions) == 1
+
+    assert (
+        analysis.instructions[0].source.text
+        == line
+    )
+
+
+def test_percent_strength_continuing_into_word_is_not_medication(
+) -> None:
+    analysis = analyze_prescription_ocr(
+        make_result(
+            OCRLine(
+                "dv: 10 5%Dextrore",
+                0.99,
+            )
+        )
+    )
+
+    assert analysis.candidates == ()
+
+
+def test_valid_percent_strength_is_preserved(
+) -> None:
+    analysis = analyze_prescription_ocr(
+        make_result(
+            OCRLine(
+                "Hydrocortisone 1%",
+                0.99,
+            )
+        )
+    )
+
+    assert len(analysis.candidates) == 1
+
+    candidate = analysis.candidates[0]
+
+    assert (
+        candidate.raw_name_text
+        == "Hydrocortisone"
+    )
+
+    assert (
+        candidate.raw_strength_text
+        == "1%"
+    )
+
+
+def test_percent_followed_by_form_text_is_preserved(
+) -> None:
+    analysis = analyze_prescription_ocr(
+        make_result(
+            OCRLine(
+                "Dextrose 5% cream",
+                0.99,
+            )
+        )
+    )
+
+    assert len(analysis.candidates) == 1
+
+    assert (
+        analysis.candidates[0].raw_name_text
+        == "Dextrose"
+    )
+
+    assert (
+        analysis.candidates[0].raw_strength_text
+        == "5%"
+    )
+
+
+def test_sig_prefix_does_not_match_medicine_name(
+) -> None:
+    analysis = analyze_prescription_ocr(
+        make_result(
+            OCRLine(
+                "Signalex 10 mg",
+                0.99,
+            )
+        )
+    )
+
+    assert len(analysis.candidates) == 1
+
+    assert (
+        analysis.candidates[0].raw_name_text
+        == "Signalex"
+    )
+
+
+def test_ratio_strength_remains_supported(
+) -> None:
+    analysis = analyze_prescription_ocr(
+        make_result(
+            OCRLine(
+                "Amoxicillin 250 mg/5 mL",
+                0.99,
+            )
+        )
+    )
+
+    assert len(analysis.candidates) == 1
+
+    assert (
+        analysis.candidates[0].raw_strength_text
+        == "250 mg/5 mL"
+    )

@@ -60,6 +60,9 @@ _STRENGTH_RE = re.compile(
 
 
 _INSTRUCTION_PREFIXES = (
+    "sig:",
+    "signa:",
+    "seg:",
     "take ",
     "use ",
     "continue ",
@@ -167,6 +170,13 @@ def _candidate_from_line(
     )
 
     if match is None:
+        return None
+
+    if (
+        match.group("strength").endswith("%")
+        and match.end() < len(stripped)
+        and stripped[match.end()].isalpha()
+    ):
         return None
 
     raw_name_text = stripped[

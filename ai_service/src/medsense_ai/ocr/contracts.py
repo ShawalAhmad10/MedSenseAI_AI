@@ -11,6 +11,7 @@ BoundingBox: TypeAlias = tuple[int, int, int, int]
 class OCREngine(StrEnum):
     TESSERACT = "tesseract"
     PADDLEOCR = "paddleocr"
+    RAPIDOCR = "rapidocr"
 
 
 class PreprocessMode(StrEnum):
