@@ -91,3 +91,97 @@ test('ddiService propagates network outage instead of inventing clearance', { co
     (error) => error && error.code === 'ECONNREFUSED',
   );
 });
+
+// ddiService hardening status/clearance consistency
+test('ddiService preserves valid blocked governed statuses', { concurrency: false }, async (t) => {
+  const originalPost = axios.post;
+  t.after(() => { axios.post = originalPost; });
+
+  for (const [status, httpStatus] of [
+    ['WARNING_REVIEW_REQUIRED', 200],
+    ['UNRESOLVED_REVIEW_REQUIRED', 200],
+    ['SERVICE_UNAVAILABLE', 503],
+  ]) {
+    axios.post = async () => ({
+      status: httpStatus,
+      data: {
+        status,
+        checkout_allowed: false,
+        products: [],
+        pairs: [],
+      },
+    });
+
+    const result =
+      await ddiService.checkCart([{ product_id: 900012 }]);
+
+    assert.equal(result.result.status, status);
+    assert.equal(result.result.checkout_allowed, false);
+  }
+});
+
+test('ddiService rejects review statuses that incorrectly allow checkout', { concurrency: false }, async (t) => {
+  const originalPost = axios.post;
+  t.after(() => { axios.post = originalPost; });
+
+  for (const status of [
+    'WARNING_REVIEW_REQUIRED',
+    'UNRESOLVED_REVIEW_REQUIRED',
+    'SERVICE_UNAVAILABLE',
+  ]) {
+    axios.post = async () => ({
+      status: status === 'SERVICE_UNAVAILABLE' ? 503 : 200,
+      data: {
+        status,
+        checkout_allowed: true,
+        products: [],
+        pairs: [],
+      },
+    });
+
+    await assert.rejects(
+      () => ddiService.checkCart([{ product_id: 900012 }]),
+      (error) => error && error.code === 'DDI_INVALID_RESPONSE',
+    );
+  }
+});
+
+test('ddiService rejects CLEAR status that does not grant checkout', { concurrency: false }, async (t) => {
+  const originalPost = axios.post;
+  t.after(() => { axios.post = originalPost; });
+
+  axios.post = async () => ({
+    status: 200,
+    data: {
+      status: 'CLEAR_WITH_LIMITATIONS',
+      checkout_allowed: false,
+      products: [],
+      pairs: [],
+    },
+  });
+
+  await assert.rejects(
+    () => ddiService.checkCart([{ product_id: 900012 }]),
+    (error) => error && error.code === 'DDI_INVALID_RESPONSE',
+  );
+});
+
+test('ddiService rejects unknown governed status instead of trusting its boolean', { concurrency: false }, async (t) => {
+  const originalPost = axios.post;
+  t.after(() => { axios.post = originalPost; });
+
+  axios.post = async () => ({
+    status: 200,
+    data: {
+      status: 'UNKNOWN_CLEAR_STATE',
+      checkout_allowed: true,
+      products: [],
+      pairs: [],
+    },
+  });
+
+  await assert.rejects(
+    () => ddiService.checkCart([{ product_id: 900012 }]),
+    (error) => error && error.code === 'DDI_INVALID_RESPONSE',
+  );
+});
