@@ -63,17 +63,17 @@ def test_packaged_bridge_has_deterministic_governed_overlap() -> None:
     second = load_ddi_bridge_artifact()
 
     assert first == second
-    assert len(first.mappings) == 1125
-    assert len(first.model_unsupported_lookup_keys) == 6908
+    assert len(first.mappings) == 1244
+    assert len(first.model_unsupported_lookup_keys) == 6889
     assert len(first.ambiguous_lookup_keys) == 0
-    assert len(first.model_vocabulary_unmapped_keys) == 591
+    assert len(first.model_vocabulary_unmapped_keys) == 531
     assert first.provenance.rxnorm_release == "2026-08-03"
     assert first.provenance.rxnorm_source_sha256 == (
         "60302315447ddf1411836c4a88c1a6e16fa8e25fcf508b0a9393fca984e3a87a"
     )
     assert first.provenance.frozen_model_version == "med-ddi-binary-1.0.0"
     assert first.payload_sha256 == (
-        "4a3530ba6de56a1a7fc20e436922ab8d98aa1075fdb22c10b9d8313dd12f420a"
+        "5091ec7361b094b1d4fcf9653be30ddaf3f284b9204c96d2f5dc8a0b70df5ed6"
     )
 
 
@@ -111,6 +111,31 @@ def test_aspirin_resolves_through_same_rxcui_model_identity(
     assert result.normalized_salt == "aspirin"
     assert result.rxcui == "1191"
     assert result.frozen_model_token == "Acetylsalicylic acid"
+    assert result.review_required is False
+
+
+@pytest.mark.parametrize(
+    ("source_salt", "expected_token", "expected_rxcui"),
+    (
+        ("Clavulanic acid", "Clavulanic acid", "21216"),
+        ("Rifampin", "Rifampicin", "9384"),
+        ("Mesalamine", "Mesalazine", "52582"),
+        ("Penicillin G", "Benzylpenicillin", "7980"),
+        ("Penicillin V", "Phenoxymethylpenicillin", "7984"),
+        ("5-hydroxytryptophan", "Oxitriptan", "94"),
+    ),
+)
+def test_pinned_raw_rxnorm_terms_resolve_to_unique_model_identity(
+    resolver: ExactDDIIngredientResolver,
+    source_salt: str,
+    expected_token: str,
+    expected_rxcui: str,
+) -> None:
+    result = resolver.resolve(source_salt)
+
+    assert result.state is IngredientResolutionState.RESOLVED
+    assert result.frozen_model_token == expected_token
+    assert result.rxcui == expected_rxcui
     assert result.review_required is False
 
 

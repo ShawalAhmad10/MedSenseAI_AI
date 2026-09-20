@@ -14,14 +14,16 @@ from medsense_ai.integrations.amna_medcopy.ddi_bridge import (
     BRIDGE_SCHEMA_VERSION,
     DEFAULT_BRIDGE_ARTIFACT,
 )
+from medsense_ai.medical_data_ingestion.normalization import normalize_medical_name
 
 
 MATCHING_POLICY = (
     "NFKC/casefold/whitespace normalization followed by unambiguous exact RxNorm "
-    "canonical-or-accepted-alias identity; exact frozen-model vocabulary matches are "
+    "identity from the governed validation database or pinned unsuppressed RXNORM "
+    "ingredient terms (IN/PIN/SY/TMSY); exact frozen-model vocabulary matches are "
     "used directly, while other governed names may inherit the unique frozen-model "
-    "token already associated with the same RXCUI; no fuzzy matching, splitting, "
-    "stripping, or moiety inference."
+    "token associated with the same RXCUI; no fuzzy matching, splitting, stripping, "
+    "or moiety inference."
 )
 
 
@@ -139,6 +141,34 @@ def build_bridge_payload(
         assert isinstance(cast_set, set)
         cast_set.add(alias)
 
+    raw_rxnorm_terms: dict[str, dict[str, set[str]]] = defaultdict(
+        lambda: defaultdict(set)
+    )
+    allowed_raw_ttys = {"IN", "PIN", "SY", "TMSY"}
+
+    with rxnorm_source.open("r", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            fields = line.rstrip("\r\n").split("|")
+            if len(fields) < 17:
+                continue
+
+            rxcui = fields[0]
+            sab = fields[11]
+            tty = fields[12]
+            source_text = fields[14]
+            suppress = fields[16]
+
+            if sab != "RXNORM" or suppress != "N" or tty not in allowed_raw_ttys:
+                continue
+
+            try:
+                normalized = normalize_medical_name(source_text)
+            except ValueError:
+                continue
+
+            if normalized:
+                raw_rxnorm_terms[normalized][rxcui].add(source_text)
+
     with vocabulary_path.open("r", encoding="utf-8-sig", newline="") as handle:
         vocabulary_rows = list(csv.DictReader(handle))
     vocabulary = {row["normalized_name"]: row["original_name"] for row in vocabulary_rows}
@@ -152,6 +182,11 @@ def build_bridge_payload(
     for key in sorted(unambiguous_keys & vocabulary.keys()):
         rxcui, _identity = next(iter(candidates[key].items()))
         model_keys_by_rxcui[rxcui].add(key)
+
+    for key, identities in raw_rxnorm_terms.items():
+        if key in vocabulary and len(identities) == 1:
+            rxcui = next(iter(identities))
+            model_keys_by_rxcui[rxcui].add(key)
 
     model_key_by_lookup_key: dict[str, str] = {}
     for key in sorted(unambiguous_keys):
@@ -189,6 +224,46 @@ def build_bridge_payload(
             }
         )
 
+    raw_model_key_by_lookup_key: dict[str, str] = {}
+
+    for key in sorted(raw_rxnorm_terms):
+        if key in candidates:
+            continue
+
+        identities = raw_rxnorm_terms[key]
+        if len(identities) != 1:
+            continue
+
+        rxcui = next(iter(identities))
+        model_keys = model_keys_by_rxcui.get(rxcui, set())
+
+        if len(model_keys) == 1:
+            raw_model_key_by_lookup_key[key] = next(iter(model_keys))
+
+    for key in sorted(raw_model_key_by_lookup_key):
+        rxcui, source_texts = next(iter(raw_rxnorm_terms[key].items()))
+        model_key = raw_model_key_by_lookup_key[key]
+
+        mappings.append(
+            {
+                "canonical_display_name": vocabulary[model_key],
+                "frozen_model_token": vocabulary[model_key],
+                "match_source": "CANONICAL" if key == model_key else "ALIAS",
+                "matched_source_text": sorted(
+                    source_texts,
+                    key=lambda item: (item.casefold(), item),
+                )[0],
+                "normalized_lookup_key": key,
+                "rxcui": rxcui,
+            }
+        )
+
+    mappings.sort(key=lambda item: str(item["normalized_lookup_key"]))
+
+    mapped_model_keys = set(model_key_by_lookup_key.values()) | set(
+        raw_model_key_by_lookup_key.values()
+    )
+
     payload: dict[str, object] = {
         "ambiguous_lookup_keys": ambiguous_keys,
         "mappings": mappings,
@@ -196,7 +271,9 @@ def build_bridge_payload(
         "model_unsupported_lookup_keys": sorted(
             unambiguous_keys - set(model_key_by_lookup_key)
         ),
-        "model_vocabulary_unmapped_keys": sorted(vocabulary.keys() - unambiguous_keys),
+        "model_vocabulary_unmapped_keys": sorted(
+            vocabulary.keys() - mapped_model_keys
+        ),
         "provenance": {
             "evidence_provenance_sha256": _sha256(evidence_provenance),
             "evidence_source_file": evidence_source.name,
