@@ -18,8 +18,10 @@ from medsense_ai.integrations.amna_medcopy.ddi_bridge import (
 
 MATCHING_POLICY = (
     "NFKC/casefold/whitespace normalization followed by unambiguous exact RxNorm "
-    "canonical-or-accepted-alias and exact frozen-model-vocabulary overlap only; "
-    "no fuzzy matching, splitting, stripping, or moiety inference."
+    "canonical-or-accepted-alias identity; exact frozen-model vocabulary matches are "
+    "used directly, while other governed names may inherit the unique frozen-model "
+    "token already associated with the same RXCUI; no fuzzy matching, splitting, "
+    "stripping, or moiety inference."
 )
 
 
@@ -145,7 +147,25 @@ def build_bridge_payload(
 
     ambiguous_keys = sorted(key for key, values in candidates.items() if len(values) != 1)
     unambiguous_keys = {key for key, values in candidates.items() if len(values) == 1}
-    supported_keys = sorted(unambiguous_keys & vocabulary.keys())
+
+    model_keys_by_rxcui: dict[str, set[str]] = defaultdict(set)
+    for key in sorted(unambiguous_keys & vocabulary.keys()):
+        rxcui, _identity = next(iter(candidates[key].items()))
+        model_keys_by_rxcui[rxcui].add(key)
+
+    model_key_by_lookup_key: dict[str, str] = {}
+    for key in sorted(unambiguous_keys):
+        rxcui, _identity = next(iter(candidates[key].items()))
+
+        if key in vocabulary:
+            model_key_by_lookup_key[key] = key
+            continue
+
+        model_keys = model_keys_by_rxcui.get(rxcui, set())
+        if len(model_keys) == 1:
+            model_key_by_lookup_key[key] = next(iter(model_keys))
+
+    supported_keys = sorted(model_key_by_lookup_key)
     mappings: list[dict[str, object]] = []
     for key in supported_keys:
         rxcui, identity = next(iter(candidates[key].items()))
@@ -161,7 +181,7 @@ def build_bridge_payload(
         mappings.append(
             {
                 "canonical_display_name": identity["canonical_display_name"],
-                "frozen_model_token": vocabulary[key],
+                "frozen_model_token": vocabulary[model_key_by_lookup_key[key]],
                 "match_source": match_source,
                 "matched_source_text": matched_source_text,
                 "normalized_lookup_key": key,
@@ -173,7 +193,9 @@ def build_bridge_payload(
         "ambiguous_lookup_keys": ambiguous_keys,
         "mappings": mappings,
         "matching_policy": MATCHING_POLICY,
-        "model_unsupported_lookup_keys": sorted(unambiguous_keys - vocabulary.keys()),
+        "model_unsupported_lookup_keys": sorted(
+            unambiguous_keys - set(model_key_by_lookup_key)
+        ),
         "model_vocabulary_unmapped_keys": sorted(vocabulary.keys() - unambiguous_keys),
         "provenance": {
             "evidence_provenance_sha256": _sha256(evidence_provenance),

@@ -63,8 +63,8 @@ def test_packaged_bridge_has_deterministic_governed_overlap() -> None:
     second = load_ddi_bridge_artifact()
 
     assert first == second
-    assert len(first.mappings) == 1091
-    assert len(first.model_unsupported_lookup_keys) == 6942
+    assert len(first.mappings) == 1125
+    assert len(first.model_unsupported_lookup_keys) == 6908
     assert len(first.ambiguous_lookup_keys) == 0
     assert len(first.model_vocabulary_unmapped_keys) == 591
     assert first.provenance.rxnorm_release == "2026-08-03"
@@ -73,7 +73,7 @@ def test_packaged_bridge_has_deterministic_governed_overlap() -> None:
     )
     assert first.provenance.frozen_model_version == "med-ddi-binary-1.0.0"
     assert first.payload_sha256 == (
-        "42052b98cd40d467b776349b36a23846e4c99701c727ffffec10bd91410808a7"
+        "4a3530ba6de56a1a7fc20e436922ab8d98aa1075fdb22c10b9d8313dd12f420a"
     )
 
 
@@ -99,6 +99,18 @@ def test_exact_supported_salt_resolves_with_full_provenance(
     assert result.rxnorm_release == "2026-08-03"
     assert result.frozen_model_token == "Warfarin"
     assert result.frozen_model_version == "med-ddi-binary-1.0.0"
+    assert result.review_required is False
+
+
+def test_aspirin_resolves_through_same_rxcui_model_identity(
+    resolver: ExactDDIIngredientResolver,
+) -> None:
+    result = resolver.resolve("Aspirin")
+
+    assert result.state is IngredientResolutionState.RESOLVED
+    assert result.normalized_salt == "aspirin"
+    assert result.rxcui == "1191"
+    assert result.frozen_model_token == "Acetylsalicylic acid"
     assert result.review_required is False
 
 
