@@ -16,10 +16,28 @@ const steps = ['address', 'prescription', 'payment', 'review'];
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const checkoutParams =
+    new URLSearchParams(location.search);
+
   const checkoutMode =
-    new URLSearchParams(location.search).get('mode') === 'buy-now'
+    checkoutParams.get('mode') === 'buy-now'
       ? 'BUY_NOW'
       : 'CART';
+
+  const requestedConsultationId =
+    Number(
+      checkoutParams.get(
+        'ddi_consultation_id'
+      )
+    );
+
+  const approvedConsultationId =
+    Number.isSafeInteger(
+      requestedConsultationId
+    ) &&
+    requestedConsultationId > 0
+      ? requestedConsultationId
+      : null;
   const { isAuthenticated, openAuthModal, user } = useAuth();
   const {
     clearCart,
@@ -138,6 +156,10 @@ export default function CheckoutPage() {
   const [showWarnings, setShowWarnings] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [
+    reviewConsultationId,
+    setReviewConsultationId,
+  ] = useState(null);
   const [form, setForm] = useState({
     fullName: '',
     phone: '',
@@ -491,6 +513,67 @@ export default function CheckoutPage() {
                   {error}
                 </div>
               )}
+
+              {reviewConsultationId && (
+                <div
+                  className="sf-summary-block"
+                  style={{
+                    marginTop:
+                      '1rem',
+                  }}
+                >
+                  <strong>
+                    Pharmacist review created
+                  </strong>
+
+                  <p
+                    className="sf-muted"
+                    style={{
+                      marginBottom:
+                        '0.75rem',
+                    }}
+                  >
+                    Consultation #{reviewConsultationId} is waiting for a pharmacist decision. Your order has not been created and stock has not been deducted.
+                  </p>
+
+                  <Link
+                    className="sf-button-secondary"
+                    style={{
+                      textDecoration:
+                        'none',
+                    }}
+                    to="/consult/pharmacist"
+                  >
+                    Track Pharmacist Decision
+                  </Link>
+                </div>
+              )}
+
+              {approvedConsultationId && (
+                <div
+                  className="sf-summary-block"
+                  style={{
+                    marginTop:
+                      '1rem',
+                  }}
+                >
+                  <div className="sf-badge-success">
+                    Pharmacist approval #{approvedConsultationId}
+                  </div>
+
+                  <p
+                    className="sf-muted"
+                    style={{
+                      marginBottom:
+                        0,
+                      marginTop:
+                        '0.65rem',
+                    }}
+                  >
+                    The server will re-check the exact cart, customer and approval before creating the order.
+                  </p>
+                </div>
+              )}
             </>
           )}
 
@@ -540,12 +623,10 @@ export default function CheckoutPage() {
               <button
                 className="sf-button"
                 onClick={async () => {
-                  if (ddiLoading || !ddiCheckoutAllowed) {
+                  if (ddiLoading) {
                     setShowWarnings(true);
                     setError(
-                      ddiError ||
-                      ddiResult?.message ||
-                      'Drug interaction review must clear before placing the order.',
+                      'Please wait for the current interaction check to finish before continuing.',
                     );
                     return;
                   }
@@ -568,6 +649,12 @@ export default function CheckoutPage() {
                       customer_address: `${form.address}, ${form.city}`,
                       payment_method: 'cash',
                       notes: form.notes || null,
+                      ...(approvedConsultationId
+                        ? {
+                            ddi_consultation_id:
+                              approvedConsultationId,
+                          }
+                        : {}),
                       items: items.map(item => {
                         // Extract UUID from product ID — strip only "prod-" prefix, keep UUID intact
                         const productId = typeof item.id === 'string'
@@ -610,19 +697,112 @@ export default function CheckoutPage() {
                     }
                   } catch (err) {
                     console.error('Order placement error:', err);
-                    setError(err.response?.data?.message || err.message || 'Failed to place order. Please try again.');
+
+                    const apiPayload =
+                      err.response?.data || {};
+
+                    const apiCode =
+                      apiPayload.code ||
+                      apiPayload.error?.code ||
+                      '';
+
+                    if (
+                      apiCode ===
+                      'DDI_REVIEW_PENDING'
+                    ) {
+                      const consultation =
+                        apiPayload.consultation ||
+                        apiPayload.data
+                          ?.consultation ||
+                        null;
+
+                      const candidateId =
+                        Number(
+                          apiPayload
+                            .ddi_consultation_id ||
+                          apiPayload.data
+                            ?.ddi_consultation_id ||
+                          consultation
+                            ?.consultation_id
+                        );
+
+                      if (
+                        Number.isSafeInteger(
+                          candidateId
+                        ) &&
+                        candidateId > 0
+                      ) {
+                        setReviewConsultationId(
+                          candidateId
+                        );
+                      }
+
+                      setError(
+                        apiPayload.message ||
+                        'This medicine set requires pharmacist approval before the order can be completed.'
+                      );
+
+                      return;
+                    }
+
+                    if (
+                      apiCode ===
+                        'CONSULT_CART_REJECTED'
+                    ) {
+                      if (
+                        checkoutMode ===
+                          'CART'
+                      ) {
+                        clearCart();
+                      }
+
+                      setReviewConsultationId(
+                        null
+                      );
+
+                      navigate(
+                        '/consult/pharmacist'
+                      );
+
+                      return;
+                    }
+
+                    if (
+                      apiCode ===
+                        'CONSULT_APPROVAL_STALE' ||
+                      apiCode ===
+                        'CONSULT_APPROVAL_REJECTED' ||
+                      apiCode ===
+                        'CONSULT_APPROVAL_NOT_FOUND' ||
+                      apiCode ===
+                        'CONSULT_APPROVAL_ALREADY_USED'
+                    ) {
+                      setReviewConsultationId(
+                        null
+                      );
+                    }
+
+                    setError(
+                      apiPayload.message ||
+                      err.message ||
+                      'Failed to place order. Please try again.'
+                    );
                   } finally {
                     setIsSubmitting(false);
                   }
                 }}
-                disabled={isSubmitting || ddiLoading || !ddiCheckoutAllowed}
+                disabled={isSubmitting || ddiLoading}
                 type="button"
               >
                 {ddiLoading
                   ? 'Checking Interactions...'
                   : isSubmitting
-                    ? 'Placing Order...'
-                    : 'Place Order'}
+                    ? 'Submitting...'
+                    : approvedConsultationId
+                      ? 'Place Approved Order'
+                      : ddiCheckoutAllowed
+                        ? 'Place Order'
+                        : 'Submit for Pharmacist Review'}
               </button>
             )}
           </div>

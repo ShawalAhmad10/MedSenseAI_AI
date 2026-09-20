@@ -1,7 +1,10 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { checkCartDDI, extractDdiWarnings } from '../services/storefrontDdiService';
-import { trackFunnelEvent } from '../services/storefrontFunnelService';
+import {
+  resetFunnelCartId,
+  trackFunnelEvent,
+} from '../services/storefrontFunnelService';
 import { useAuth } from './AuthContext';
 
 const CartContext = createContext(null);
@@ -150,6 +153,13 @@ export function CartProvider({ children }) {
 
   const addItem = async (item) => {
     try {
+      // An empty cart starts a fresh cart lifecycle.
+      // This prevents an old rejected review from binding
+      // medicines added after the cart was emptied.
+      if (items.length === 0) {
+        resetFunnelCartId();
+      }
+
       // Fetch live stock before adding
       const liveStock = await fetchLiveStock(item.id);
       const currentStock = liveStock !== null ? liveStock : (item.stockQty ?? 0);
@@ -290,6 +300,7 @@ export function CartProvider({ children }) {
   const clearCart = () => {
     setItems([]);
     saveCart(userId, []);
+    resetFunnelCartId();
   };
 
   // Merge guest cart to account cart when user logs in

@@ -229,6 +229,22 @@ export default function PharmacistConsultPage() {
                 consultation.status ===
                 'responded';
 
+              const approved =
+                responded &&
+                consultation.decision ===
+                  'approved';
+
+              const rejected =
+                responded &&
+                consultation.decision ===
+                  'rejected';
+
+              const approvalConsumed =
+                Boolean(
+                  consultation
+                    .checkout_consumed_at
+                );
+
               return (
                 <article
                   className="sf-summary-block"
@@ -272,14 +288,18 @@ export default function PharmacistConsultPage() {
 
                     <span
                       className={
-                        responded
+                        approved
                           ? 'sf-badge-success'
                           : 'sf-badge-warning'
                       }
                     >
-                      {responded
-                        ? 'Guidance received'
-                        : 'Pending pharmacist guidance'}
+                      {approved
+                        ? 'Checkout approved'
+                        : rejected
+                          ? 'Checkout rejected'
+                          : responded
+                            ? 'Guidance received'
+                            : 'Pending pharmacist review'}
                     </span>
                   </div>
 
@@ -471,6 +491,40 @@ export default function PharmacistConsultPage() {
                       )}
                   </div>
 
+                  {approved &&
+                    !approvalConsumed && (
+                      <div
+                        style={{
+                          marginTop:
+                            '1rem',
+                        }}
+                      >
+                        <Link
+                          className="sf-button"
+                          style={{
+                            textDecoration:
+                              'none',
+                          }}
+                          to={`/checkout?ddi_consultation_id=${consultation.consultation_id}`}
+                        >
+                          Continue Approved Checkout
+                        </Link>
+                      </div>
+                    )}
+
+                  {approved &&
+                    approvalConsumed && (
+                      <div
+                        className="sf-badge-success"
+                        style={{
+                          marginTop:
+                            '1rem',
+                        }}
+                      >
+                        This approval has already been consumed by checkout.
+                      </div>
+                    )}
+
                   <p
                     className="sf-muted"
                     style={{
@@ -482,7 +536,13 @@ export default function PharmacistConsultPage() {
                         '0.85rem',
                     }}
                   >
-                    Pharmacist guidance does not override the governed DDI checkout decision.
+                    {approved
+                      ? 'Approval applies only to the exact reviewed medicine set. The server will revalidate the cart before creating the order.'
+                      : rejected
+                        ? 'Checkout remains blocked for this reviewed medicine set. Follow the pharmacist guidance before continuing.'
+                        : responded
+                          ? 'This response contains guidance only because no checkout decision is attached to it.'
+                          : 'A pharmacist must review this medicine set before checkout can continue.'}
                   </p>
                 </article>
               );

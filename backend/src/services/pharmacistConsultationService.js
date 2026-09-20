@@ -62,6 +62,24 @@ function boundedText(
   return text;
 }
 
+function normalizeCartInstanceId(value) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return null;
+  }
+
+  const normalized =
+    boundedText(
+      value,
+      128
+    );
+
+  return normalized || null;
+}
+
+
 function normalizeSource(value) {
   const source =
     String(value || '')
@@ -248,7 +266,8 @@ async function ensureConsultationSchema() {
         ALTER TABLE pharmacist_consultations
           ADD COLUMN IF NOT EXISTS decision VARCHAR(16) NULL,
           ADD COLUMN IF NOT EXISTS decision_at TIMESTAMPTZ NULL,
-          ADD COLUMN IF NOT EXISTS checkout_consumed_at TIMESTAMPTZ NULL
+          ADD COLUMN IF NOT EXISTS checkout_consumed_at TIMESTAMPTZ NULL,
+          ADD COLUMN IF NOT EXISTS cart_instance_id VARCHAR(128) NULL
       `);
 
       await sequelize.query(`
@@ -288,6 +307,16 @@ async function ensureConsultationSchema() {
           status,
           created_at ASC
         )
+      `);
+
+      await sequelize.query(`
+        CREATE INDEX IF NOT EXISTS
+          idx_pharmacist_consultations_cart_instance
+        ON pharmacist_consultations (
+          customer_id,
+          cart_instance_id
+        )
+        WHERE cart_instance_id IS NOT NULL
       `);
 
       await sequelize.query(`
@@ -856,6 +885,7 @@ function buildSnapshot(
 function fingerprintPayload({
   customerId,
   source,
+  cartInstanceId = null,
   ddiStatus,
   interactionDetails,
   cartSnapshot,
@@ -865,6 +895,15 @@ function fingerprintPayload({
       customerId,
 
     source,
+
+    ...(
+      cartInstanceId
+        ? {
+            cart_instance_id:
+              cartInstanceId,
+          }
+        : {}
+    ),
 
     ddi_status:
       ddiStatus,
@@ -920,6 +959,10 @@ function mapConsultation(row) {
 
     source:
       row.source,
+
+    cart_instance_id:
+      row.cart_instance_id ||
+      null,
 
     status:
       row.status,
@@ -993,6 +1036,13 @@ async function createConsultation(
       payload.items
     );
 
+  const cartInstanceId =
+    source === 'cart'
+      ? normalizeCartInstanceId(
+          payload.cart_instance_id
+        )
+      : null;
+
   const customerMessage =
     boundedText(
       payload.customer_message,
@@ -1035,11 +1085,58 @@ async function createConsultation(
     fingerprintPayload({
       customerId,
       source,
+      cartInstanceId,
       ddiStatus:
         ddi.status,
       interactionDetails,
       cartSnapshot,
     });
+
+  if (cartInstanceId) {
+    const rejected =
+      await sequelize.query(
+        `
+          SELECT pc.*
+          FROM pharmacist_consultations pc
+          WHERE pc.customer_id =
+                :customer_id
+            AND pc.review_fingerprint =
+                :review_fingerprint
+            AND pc.cart_instance_id =
+                :cart_instance_id
+            AND pc.status =
+                'responded'
+            AND pc.decision =
+                'rejected'
+          ORDER BY
+            pc.consultation_id
+            DESC
+          LIMIT 1
+        `,
+        {
+          replacements: {
+            customer_id:
+              customerId,
+
+            review_fingerprint:
+              reviewFingerprint,
+
+            cart_instance_id:
+              cartInstanceId,
+          },
+
+          type:
+            QueryTypes.SELECT,
+        }
+      );
+
+    if (rejected.length === 1) {
+      throw consultationError(
+        'CONSULT_CART_REJECTED',
+        'This exact cart was already rejected by a pharmacist. Clear or change the cart before requesting another review.'
+      );
+    }
+  }
 
   const existing =
     await sequelize.query(
@@ -1090,6 +1187,7 @@ async function createConsultation(
           pharmacist_consultations (
             customer_id,
             source,
+            cart_instance_id,
             status,
             ddi_status,
             review_fingerprint,
@@ -1102,6 +1200,7 @@ async function createConsultation(
         VALUES (
           :customer_id,
           :source,
+          :cart_instance_id,
           'pending',
           :ddi_status,
           :review_fingerprint,
@@ -1125,6 +1224,9 @@ async function createConsultation(
             customerId,
 
           source,
+
+          cart_instance_id:
+            cartInstanceId,
 
           ddi_status:
             ddi.status,
@@ -1623,6 +1725,7 @@ async function decideConsultation(
 async function consumeApprovedCheckout({
   consultationIdValue,
   customerIdValue,
+  cartInstanceIdValue = null,
   requestedItems,
   transaction,
 }) {
@@ -1642,6 +1745,11 @@ async function consumeApprovedCheckout({
   const normalizedItems =
     normalizeRequestedItems(
       requestedItems
+    );
+
+  const cartInstanceId =
+    normalizeCartInstanceId(
+      cartInstanceIdValue
     );
 
   const rows =
@@ -1721,6 +1829,20 @@ async function consumeApprovedCheckout({
     );
   }
 
+  if (
+    consultation.cart_instance_id &&
+    (
+      !cartInstanceId ||
+      cartInstanceId !==
+        consultation.cart_instance_id
+    )
+  ) {
+    throw consultationError(
+      'CONSULT_APPROVAL_STALE',
+      'This approval belongs to a different cart lifecycle. A new pharmacist review is required.'
+    );
+  }
+
   const authoritativeProducts =
     await loadAuthoritativeProducts(
       normalizedItems
@@ -1744,6 +1866,9 @@ async function consumeApprovedCheckout({
       customerId,
       source:
         'cart',
+      cartInstanceId:
+        consultation.cart_instance_id ||
+        null,
       ddiStatus:
         ddi.status,
       interactionDetails,

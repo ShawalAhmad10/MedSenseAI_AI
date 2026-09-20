@@ -122,6 +122,46 @@ export const consultationService = {
     return response.data?.data ||
       null;
   },
+
+  async decideConsultation(
+    consultationId,
+    decision,
+    guidance
+  ) {
+    const normalizedDecision =
+      String(
+        decision || ''
+      )
+        .trim()
+        .toLowerCase();
+
+    if (
+      normalizedDecision !==
+        'approved' &&
+      normalizedDecision !==
+        'rejected'
+    ) {
+      throw new Error(
+        'Consultation decision must be approved or rejected.'
+      );
+    }
+
+    const response =
+      await api.patch(
+        `/consultations/${consultationId}/decision`,
+        {
+          decision:
+            normalizedDecision,
+          guidance:
+            String(
+              guidance || ''
+            ).trim(),
+        }
+      );
+
+    return response.data?.data ||
+      null;
+  },
 };
 
 export default consultationService;

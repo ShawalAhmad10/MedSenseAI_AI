@@ -56,7 +56,9 @@ function sendError(
 
   if (
     code ===
-      'CONSULT_ALREADY_RESPONDED'
+      'CONSULT_ALREADY_RESPONDED' ||
+    code ===
+      'CONSULT_CART_REJECTED'
   ) {
     status = 409;
   }

@@ -67,12 +67,28 @@ test('ProductPage Buy Now explicitly starts isolated session', () => {
   assert.ok(start < navigate);
 });
 
-test('blocking DDI uses disabled checkout and exposes escalation', () => {
+test('review-required DDI routes to pharmacist workflow while active checking stays disabled', () => {
   assert.match(cartPage, /Escalate to Pharmacist/);
-  assert.match(cartPage, /Checkout blocked - review required/);
-  assert.match(cartPage, /\sdisabled\s/);
-  assert.match(cartDrawer, /Checkout blocked - review required/);
-  assert.match(cartDrawer, /\sdisabled\s/);
+  assert.match(cartPage, /Continue to Pharmacist Review/);
+  assert.match(cartDrawer, /Continue to Pharmacist Review/);
+
+  assert.match(cartPage, /Checking DDI\.\.\./);
+  assert.match(cartDrawer, /Checking DDI\.\.\./);
+
+  assert.match(
+    cartPage,
+    /disabled/
+  );
+
+  assert.match(
+    cartDrawer,
+    /disabled/
+  );
+
+  assert.doesNotMatch(
+    `${cartPage}\n${cartDrawer}`,
+    /Checkout blocked - review required/
+  );
 });
 
 test('DDI callers use factual workflow state names instead of severity names', () => {
@@ -122,14 +138,39 @@ test('forbidden storefront DDI claims remain absent', () => {
   assert.doesNotMatch(combined, /Checked - no interactions found/i);
 });
 
-test('Checkout submit remains gated by current DDI authorization', () => {
+test('Checkout submit delegates review authorization to authoritative backend workflow', () => {
   assert.match(
     checkout,
-    /disabled=\{isSubmitting \|\| ddiLoading \|\| !ddiCheckoutAllowed\}/,
+    /disabled=\{isSubmitting \|\| ddiLoading\}/,
   );
 
   assert.match(
     checkout,
-    /if \(ddiLoading \|\| !ddiCheckoutAllowed\)/,
+    /if \(ddiLoading\)/,
+  );
+
+  assert.match(
+    checkout,
+    /DDI_REVIEW_PENDING/
+  );
+
+  assert.match(
+    checkout,
+    /ddi_consultation_id/
+  );
+
+  assert.match(
+    checkout,
+    /createOrder\(orderData\)/
+  );
+
+  assert.doesNotMatch(
+    checkout,
+    /if \(ddiLoading \|\| !ddiCheckoutAllowed\)/
+  );
+
+  assert.doesNotMatch(
+    checkout,
+    /checkout_allowed\s*=\s*true/
   );
 });

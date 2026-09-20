@@ -4,6 +4,7 @@ import { MessageSquareText, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { useAuth } from '../../context/AuthContext';
+import { useCart } from '../../context/CartContext';
 import {
   createCartConsultation,
 } from '../../services/storefrontConsultationService';
@@ -17,6 +18,8 @@ export default function EscalateToPharmacistModal({
     isAuthenticated,
     openAuthModal,
   } = useAuth();
+
+  const { clearCart } = useCart();
 
   const [requestState, setRequestState] =
     useState('idle');
@@ -92,6 +95,19 @@ export default function EscalateToPharmacistModal({
       setErrorMessage(
         apiMessage
       );
+
+      if (
+        code ===
+        'CONSULT_CART_REJECTED'
+      ) {
+        clearCart();
+
+        setRequestState(
+          'error'
+        );
+
+        return;
+      }
 
       if (
         code ===
@@ -237,7 +253,7 @@ export default function EscalateToPharmacistModal({
                       '0.75rem',
                   }}
                 >
-                  A consultation provides pharmacist guidance only. It does not override or bypass the governed checkout DDI decision.
+                  A pharmacist can approve or reject this exact reviewed medicine set. Any later cart change must be reviewed again before checkout.
                 </p>
 
                 <label

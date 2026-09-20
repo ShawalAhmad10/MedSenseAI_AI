@@ -917,6 +917,8 @@ exports.createOrder = async (req, res) => {
                 requestedConsultationId,
               customerIdValue:
                 authenticatedCustomerId,
+              cartInstanceIdValue:
+                req.body?.funnel_cart_id,
               requestedItems:
                 reviewItems,
               transaction,
@@ -972,6 +974,8 @@ exports.createOrder = async (req, res) => {
                 {
                   source:
                     'cart',
+                  cart_instance_id:
+                    req.body?.funnel_cart_id,
                   items:
                     reviewItems,
                   customer_message:

@@ -162,15 +162,7 @@ export default function CartPage() {
                 Escalate to Pharmacist
               </button>
             )}
-            {ddiCheckoutAllowed ? (
-              <Link
-                className="sf-button"
-                style={{ textAlign: 'center', textDecoration: 'none' }}
-                to="/checkout"
-              >
-                Continue to Checkout <ArrowRight size={15} style={{ marginLeft: 4, verticalAlign: 'text-bottom' }} />
-              </Link>
-            ) : (
+            {ddiLoading ? (
               <button
                 aria-disabled="true"
                 className="sf-button-secondary"
@@ -178,8 +170,19 @@ export default function CartPage() {
                 style={{ opacity: 0.45, cursor: 'not-allowed' }}
                 type="button"
               >
-                {ddiLoading ? 'Checking DDI...' : 'Checkout blocked - review required'}
+                Checking DDI...
               </button>
+            ) : (
+              <Link
+                className="sf-button"
+                style={{ textAlign: 'center', textDecoration: 'none' }}
+                to="/checkout"
+              >
+                {ddiCheckoutAllowed
+                  ? 'Continue to Checkout'
+                  : 'Continue to Pharmacist Review'}{' '}
+                <ArrowRight size={15} style={{ marginLeft: 4, verticalAlign: 'text-bottom' }} />
+              </Link>
             )}
           </div>
         </aside>

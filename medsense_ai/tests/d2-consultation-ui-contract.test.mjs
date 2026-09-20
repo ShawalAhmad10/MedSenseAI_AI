@@ -163,7 +163,17 @@ test(
 
     assert.match(
       source,
-      /\.addGuidance/
+      /\.decideConsultation/
+    );
+
+    assert.match(
+      source,
+      /Approve Checkout/
+    );
+
+    assert.match(
+      source,
+      /Reject Checkout/
     );
 
     assert.doesNotMatch(
@@ -219,7 +229,7 @@ test(
 );
 
 test(
-  'consultation UI never claims pharmacist guidance overrides DDI',
+  'consultation approval remains server-governed and exact-cart bound',
   () => {
     const customer =
       read(
@@ -240,13 +250,23 @@ test(
       `${customer}\n${pharmacist}\n${modal}`;
 
     assert.match(
+      pharmacist,
+      /Approve Checkout/
+    );
+
+    assert.match(
+      pharmacist,
+      /Reject Checkout/
+    );
+
+    assert.match(
       combined,
-      /does not override|does not bypass/i
+      /exact reviewed medicine set|exact reviewed cart|server re-runs|server will revalidate/i
     );
 
     assert.doesNotMatch(
       combined,
-      /approve checkout|override ddi|ddi override/i
+      /override ddi|ddi override|checkout_allowed\s*=\s*true|force checkout/i
     );
   }
 );

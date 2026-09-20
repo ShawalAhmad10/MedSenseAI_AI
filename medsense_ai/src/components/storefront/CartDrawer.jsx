@@ -107,16 +107,7 @@ export default function CartDrawer({ isOpen, onClose }) {
                 <span>PKR {subtotal}</span>
               </div>
               <div style={{ display: 'grid', gap: '0.65rem' }}>
-                {ddiCheckoutAllowed ? (
-                  <Link
-                    className="sf-button"
-                    onClick={onClose}
-                    style={{ textAlign: 'center', textDecoration: 'none' }}
-                    to="/checkout"
-                  >
-                    Proceed to Checkout
-                  </Link>
-                ) : (
+                {ddiLoading ? (
                   <button
                     aria-disabled="true"
                     className="sf-button-secondary"
@@ -124,8 +115,19 @@ export default function CartDrawer({ isOpen, onClose }) {
                     style={{ opacity: 0.45, cursor: 'not-allowed' }}
                     type="button"
                   >
-                    {ddiLoading ? 'Checking DDI...' : 'Checkout blocked - review required'}
+                    Checking DDI...
                   </button>
+                ) : (
+                  <Link
+                    className="sf-button"
+                    onClick={onClose}
+                    style={{ textAlign: 'center', textDecoration: 'none' }}
+                    to="/checkout"
+                  >
+                    {ddiCheckoutAllowed
+                      ? 'Proceed to Checkout'
+                      : 'Continue to Pharmacist Review'}
+                  </Link>
                 )}
                 <Link className="sf-button-secondary" onClick={onClose} style={{ textAlign: 'center', textDecoration: 'none' }} to="/cart">
                   View Full Cart

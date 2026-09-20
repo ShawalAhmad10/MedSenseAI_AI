@@ -59,6 +59,51 @@ test('consultation approval is explicit and one-time', () => {
   );
 });
 
+test('cart lifecycle binds rejection and approval to cart instance', () => {
+  const service = read(
+    'src/services/pharmacistConsultationService.js'
+  );
+
+  const order = read(
+    'src/controllers/orderController.js'
+  );
+
+  const controller = read(
+    'src/controllers/consultationController.js'
+  );
+
+  assert.match(
+    service,
+    /cart_instance_id/
+  );
+
+  assert.match(
+    service,
+    /CONSULT_CART_REJECTED/
+  );
+
+  assert.match(
+    service,
+    /cartInstanceIdValue/
+  );
+
+  assert.match(
+    order,
+    /cartInstanceIdValue:\s*req\.body\?\.funnel_cart_id/
+  );
+
+  assert.match(
+    order,
+    /cart_instance_id:\s*req\.body\?\.funnel_cart_id/
+  );
+
+  assert.match(
+    controller,
+    /CONSULT_CART_REJECTED/
+  );
+});
+
+
 test('checkout only bypasses review with consumed exact approval', () => {
   const order = read(
     'src/controllers/orderController.js'

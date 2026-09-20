@@ -185,8 +185,8 @@ export default function Consultations() {
         'pending'
     ).length;
 
-  const handleGuidance =
-    async () => {
+  const handleDecision =
+    async (decision) => {
       if (
         !activeConsultation ||
         activeConsultation.status !==
@@ -200,7 +200,7 @@ export default function Consultations() {
 
       if (!trimmed) {
         setError(
-          'Enter pharmacist guidance before submitting.'
+          'Enter pharmacist guidance before approving or rejecting.'
         );
 
         return;
@@ -212,9 +212,10 @@ export default function Consultations() {
       try {
         const updated =
           await consultationService
-            .addGuidance(
+            .decideConsultation(
               activeConsultation
                 .consultation_id,
+              decision,
               trimmed
             );
 
@@ -238,7 +239,7 @@ export default function Consultations() {
         setError(
           requestError?.response?.data?.message ||
           requestError?.message ||
-          'Guidance could not be saved.'
+          'Pharmacist decision could not be saved.'
         );
       } finally {
         setSubmitting(false);
@@ -936,11 +937,29 @@ export default function Consultations() {
                         padding:
                           '1rem',
                         background:
-                          'var(--green-light)',
+                          activeConsultation.decision ===
+                          'rejected'
+                            ? 'var(--amber-light)'
+                            : 'var(--green-light)',
                         borderRadius:
                           10,
                       }}
                     >
+                      <strong
+                        style={{
+                          display:
+                            'block',
+                          marginBottom:
+                            '0.6rem',
+                          textTransform:
+                            'capitalize',
+                        }}
+                      >
+                        {activeConsultation.decision
+                          ? `Decision: ${activeConsultation.decision}`
+                          : 'Guidance response'}
+                      </strong>
+
                       <p
                         style={{
                           marginTop:
@@ -988,48 +1007,104 @@ export default function Consultations() {
                         value={guidance}
                       />
 
-                      <button
-                        disabled={
-                          submitting ||
-                          !guidance.trim()
-                        }
-                        onClick={
-                          handleGuidance
-                        }
+                      <div
                         style={{
-                          marginTop:
-                            '0.75rem',
                           display:
                             'flex',
-                          alignItems:
-                            'center',
                           gap:
-                            7,
-                          background:
-                            'var(--navy)',
-                          color:
-                            'white',
-                          border:
-                            'none',
-                          borderRadius:
-                            10,
-                          padding:
-                            '0.75rem 1rem',
-                          fontWeight:
-                            700,
-                          cursor:
-                            'pointer',
+                            '0.75rem',
+                          flexWrap:
+                            'wrap',
+                          marginTop:
+                            '0.75rem',
                         }}
-                        type="button"
                       >
-                        <Send
-                          size={16}
-                        />
+                        <button
+                          disabled={
+                            submitting ||
+                            !guidance.trim()
+                          }
+                          onClick={() =>
+                            handleDecision(
+                              'approved'
+                            )
+                          }
+                          style={{
+                            display:
+                              'flex',
+                            alignItems:
+                              'center',
+                            gap:
+                              7,
+                            background:
+                              'var(--navy)',
+                            color:
+                              'white',
+                            border:
+                              'none',
+                            borderRadius:
+                              10,
+                            padding:
+                              '0.75rem 1rem',
+                            fontWeight:
+                              700,
+                            cursor:
+                              'pointer',
+                          }}
+                          type="button"
+                        >
+                          <Send
+                            size={16}
+                          />
 
-                        {submitting
-                          ? 'Saving Guidance...'
-                          : 'Send Guidance'}
-                      </button>
+                          {submitting
+                            ? 'Saving Decision...'
+                            : 'Approve Checkout'}
+                        </button>
+
+                        <button
+                          disabled={
+                            submitting ||
+                            !guidance.trim()
+                          }
+                          onClick={() =>
+                            handleDecision(
+                              'rejected'
+                            )
+                          }
+                          style={{
+                            display:
+                              'flex',
+                            alignItems:
+                              'center',
+                            gap:
+                              7,
+                            background:
+                              'white',
+                            color:
+                              'var(--navy)',
+                            border:
+                              '1px solid var(--dash-border)',
+                            borderRadius:
+                              10,
+                            padding:
+                              '0.75rem 1rem',
+                            fontWeight:
+                              700,
+                            cursor:
+                              'pointer',
+                          }}
+                          type="button"
+                        >
+                          <ShieldAlert
+                            size={16}
+                          />
+
+                          {submitting
+                            ? 'Saving Decision...'
+                            : 'Reject Checkout'}
+                        </button>
+                      </div>
                     </>
                   )}
 
@@ -1045,7 +1120,7 @@ export default function Consultations() {
                         '0.75rem',
                     }}
                   >
-                    Guidance is recorded for the customer but does not bypass the governed DDI checkout gate.
+                    Approval is bound to this customer and the exact reviewed cart. The server re-runs the authoritative DDI check before checkout and rejects stale, reused or mismatched approvals.
                   </p>
                 </section>
               </>

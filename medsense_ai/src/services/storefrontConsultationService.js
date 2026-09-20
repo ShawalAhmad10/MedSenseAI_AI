@@ -1,5 +1,9 @@
 import axios from 'axios';
 
+import {
+  getFunnelCartId,
+} from './storefrontFunnelService';
+
 const API_URL =
   import.meta.env.VITE_API_URL ||
   'http://localhost:5005/api';
@@ -136,6 +140,9 @@ export async function createCartConsultation(
   const payload = {
     source:
       'cart',
+
+    cart_instance_id:
+      getFunnelCartId(),
 
     items:
       normalizeCartItems(
