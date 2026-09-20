@@ -245,6 +245,34 @@ async function ensureConsultationSchema() {
       `);
 
       await sequelize.query(`
+        ALTER TABLE pharmacist_consultations
+          ADD COLUMN IF NOT EXISTS decision VARCHAR(16) NULL,
+          ADD COLUMN IF NOT EXISTS decision_at TIMESTAMPTZ NULL,
+          ADD COLUMN IF NOT EXISTS checkout_consumed_at TIMESTAMPTZ NULL
+      `);
+
+      await sequelize.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE conname =
+              'pharmacist_consultations_decision_chk'
+          ) THEN
+            ALTER TABLE pharmacist_consultations
+              ADD CONSTRAINT
+                pharmacist_consultations_decision_chk
+              CHECK (
+                decision IS NULL OR
+                decision IN ('approved', 'rejected')
+              );
+          END IF;
+        END
+        $$
+      `);
+
+      await sequelize.query(`
         CREATE INDEX IF NOT EXISTS
           idx_pharmacist_consultations_customer_created
         ON pharmacist_consultations (
@@ -919,6 +947,18 @@ function mapConsultation(row) {
       row.pharmacist_id ||
       null,
 
+    decision:
+      row.decision ||
+      null,
+
+    decision_at:
+      row.decision_at ||
+      null,
+
+    checkout_consumed_at:
+      row.checkout_consumed_at ||
+      null,
+
     created_at:
       row.created_at,
 
@@ -1477,6 +1517,289 @@ async function addGuidance(
   );
 }
 
+
+async function decideConsultation(
+  consultationIdValue,
+  pharmacistIdValue,
+  decisionValue,
+  guidanceValue
+) {
+  await ensureConsultationSchema();
+
+  const pharmacistId =
+    await requireEligiblePharmacist(
+      pharmacistIdValue
+    );
+
+  const consultationId =
+    positiveInteger(
+      consultationIdValue
+    );
+
+  const decision =
+    String(
+      decisionValue || ''
+    )
+      .trim()
+      .toLowerCase();
+
+  if (
+    decision !== 'approved' &&
+    decision !== 'rejected'
+  ) {
+    throw consultationError(
+      'CONSULT_INVALID_DECISION',
+      'decision must be approved or rejected'
+    );
+  }
+
+  const guidance =
+    boundedText(
+      guidanceValue,
+      3000
+    );
+
+  if (!guidance) {
+    throw consultationError(
+      'CONSULT_INVALID_GUIDANCE',
+      'Pharmacist guidance is required'
+    );
+  }
+
+  const [rows] =
+    await sequelize.query(
+      `
+        UPDATE pharmacist_consultations
+        SET
+          pharmacist_guidance =
+            :pharmacist_guidance,
+          pharmacist_id =
+            :pharmacist_id,
+          decision =
+            :decision,
+          decision_at =
+            NOW(),
+          status =
+            'responded',
+          responded_at =
+            NOW(),
+          updated_at =
+            NOW()
+        WHERE consultation_id =
+              :consultation_id
+          AND status =
+              'pending'
+        RETURNING *
+      `,
+      {
+        replacements: {
+          pharmacist_guidance:
+            guidance,
+          pharmacist_id:
+            pharmacistId,
+          decision,
+          consultation_id:
+            consultationId,
+        },
+      }
+    );
+
+  if (
+    !Array.isArray(rows) ||
+    rows.length !== 1
+  ) {
+    throw consultationError(
+      'CONSULT_ALREADY_RESPONDED',
+      'This consultation is no longer pending'
+    );
+  }
+
+  return mapConsultation(
+    rows[0]
+  );
+}
+
+
+async function consumeApprovedCheckout({
+  consultationIdValue,
+  customerIdValue,
+  requestedItems,
+  transaction,
+}) {
+  await ensureConsultationSchema();
+
+  const consultationId =
+    positiveInteger(
+      consultationIdValue
+    );
+
+  const customerId =
+    positiveInteger(
+      customerIdValue,
+      'CONSULT_INVALID_CUSTOMER_ID'
+    );
+
+  const normalizedItems =
+    normalizeRequestedItems(
+      requestedItems
+    );
+
+  const rows =
+    await sequelize.query(
+      `
+        SELECT *
+        FROM pharmacist_consultations
+        WHERE consultation_id =
+              :consultation_id
+          AND customer_id =
+              :customer_id
+          AND source =
+              'cart'
+        LIMIT 1
+        FOR UPDATE
+      `,
+      {
+        replacements: {
+          consultation_id:
+            consultationId,
+          customer_id:
+            customerId,
+        },
+        type:
+          QueryTypes.SELECT,
+        transaction,
+      }
+    );
+
+  if (rows.length !== 1) {
+    throw consultationError(
+      'CONSULT_APPROVAL_NOT_FOUND',
+      'Approved pharmacist review was not found for this customer'
+    );
+  }
+
+  const consultation =
+    rows[0];
+
+  if (
+    consultation.status !==
+      'responded'
+  ) {
+    throw consultationError(
+      'CONSULT_APPROVAL_PENDING',
+      'Pharmacist review is still pending'
+    );
+  }
+
+  if (
+    consultation.decision ===
+      'rejected'
+  ) {
+    throw consultationError(
+      'CONSULT_APPROVAL_REJECTED',
+      'The pharmacist did not approve this cart for checkout'
+    );
+  }
+
+  if (
+    consultation.decision !==
+      'approved'
+  ) {
+    throw consultationError(
+      'CONSULT_APPROVAL_NOT_GRANTED',
+      'This consultation does not contain checkout approval'
+    );
+  }
+
+  if (
+    consultation
+      .checkout_consumed_at
+  ) {
+    throw consultationError(
+      'CONSULT_APPROVAL_ALREADY_USED',
+      'This pharmacist approval has already been used'
+    );
+  }
+
+  const authoritativeProducts =
+    await loadAuthoritativeProducts(
+      normalizedItems
+    );
+
+  const ddi =
+    await runAuthoritativeDdi(
+      authoritativeProducts
+    );
+
+  const interactionDetails =
+    ddi.reviewItems;
+
+  const cartSnapshot =
+    buildSnapshot(
+      authoritativeProducts
+    );
+
+  const currentFingerprint =
+    fingerprintPayload({
+      customerId,
+      source:
+        'cart',
+      ddiStatus:
+        ddi.status,
+      interactionDetails,
+      cartSnapshot,
+    });
+
+  if (
+    currentFingerprint !==
+      consultation.review_fingerprint
+  ) {
+    throw consultationError(
+      'CONSULT_APPROVAL_STALE',
+      'Cart or DDI review changed after pharmacist approval. A new review is required.'
+    );
+  }
+
+  const [updated] =
+    await sequelize.query(
+      `
+        UPDATE pharmacist_consultations
+        SET
+          checkout_consumed_at =
+            NOW(),
+          updated_at =
+            NOW()
+        WHERE consultation_id =
+              :consultation_id
+          AND checkout_consumed_at
+              IS NULL
+        RETURNING *
+      `,
+      {
+        replacements: {
+          consultation_id:
+            consultationId,
+        },
+        transaction,
+      }
+    );
+
+  if (
+    !Array.isArray(updated) ||
+    updated.length !== 1
+  ) {
+    throw consultationError(
+      'CONSULT_APPROVAL_ALREADY_USED',
+      'This pharmacist approval has already been used'
+    );
+  }
+
+  return mapConsultation(
+    updated[0]
+  );
+}
+
+
 module.exports = {
   ensureConsultationSchema,
   createConsultation,
@@ -1485,4 +1808,6 @@ module.exports = {
   listQueue,
   getStaffConsultation,
   addGuidance,
+  decideConsultation,
+  consumeApprovedCheckout,
 };

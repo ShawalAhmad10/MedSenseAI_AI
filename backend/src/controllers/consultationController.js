@@ -29,6 +29,8 @@ function sendError(
     code ===
       'CONSULT_INVALID_GUIDANCE' ||
     code ===
+      'CONSULT_INVALID_DECISION' ||
+    code ===
       'CONSULT_NOT_REVIEWABLE'
   ) {
     status = 400;
@@ -266,6 +268,38 @@ exports.addGuidance =
     } catch (error) {
       console.error(
         'Consultation guidance error:',
+        error.message
+      );
+
+      return sendError(
+        res,
+        error
+      );
+    }
+  };
+
+exports.decideConsultation =
+  async (req, res) => {
+    try {
+      const row =
+        await consultationService
+          .decideConsultation(
+            req.params
+              .consultationId,
+            req.user.id,
+            req.body?.decision,
+            req.body?.guidance
+          );
+
+      return res.json({
+        success:
+          true,
+        data:
+          row,
+      });
+    } catch (error) {
+      console.error(
+        'Consultation decision error:',
         error.message
       );
 

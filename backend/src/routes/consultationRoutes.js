@@ -55,4 +55,11 @@ router.patch(
   consultationController.addGuidance
 );
 
+router.patch(
+  '/:consultationId/decision',
+  authenticate,
+  consultationController
+    .decideConsultation
+);
+
 module.exports = router;

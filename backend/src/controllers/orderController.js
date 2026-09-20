@@ -4,6 +4,8 @@ const { sequelize } = require('../config/database');
 const { createNotification } = require('./notificationController');
 const User = require('../models/User');
 const ddiService = require('../services/ddiService');
+const consultationService =
+  require('../services/pharmacistConsultationService');
 const funnelService = require('../services/funnelService');
 
 // Get all orders (invoice) with pagination
@@ -864,18 +866,159 @@ exports.createOrder = async (req, res) => {
     }
 
     if (!ddi.result.checkout_allowed) {
-      await transaction.rollback();
+      const authenticatedCustomerId =
+        Number(
+          req.customerUser?.id
+        );
 
-      return res.status(409).json({
-        success: false,
-        code: 'DDI_REVIEW_REQUIRED',
-        message:
-          ddi.result.message ||
-          'Drug interaction review is required before checkout.',
-        data: {
-          ddi: ddi.result
+      const requestedConsultationId =
+        Number(
+          req.body
+            ?.ddi_consultation_id
+        );
+
+      const hasAuthenticatedCustomer =
+        Number.isSafeInteger(
+          authenticatedCustomerId
+        ) &&
+        authenticatedCustomerId > 0;
+
+      const hasApprovalCandidate =
+        Number.isSafeInteger(
+          requestedConsultationId
+        ) &&
+        requestedConsultationId > 0;
+
+      const reviewItems =
+        normalizedItems.map(
+          (item) => ({
+            product_id:
+              Number(
+                item.product_id
+              ),
+            quantity:
+              Number(
+                item.quantity
+              ),
+          })
+        );
+
+      let approvalUsed =
+        false;
+
+      if (
+        hasAuthenticatedCustomer &&
+        hasApprovalCandidate
+      ) {
+        try {
+          await consultationService
+            .consumeApprovedCheckout({
+              consultationIdValue:
+                requestedConsultationId,
+              customerIdValue:
+                authenticatedCustomerId,
+              requestedItems:
+                reviewItems,
+              transaction,
+            });
+
+          approvalUsed =
+            true;
+        } catch (approvalError) {
+          await transaction.rollback();
+
+          return res.status(409).json({
+            success:
+              false,
+            code:
+              approvalError.code ||
+              'DDI_APPROVAL_INVALID',
+            message:
+              approvalError.message ||
+              'The pharmacist approval could not be used for this cart.',
+            data: {
+              ddi:
+                ddi.result,
+              consultation_id:
+                requestedConsultationId
+            }
+          });
         }
-      });
+      }
+
+      if (!approvalUsed) {
+        await transaction.rollback();
+
+        if (!hasAuthenticatedCustomer) {
+          return res.status(409).json({
+            success:
+              false,
+            code:
+              'DDI_REVIEW_REQUIRED',
+            message:
+              'Drug interaction review is required. Sign in to request pharmacist review before checkout.',
+            data: {
+              ddi:
+                ddi.result
+            }
+          });
+        }
+
+        try {
+          const review =
+            await consultationService
+              .createConsultation(
+                authenticatedCustomerId,
+                {
+                  source:
+                    'cart',
+                  items:
+                    reviewItems,
+                  customer_message:
+                    'Checkout requires pharmacist review.'
+                }
+              );
+
+          return res.status(409).json({
+            success:
+              false,
+            code:
+              'DDI_REVIEW_PENDING',
+            message:
+              'Checkout is paused for pharmacist review. After approval, retry the same cart using the consultation ID.',
+            data: {
+              ddi:
+                ddi.result,
+              consultation:
+                review.consultation,
+              duplicate:
+                review.duplicate,
+              retry_field:
+                'ddi_consultation_id'
+            }
+          });
+        } catch (reviewError) {
+          return res.status(
+            reviewError.code ===
+              'PHARMACIST_UNAVAILABLE'
+              ? 503
+              : 409
+          ).json({
+            success:
+              false,
+            code:
+              reviewError.code ||
+              'DDI_REVIEW_REQUIRED',
+            message:
+              reviewError.message ||
+              'Pharmacist review could not be created.',
+            data: {
+              ddi:
+                ddi.result
+            }
+          });
+        }
+      }
     }
 
     // Calculate totals
