@@ -12,6 +12,10 @@ from medsense_ai.database import Database
 from medsense_ai.ddi_runtime import RuntimeDDIService
 from medsense_ai.integrations.amna_medcopy.cart_ddi import PartnerCartDDIService
 from medsense_ai.integrations.amna_medcopy.ddi_bridge import ExactDDIIngredientResolver
+from medsense_ai.integrations.amna_medcopy.ddi_rxcui_sidecar import (
+    ExactRxCUIIdentityResolver,
+    RxCUIInteractionEvidenceIndex,
+)
 from medsense_ai.integrations.amna_medcopy.prescription_orchestration import PartnerPrescriptionOrchestrationService
 from medsense_ai.logging_config import configure_logging
 
@@ -45,6 +49,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             application.state.amna_cart_ddi_service = PartnerCartDDIService(
                 resolver=ExactDDIIngredientResolver.from_artifact(),
+                rxcui_identity_resolver=(
+                    ExactRxCUIIdentityResolver.from_artifact()
+                ),
+                rxcui_evidence_index=(
+                    RxCUIInteractionEvidenceIndex.from_artifact()
+                ),
                 runtime_service=RuntimeDDIService(
                     model_dir=resolved_settings.ddi_model_dir,
                     known_interaction_source=resolved_settings.ddi_known_interaction_source,

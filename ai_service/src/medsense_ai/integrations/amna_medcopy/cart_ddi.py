@@ -21,6 +21,10 @@ from medsense_ai.integrations.amna_medcopy.ddi_bridge import (
     IngredientResolutionState,
     ResolvedDDIIngredient,
 )
+from medsense_ai.integrations.amna_medcopy.ddi_rxcui_sidecar import (
+    ExactRxCUIIdentityResolver,
+    RxCUIInteractionEvidenceIndex,
+)
 from medsense_ai.integrations.amna_medcopy.product_adapter import (
     PartnerProductAdaptationError,
     adapt_partner_product,
@@ -152,15 +156,21 @@ class PartnerCartDDIService:
         *,
         resolver: ExactDDIIngredientResolver,
         runtime_service: RuntimeDDIService,
+        rxcui_identity_resolver: ExactRxCUIIdentityResolver | None = None,
+        rxcui_evidence_index: RxCUIInteractionEvidenceIndex | None = None,
     ) -> None:
         self._resolver = resolver
         self._runtime = runtime_service
+        self._rxcui_identity_resolver = rxcui_identity_resolver
+        self._rxcui_evidence_index = rxcui_evidence_index
 
     def evaluate(self, request: PartnerCartCheckRequest) -> PartnerCartCheckResponse:
         digest, snapshot_identifier = request_snapshot(request)
         product_results: list[CartProductResolution] = []
         product_ids_by_token: dict[str, list[int]] = defaultdict(list)
         identity_by_token: dict[str, ResolvedDDIIngredient] = {}
+        product_ids_by_rxcui: dict[str, list[int]] = defaultdict(list)
+        identity_name_by_rxcui: dict[str, str] = {}
 
         for record in sorted(request.products, key=lambda item: item.product_id):
             structural_succeeded = True
@@ -178,10 +188,46 @@ class PartnerCartDDIService:
                 structural_limitation = str(exc)
 
             ingredient = self._resolver.resolve(record.product_salt)
+
+            sidecar_identity = None
+
+            if self._rxcui_identity_resolver is not None:
+                sidecar_identity = self._rxcui_identity_resolver.resolve(
+                    record.product_salt
+                )
+
             if ingredient.state is IngredientResolutionState.RESOLVED:
                 assert ingredient.frozen_model_token is not None
-                product_ids_by_token[ingredient.frozen_model_token].append(record.product_id)
-                identity_by_token[ingredient.frozen_model_token] = ingredient
+                assert ingredient.rxcui is not None
+
+                product_ids_by_token[
+                    ingredient.frozen_model_token
+                ].append(record.product_id)
+
+                identity_by_token[
+                    ingredient.frozen_model_token
+                ] = ingredient
+
+                product_ids_by_rxcui[
+                    ingredient.rxcui
+                ].append(record.product_id)
+
+                identity_name_by_rxcui[
+                    ingredient.rxcui
+                ] = (
+                    ingredient.canonical_display_name
+                    or ingredient.frozen_model_token
+                )
+
+            elif sidecar_identity is not None:
+                product_ids_by_rxcui[
+                    sidecar_identity.rxcui
+                ].append(record.product_id)
+
+                identity_name_by_rxcui[
+                    sidecar_identity.rxcui
+                ] = sidecar_identity.canonical_display_name
+
             product_results.append(
                 CartProductResolution(
                     product_id=record.product_id,
@@ -222,6 +268,61 @@ class PartnerCartDDIService:
                     rxcui_b=identity_b.rxcui,
                 )
             )
+
+
+        if self._rxcui_evidence_index is not None:
+            for rxcui_a, rxcui_b in itertools.combinations(
+                sorted(product_ids_by_rxcui),
+                2,
+            ):
+                evidence = self._rxcui_evidence_index.lookup(
+                    rxcui_a,
+                    rxcui_b,
+                )
+
+                if evidence is None:
+                    continue
+
+                pair_results.append(
+                    CartPairResult(
+                        product_ids_a=tuple(
+                            sorted(product_ids_by_rxcui[rxcui_a])
+                        ),
+                        product_ids_b=tuple(
+                            sorted(product_ids_by_rxcui[rxcui_b])
+                        ),
+                        ingredient_a=identity_name_by_rxcui[rxcui_a],
+                        ingredient_b=identity_name_by_rxcui[rxcui_b],
+                        rxcui_a=rxcui_a,
+                        rxcui_b=rxcui_b,
+                        state=RuntimeDDIStatus.INTERACTION_WARNING,
+                        model_version=None,
+                        model_warning_score=None,
+                        selected_threshold=None,
+                        model_warning_triggered=None,
+                        warning_triggered=True,
+                        known_dataset_record_found=True,
+                        known_interaction_descriptions=evidence.descriptions,
+                        evidence_source_identifier=(
+                            evidence.source_identifier
+                        ),
+                        evidence_record_identifiers=(
+                            evidence.record_identifiers
+                        ),
+                        review_required=True,
+                        message=(
+                            "Exact DDInter interaction evidence was found "
+                            "for this governed RxCUI pair. Model support is "
+                            "independent of this exact evidence."
+                        ),
+                        limitations=CART_LIMITATIONS
+                        + (
+                            "DDInter evidence is an exact positive record; "
+                            "absence of a DDInter row does not establish "
+                            "absence of interaction.",
+                        ),
+                    )
+                )
 
         unresolved = any(
             item.ingredient.state is not IngredientResolutionState.RESOLVED

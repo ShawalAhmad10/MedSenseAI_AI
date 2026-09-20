@@ -11,6 +11,7 @@ import pytest
 from pydantic import ValidationError
 
 from medsense_ai.ddi_runtime import RuntimeDDIService
+from medsense_ai.ddi_runtime.contracts import RuntimeDDIStatus
 from medsense_ai.integrations.amna_medcopy.cart_ddi import (
     CartDDIStatus,
     PartnerCartCheckRequest,
@@ -23,6 +24,12 @@ from medsense_ai.integrations.amna_medcopy.ddi_bridge import (
     ExactDDIIngredientResolver,
     IngredientResolutionState,
     load_ddi_bridge_artifact,
+)
+from medsense_ai.integrations.amna_medcopy.ddi_rxcui_sidecar import (
+    ExactRxCUIIdentityResolver,
+    RxCUIInteractionEvidenceIndex,
+    load_rxcui_evidence_artifact,
+    load_rxcui_identity_artifact,
 )
 
 
@@ -294,6 +301,117 @@ def test_bridge_and_runtime_artifact_version_mismatch_fails_closed(
 
     assert result.status is CartDDIStatus.SERVICE_UNAVAILABLE
     assert result.checkout_allowed is False
+
+
+
+def test_model_unsupported_pair_can_preserve_exact_ddinter_evidence() -> None:
+    bridge = load_ddi_bridge_artifact()
+    identity_artifact = load_rxcui_identity_artifact()
+    evidence_artifact = load_rxcui_evidence_artifact()
+
+    supported_by_rxcui: dict[str, str] = {}
+
+    for item in bridge.mappings:
+        supported_by_rxcui.setdefault(
+            item.rxcui,
+            item.normalized_lookup_key,
+        )
+
+    unsupported_by_rxcui: dict[str, str] = {}
+
+    for item in identity_artifact.mappings:
+        unsupported_by_rxcui.setdefault(
+            item.rxcui,
+            item.normalized_lookup_key,
+        )
+
+    selected = None
+
+    for record in evidence_artifact.pairs:
+        if (
+            record.rxcui_a in unsupported_by_rxcui
+            and record.rxcui_b in supported_by_rxcui
+        ):
+            selected = (
+                record.rxcui_a,
+                unsupported_by_rxcui[record.rxcui_a],
+                record.rxcui_b,
+                supported_by_rxcui[record.rxcui_b],
+            )
+            break
+
+        if (
+            record.rxcui_b in unsupported_by_rxcui
+            and record.rxcui_a in supported_by_rxcui
+        ):
+            selected = (
+                record.rxcui_b,
+                unsupported_by_rxcui[record.rxcui_b],
+                record.rxcui_a,
+                supported_by_rxcui[record.rxcui_a],
+            )
+            break
+
+    assert selected is not None
+
+    (
+        unsupported_rxcui,
+        unsupported_salt,
+        supported_rxcui,
+        supported_salt,
+    ) = selected
+
+    service = PartnerCartDDIService(
+        resolver=ExactDDIIngredientResolver.from_artifact(),
+        rxcui_identity_resolver=(
+            ExactRxCUIIdentityResolver.from_artifact()
+        ),
+        rxcui_evidence_index=(
+            RxCUIInteractionEvidenceIndex.from_artifact()
+        ),
+        runtime_service=RuntimeDDIService(
+            model_dir=Path("artifacts/ddi/model"),
+            known_interaction_source=Path(
+                "external/db_drug_interactions.csv"
+            ),
+        ),
+    )
+
+    result = service.evaluate(
+        PartnerCartCheckRequest(
+            products=(
+                product(1, unsupported_salt),
+                product(2, supported_salt),
+            )
+        )
+    )
+
+    assert result.status is CartDDIStatus.UNRESOLVED_REVIEW_REQUIRED
+    assert result.checkout_allowed is False
+    assert result.review_required is True
+
+    matching_pairs = [
+        pair
+        for pair in result.pairs
+        if {pair.rxcui_a, pair.rxcui_b}
+        == {unsupported_rxcui, supported_rxcui}
+    ]
+
+    assert len(matching_pairs) == 1
+
+    pair = matching_pairs[0]
+
+    assert pair.state is RuntimeDDIStatus.INTERACTION_WARNING
+    assert pair.warning_triggered is True
+    assert pair.known_dataset_record_found is True
+    assert pair.model_warning_score is None
+    assert pair.model_warning_triggered is None
+    assert pair.evidence_record_identifiers
+    assert pair.known_interaction_descriptions
+    assert (
+        "ddinter_rxcui_evidence_v1.json@sha256:"
+        in pair.evidence_source_identifier
+    )
 
 
 def test_cart_api_returns_typed_authoritative_result(client: TestClient) -> None:
