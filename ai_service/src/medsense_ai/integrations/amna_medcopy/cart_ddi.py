@@ -474,6 +474,107 @@ class PartnerCartDDIService:
                     )
                 )
 
+        # Consolidate an exact-evidence row into an existing frozen-model
+        # row for the same governed RxCUI pair. Clinical evidence and the
+        # model signal remain semantically independent, but the API emits
+        # only one CartPairResult per governed pair.
+        consolidated_pair_results: list[CartPairResult] = []
+        pair_index_by_rxcui: dict[tuple[str, str], int] = {}
+
+        for candidate in pair_results:
+            if candidate.rxcui_a and candidate.rxcui_b:
+                pair_key = tuple(
+                    sorted(
+                        (
+                            candidate.rxcui_a,
+                            candidate.rxcui_b,
+                        )
+                    )
+                )
+            else:
+                pair_key = None
+
+            if (
+                pair_key is None
+                or pair_key not in pair_index_by_rxcui
+            ):
+                if pair_key is not None:
+                    pair_index_by_rxcui[pair_key] = len(
+                        consolidated_pair_results
+                    )
+
+                consolidated_pair_results.append(candidate)
+                continue
+
+            existing_index = pair_index_by_rxcui[pair_key]
+            existing = consolidated_pair_results[existing_index]
+
+            incoming_is_exact = (
+                candidate.known_dataset_record_found
+                and candidate.model_version is None
+            )
+
+            existing_is_model = (
+                existing.model_version is not None
+            )
+
+            # If the model/runtime row already contains an exact governed
+            # source record, retain it rather than silently replacing its
+            # provenance with a second exact source. Multi-source provenance
+            # requires a future explicit schema extension.
+            if (
+                existing_is_model
+                and existing.known_dataset_record_found
+                and incoming_is_exact
+            ):
+                continue
+
+            if existing_is_model and incoming_is_exact:
+                merged_limitations = tuple(
+                    dict.fromkeys(
+                        (
+                            *existing.limitations,
+                            *candidate.limitations,
+                        )
+                    )
+                )
+
+                consolidated_pair_results[existing_index] = (
+                    existing.model_copy(
+                        update={
+                            "severity": candidate.severity,
+                            "state": RuntimeDDIStatus.INTERACTION_WARNING,
+                            "warning_triggered": True,
+                            "known_dataset_record_found": True,
+                            "known_interaction_descriptions": (
+                                candidate.known_interaction_descriptions
+                            ),
+                            "evidence_source_identifier": (
+                                candidate.evidence_source_identifier
+                            ),
+                            "evidence_record_identifiers": (
+                                candidate.evidence_record_identifiers
+                            ),
+                            "review_required": True,
+                            "message": (
+                                f"{candidate.message} "
+                                "Frozen-model metadata is retained as a "
+                                "separate non-clinical signal."
+                            ),
+                            "limitations": merged_limitations,
+                        }
+                    )
+                )
+                continue
+
+            # Defensive fallback: preserve the first governed row rather
+            # than emitting duplicate UI warnings for one RxCUI pair.
+            # Current source precedence is:
+            # runtime exact row > DDInter > official-label fallback.
+            continue
+
+        pair_results = consolidated_pair_results
+
         hard_unresolved = any(
             not item.structural_adaptation_succeeded
             or item.product_status != 1

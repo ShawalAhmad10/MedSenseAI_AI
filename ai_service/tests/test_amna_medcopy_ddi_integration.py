@@ -916,6 +916,151 @@ def test_ddinter_precedes_official_label_overlap_without_duplicate_lookup() -> N
 
 
 
+
+def test_official_exact_evidence_merges_into_existing_model_pair() -> None:
+    service = PartnerCartDDIService(
+        resolver=ExactDDIIngredientResolver.from_artifact(),
+        rxcui_identity_resolver=(
+            ExactRxCUIIdentityResolver.from_artifact()
+        ),
+        rxcui_evidence_index=(
+            RxCUIInteractionEvidenceIndex.from_artifact()
+        ),
+        official_label_evidence_index=(
+            OfficialLabelInteractionEvidenceIndex.from_artifact()
+        ),
+        runtime_service=RuntimeDDIService(
+            model_dir=Path("artifacts/ddi/model"),
+            known_interaction_source=Path(
+                "external/db_drug_interactions.csv"
+            ),
+        ),
+    )
+
+    result = service.evaluate(
+        PartnerCartCheckRequest(
+            products=(
+                product(1, "Fosfomycin"),
+                product(2, "Metoclopramide"),
+            )
+        )
+    )
+
+    matching = [
+        pair
+        for pair in result.pairs
+        if {
+            str(pair.rxcui_a or ""),
+            str(pair.rxcui_b or ""),
+        }
+        == {"4550", "6915"}
+    ]
+
+    assert len(matching) == 1
+
+    pair = matching[0]
+
+    assert result.status is (
+        CartDDIStatus.WARNING_REVIEW_REQUIRED
+    )
+    assert result.checkout_allowed is False
+    assert result.review_required is True
+
+    assert pair.state is RuntimeDDIStatus.INTERACTION_WARNING
+
+    # Frozen-model metadata is retained.
+    assert pair.model_version == "med-ddi-binary-1.0.0"
+    assert pair.model_warning_score is not None
+    assert pair.selected_threshold is not None
+    assert pair.model_warning_triggered is False
+
+    # Exact official evidence independently upgrades the pair.
+    assert pair.warning_triggered is True
+    assert pair.known_dataset_record_found is True
+    assert pair.severity == "Unknown"
+    assert pair.review_required is True
+
+    assert pair.evidence_source_identifier is not None
+    assert pair.evidence_source_identifier.startswith(
+        "official_label_ddi_evidence_v1.json@sha256:"
+    )
+
+    assert pair.evidence_record_identifiers == (
+        "DailyMed:f44b79d0-a789-46cb-ab70-7eb33a7debaf:"
+        "fosfomycin:metoclopramide",
+    )
+
+
+def test_etrasimod_official_exact_evidence_creates_single_warning_pair() -> None:
+    service = PartnerCartDDIService(
+        resolver=ExactDDIIngredientResolver.from_artifact(),
+        rxcui_identity_resolver=(
+            ExactRxCUIIdentityResolver.from_artifact()
+        ),
+        rxcui_evidence_index=(
+            RxCUIInteractionEvidenceIndex.from_artifact()
+        ),
+        official_label_evidence_index=(
+            OfficialLabelInteractionEvidenceIndex.from_artifact()
+        ),
+        runtime_service=RuntimeDDIService(
+            model_dir=Path("artifacts/ddi/model"),
+            known_interaction_source=Path(
+                "external/db_drug_interactions.csv"
+            ),
+        ),
+    )
+
+    for partner, partner_rxcui in (
+        ("Fluconazole", "4450"),
+        ("Rifampin", "9384"),
+    ):
+        result = service.evaluate(
+            PartnerCartCheckRequest(
+                products=(
+                    product(1, "Etrasimod"),
+                    product(2, partner),
+                )
+            )
+        )
+
+        matching = [
+            pair
+            for pair in result.pairs
+            if {
+                str(pair.rxcui_a or ""),
+                str(pair.rxcui_b or ""),
+            }
+            == {"2668045", partner_rxcui}
+        ]
+
+        assert len(matching) == 1
+
+        pair = matching[0]
+
+        assert result.status is (
+            CartDDIStatus.WARNING_REVIEW_REQUIRED
+        )
+        assert result.checkout_allowed is False
+
+        assert pair.state is (
+            RuntimeDDIStatus.INTERACTION_WARNING
+        )
+        assert pair.model_version is None
+        assert pair.model_warning_score is None
+        assert pair.model_warning_triggered is None
+
+        assert pair.warning_triggered is True
+        assert pair.known_dataset_record_found is True
+        assert pair.severity == "Unknown"
+        assert pair.review_required is True
+
+        assert pair.evidence_source_identifier is not None
+        assert pair.evidence_source_identifier.startswith(
+            "official_label_ddi_evidence_v1.json@sha256:"
+        )
+
+
 def test_cart_api_returns_typed_authoritative_result(client: TestClient) -> None:
     response = client.post(
         "/api/v1/integrations/amna/ddi/cart-check",

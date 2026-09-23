@@ -719,6 +719,42 @@
         "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
       ],
       "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "etrasimod",
+      "ingredient_b": "fluconazole",
+      "label_section": "7 DRUG INTERACTIONS",
+      "label_set_id": "65171e4a-d136-4abc-b08c-c40c1b486ff6",
+      "record_identifiers": [
+        "DailyMed:65171e4a-d136-4abc-b08c-c40c1b486ff6:etrasimod:fluconazole"
+      ],
+      "review_required": true,
+      "rxcui_a": "2668045",
+      "rxcui_b": "4450",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "etrasimod",
+      "ingredient_b": "rifampin",
+      "label_section": "7 DRUG INTERACTIONS",
+      "label_set_id": "65171e4a-d136-4abc-b08c-c40c1b486ff6",
+      "record_identifiers": [
+        "DailyMed:65171e4a-d136-4abc-b08c-c40c1b486ff6:etrasimod:rifampin"
+      ],
+      "review_required": true,
+      "rxcui_a": "2668045",
+      "rxcui_b": "9384",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
       "ingredient_a": "capivasertib",
       "ingredient_b": "itraconazole",
       "label_section": "7 / 12.3",
@@ -1091,14 +1127,32 @@
       "rxcui_b": "9384",
       "severity": "Unknown",
       "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "fosfomycin",
+      "ingredient_b": "metoclopramide",
+      "label_section": "Drug Interactions",
+      "label_set_id": "f44b79d0-a789-46cb-ab70-7eb33a7debaf",
+      "record_identifiers": [
+        "DailyMed:f44b79d0-a789-46cb-ab70-7eb33a7debaf:fosfomycin:metoclopramide"
+      ],
+      "review_required": true,
+      "rxcui_a": "4550",
+      "rxcui_b": "6915",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
     }
   ],
-  "payload_sha256": "d04d1d7cfc721cc45b3b0addc1ef3672cbe30194173390a036bc9185132b4f70",
+  "payload_sha256": "85107e2d84343bb8c7a4fb4e660e3da46e6178a7d3e73dfe7ddf4bbb4cf8ab71",
   "provenance": {
     "bridge_file": "ddi_bridge_v1.json",
     "bridge_payload_sha256": "5091ec7361b094b1d4fcf9653be30ddaf3f284b9204c96d2f5dc8a0b70df5ed6",
     "manifest_file": "official_label_ddi_manifest_v1.json",
-    "manifest_sha256": "3618d5baeab2fb3d154ef934892bf45f6410ed86bcce78d5b9fd406552e1d893",
+    "manifest_sha256": "0b9ca1810b171daffe51c7eeef44dbf6d41b874170ace73136d7941754b75577",
     "policy": "Explicitly named official-label interaction evidence only; no class-to-pair expansion, fuzzy identity inference, negative-study conversion, or clinical severity invention.",
     "rxcui_identity_file": "ddi_rxcui_identity_v1.json",
     "rxcui_identity_payload_sha256": "d2eb1eb194dc754718be9f7fc59d1ef2b67bc51b3c4746bcceccf97f66c83082"

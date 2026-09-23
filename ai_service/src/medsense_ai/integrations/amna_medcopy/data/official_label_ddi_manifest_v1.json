@@ -442,6 +442,30 @@
       "source_system": "DailyMed/FDA"
     },
     {
+      "drug_rxcui": "2668045",
+      "drug_source_text": "etrasimod",
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "label_section": "7 DRUG INTERACTIONS",
+      "label_set_id": "65171e4a-d136-4abc-b08c-c40c1b486ff6",
+      "partner_rxcui": "4450",
+      "partner_source_text": "fluconazole",
+      "review_required": true,
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "drug_rxcui": "2668045",
+      "drug_source_text": "etrasimod",
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "label_section": "7 DRUG INTERACTIONS",
+      "label_set_id": "65171e4a-d136-4abc-b08c-c40c1b486ff6",
+      "partner_rxcui": "9384",
+      "partner_source_text": "rifampin",
+      "review_required": true,
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
       "drug_rxcui": "2669967",
       "drug_source_text": "capivasertib",
       "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
@@ -737,6 +761,18 @@
       "label_set_id": "9a7e7f85-bfd0-44a0-beda-3bcfa8215c64",
       "partner_rxcui": "9384",
       "partner_source_text": "rifampin",
+      "review_required": true,
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "drug_rxcui": "4550",
+      "drug_source_text": "fosfomycin",
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "label_section": "Drug Interactions",
+      "label_set_id": "f44b79d0-a789-46cb-ab70-7eb33a7debaf",
+      "partner_rxcui": "6915",
+      "partner_source_text": "metoclopramide",
       "review_required": true,
       "severity": "Unknown",
       "source_system": "DailyMed/FDA"
