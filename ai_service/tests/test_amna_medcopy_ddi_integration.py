@@ -620,7 +620,7 @@ def test_model_unsupported_pair_can_preserve_exact_ddinter_evidence() -> None:
         )
     )
 
-    assert result.status is CartDDIStatus.UNRESOLVED_REVIEW_REQUIRED
+    assert result.status is CartDDIStatus.WARNING_REVIEW_REQUIRED
     assert result.checkout_allowed is False
     assert result.review_required is True
 

@@ -127,6 +127,37 @@ CART_LIMITATIONS = (
 )
 
 
+def _ddinter_severity(levels: tuple[str, ...]) -> str:
+    """Return one exact source severity without inventing a severity ranking."""
+
+    canonical = {
+        "minor": "Minor",
+        "moderate": "Moderate",
+        "major": "Major",
+        "unknown": "Unknown",
+    }
+
+    resolved: set[str] = set()
+
+    for raw_level in levels:
+        normalized = str(raw_level).strip().casefold()
+
+        if not normalized:
+            continue
+
+        mapped = canonical.get(normalized)
+
+        if mapped is None:
+            return "Unknown"
+
+        resolved.add(mapped)
+
+    if len(resolved) != 1:
+        return "Unknown"
+
+    return next(iter(resolved))
+
+
 def _canonical_json(value: object) -> bytes:
     return json.dumps(
         value,
@@ -313,7 +344,7 @@ class PartnerCartDDIService:
                         identity_id_b=rxcui_b,
                         rxcui_a=rxcui_a,
                         rxcui_b=rxcui_b,
-                        severity="Unknown",
+                        severity=_ddinter_severity(evidence.levels),
                         state=RuntimeDDIStatus.INTERACTION_WARNING,
                         model_version=None,
                         model_warning_score=None,
@@ -343,28 +374,48 @@ class PartnerCartDDIService:
                     )
                 )
 
-        unresolved = any(
-            item.ingredient.state is not IngredientResolutionState.RESOLVED
-            or not item.structural_adaptation_succeeded
+        hard_unresolved = any(
+            not item.structural_adaptation_succeeded
             or item.product_status != 1
+            or item.ingredient.state
+            in {
+                IngredientResolutionState.SOURCE_UNAVAILABLE,
+                IngredientResolutionState.UNMAPPED,
+                IngredientResolutionState.AMBIGUOUS,
+                IngredientResolutionState.REVIEW_REQUIRED,
+            }
             for item in product_results
         )
+
+        model_unsupported = any(
+            item.ingredient.state is IngredientResolutionState.MODEL_UNSUPPORTED
+            for item in product_results
+        )
+
         service_unavailable = artifact_alignment_failure or any(
             pair.state is RuntimeDDIStatus.MODEL_UNAVAILABLE for pair in pair_results
         )
-        warning = any(pair.state is RuntimeDDIStatus.INTERACTION_WARNING for pair in pair_results)
+
+        warning = any(
+            pair.state is RuntimeDDIStatus.INTERACTION_WARNING
+            for pair in pair_results
+        )
+
         if service_unavailable:
             status = CartDDIStatus.SERVICE_UNAVAILABLE
             message = (
                 "The DDI runtime could not complete every required pair evaluation with "
                 "the exact model and evidence artifacts pinned by the bridge."
             )
-        elif unresolved:
+        elif hard_unresolved:
             status = CartDDIStatus.UNRESOLVED_REVIEW_REQUIRED
             message = "One or more cart products could not be evaluated with complete governed identity."
         elif warning:
             status = CartDDIStatus.WARNING_REVIEW_REQUIRED
             message = "At least one cart ingredient pair produced a DDI warning or exact evidence match."
+        elif model_unsupported:
+            status = CartDDIStatus.UNRESOLVED_REVIEW_REQUIRED
+            message = "One or more cart products are outside the frozen DDI model vocabulary and require review."
         else:
             status = CartDDIStatus.CLEAR_WITH_LIMITATIONS
             if len(product_ids_by_token) < 2:
