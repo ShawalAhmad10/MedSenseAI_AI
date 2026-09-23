@@ -3,6 +3,42 @@ const assert = require('node:assert/strict');
 const axios = require('axios');
 const ddiService = require('../src/services/ddiService');
 
+function contractFields(status) {
+  const values = {
+    CLEAR_WITH_LIMITATIONS: {
+      review_required: false,
+      pharmacist_flag_required: false,
+      highest_severity: null,
+      workflow_action: 'CLEAR',
+    },
+    WARNING_CHECKOUT_ALLOWED: {
+      review_required: false,
+      pharmacist_flag_required: true,
+      highest_severity: 'Moderate',
+      workflow_action: 'FLAG_PHARMACIST',
+    },
+    WARNING_REVIEW_REQUIRED: {
+      review_required: true,
+      pharmacist_flag_required: false,
+      highest_severity: 'Major',
+      workflow_action: 'PHARMACIST_APPROVAL_REQUIRED',
+    },
+    UNRESOLVED_REVIEW_REQUIRED: {
+      review_required: true,
+      pharmacist_flag_required: false,
+      highest_severity: null,
+      workflow_action: 'IDENTITY_REVIEW_REQUIRED',
+    },
+    SERVICE_UNAVAILABLE: {
+      review_required: true,
+      pharmacist_flag_required: false,
+      highest_severity: null,
+      workflow_action: 'SERVICE_UNAVAILABLE',
+    },
+  };
+  return values[status];
+}
+
 test('ddiService rejects an empty authoritative product set', async () => {
   await assert.rejects(
     () => ddiService.checkCart([]),
@@ -24,6 +60,7 @@ test('ddiService accepts a structurally valid clear response', { concurrency: fa
       data: {
         status: 'CLEAR_WITH_LIMITATIONS',
         checkout_allowed: true,
+        ...contractFields('CLEAR_WITH_LIMITATIONS'),
         products: [],
         pairs: [],
       },
@@ -46,6 +83,7 @@ test('ddiService preserves governed service-unavailable response', { concurrency
     data: {
       status: 'SERVICE_UNAVAILABLE',
       checkout_allowed: false,
+      ...contractFields('SERVICE_UNAVAILABLE'),
       products: [],
       pairs: [],
     },
@@ -107,6 +145,7 @@ test('ddiService preserves valid blocked governed statuses', { concurrency: fals
       data: {
         status,
         checkout_allowed: false,
+        ...contractFields(status),
         products: [],
         pairs: [],
       },
@@ -133,6 +172,7 @@ test('ddiService rejects review statuses that incorrectly allow checkout', { con
       status: status === 'SERVICE_UNAVAILABLE' ? 503 : 200,
       data: {
         status,
+        ...contractFields(status),
         checkout_allowed: true,
         products: [],
         pairs: [],
@@ -154,6 +194,7 @@ test('ddiService rejects CLEAR status that does not grant checkout', { concurren
     status: 200,
     data: {
       status: 'CLEAR_WITH_LIMITATIONS',
+      ...contractFields('CLEAR_WITH_LIMITATIONS'),
       checkout_allowed: false,
       products: [],
       pairs: [],
@@ -175,8 +216,69 @@ test('ddiService rejects unknown governed status instead of trusting its boolean
     data: {
       status: 'UNKNOWN_CLEAR_STATE',
       checkout_allowed: true,
+      review_required: false,
+      pharmacist_flag_required: false,
+      highest_severity: null,
+      workflow_action: 'CLEAR',
       products: [],
       pairs: [],
+    },
+  });
+
+  await assert.rejects(
+    () => ddiService.checkCart([{ product_id: 900012 }]),
+    (error) => error && error.code === 'DDI_INVALID_RESPONSE',
+  );
+});
+
+test('ddiService accepts WARNING_CHECKOUT_ALLOWED only with checkout enabled', { concurrency: false }, async (t) => {
+  const originalPost = axios.post;
+  t.after(() => { axios.post = originalPost; });
+
+  axios.post = async () => ({
+    status: 200,
+    data: {
+      status: 'WARNING_CHECKOUT_ALLOWED',
+      checkout_allowed: true,
+      ...contractFields('WARNING_CHECKOUT_ALLOWED'),
+      products: [],
+      pairs: [],
+    },
+  });
+
+  const result = await ddiService.checkCart([{ product_id: 900012 }]);
+  assert.equal(result.result.checkout_allowed, true);
+  assert.equal(result.result.pharmacist_flag_required, true);
+
+  axios.post = async () => ({
+    status: 200,
+    data: {
+      status: 'WARNING_CHECKOUT_ALLOWED',
+      checkout_allowed: false,
+      ...contractFields('WARNING_CHECKOUT_ALLOWED'),
+      products: [],
+      pairs: [],
+    },
+  });
+
+  await assert.rejects(
+    () => ddiService.checkCart([{ product_id: 900012 }]),
+    (error) => error && error.code === 'DDI_INVALID_RESPONSE',
+  );
+});
+
+test('ddiService rejects allowed warnings missing deterministic pair fields', { concurrency: false }, async (t) => {
+  const originalPost = axios.post;
+  t.after(() => { axios.post = originalPost; });
+
+  axios.post = async () => ({
+    status: 200,
+    data: {
+      status: 'WARNING_CHECKOUT_ALLOWED',
+      checkout_allowed: true,
+      ...contractFields('WARNING_CHECKOUT_ALLOWED'),
+      products: [],
+      pairs: [{ warning_triggered: true }],
     },
   });
 

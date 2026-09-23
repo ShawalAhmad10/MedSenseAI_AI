@@ -69,6 +69,37 @@ test('blocked DDI paths rollback before mutation', () => {
   assert.ok(rollbacks.length >= 4);
 });
 
+test('risk-based DDI gate sends only checkout_allowed false to consultation', () => {
+  const gate = source.indexOf('if (!ddi.result.checkout_allowed)');
+  const invoiceInsert = source.indexOf('INSERT INTO invoice (', gate);
+  const scope = source.slice(gate, invoiceInsert);
+
+  assert.ok(gate >= 0);
+  assert.ok(invoiceInsert > gate);
+  assert.match(scope, /createConsultation/);
+  assert.doesNotMatch(scope, /WARNING_CHECKOUT_ALLOWED/);
+});
+
+test('post-order DDI flag is emitted once after commit and failure is contained', () => {
+  const commit = source.indexOf('await transaction.commit()');
+  const emit = source.indexOf(
+    'await ddiPharmacistFlagService.emitCompletedOrderFlag',
+    commit,
+  );
+  const containedError = source.indexOf(
+    'Failed to create post-order DDI pharmacist flag:',
+    emit,
+  );
+
+  assert.ok(commit >= 0);
+  assert.ok(emit > commit);
+  assert.ok(containedError > emit);
+  assert.equal(
+    (source.match(/emitCompletedOrderFlag/g) || []).length,
+    1,
+  );
+});
+
 test('client selling price is not authoritative', () => {
   assert.match(source, /Client selling price is ignored/);
   assert.match(source, /Number\(product\.product_price \|\| 0\)/);

@@ -91,9 +91,9 @@ test('review-required DDI routes to pharmacist workflow while active checking st
   );
 });
 
-test('DDI callers use factual workflow state names instead of severity names', () => {
+test('DDI callers use centralized risk-based workflow presentation', () => {
   const semanticExpression =
-    "level={ddiLoading ? 'checking' : ddiCheckoutAllowed ? 'clear' : 'review'}";
+    "level={ddiLoading ? 'checking' : ddiPresentation.level}";
 
   assert.ok(cartPage.includes(semanticExpression));
   assert.ok(cartDrawer.includes(semanticExpression));
@@ -173,4 +173,17 @@ test('Checkout submit delegates review authorization to authoritative backend wo
     checkout,
     /checkout_allowed\s*=\s*true/
   );
+});
+
+test('allowed warning status keeps checkout and uses non-blocking presentation', () => {
+  assert.match(ddiService, /WARNING_CHECKOUT_ALLOWED/);
+  assert.match(ddiService, /Potential AI interaction signal/);
+  assert.match(checkout, /View non-blocking DDI warning/);
+  assert.match(checkout, /ddiCheckoutAllowed\s*\?\s*'Place Order'/);
+});
+
+test('unresolved presentation uses medicine identity verification language', () => {
+  assert.match(ddiService, /Submitted for pharmacist verification/);
+  assert.match(ddiService, /medicine identities could not be fully evaluated/i);
+  assert.doesNotMatch(ddiService, /unsupported.*confirmed.*interaction/i);
 });

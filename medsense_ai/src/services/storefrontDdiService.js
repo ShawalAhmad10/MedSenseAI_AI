@@ -33,6 +33,81 @@ export async function checkCartDDI(items) {
   return response.data?.data ?? null;
 }
 
+export function getDdiPresentation(result, fallbackMessage = '') {
+  const status = result?.status;
+
+  if (status === 'WARNING_CHECKOUT_ALLOWED') {
+    const severity = ['Minor', 'Moderate'].includes(result.highest_severity)
+      ? result.highest_severity
+      : null;
+
+    return {
+      level: 'moderate',
+      allowedWarning: true,
+      blocking: false,
+      text: severity
+        ? `${severity} exact interaction — checkout available`
+        : 'Potential AI interaction signal — checkout available',
+      detail: severity
+        ? `${severity} exact interaction warning. Your order can proceed and will be flagged for pharmacist review.`
+        : 'Potential AI interaction signal. No governed clinical severity is available; checkout remains available and the order will be flagged.'
+    };
+  }
+
+  if (status === 'WARNING_REVIEW_REQUIRED') {
+    const severity = result.highest_severity;
+    return {
+      level: 'review',
+      allowedWarning: false,
+      blocking: true,
+      text: severity === 'Unknown'
+        ? 'Exact interaction — severity unknown'
+        : `${severity || 'Exact'} interaction — pharmacist approval required`,
+      detail: severity === 'Unknown'
+        ? 'An exact interaction is confirmed, but its clinical severity is unknown. Checkout is paused for pharmacist approval.'
+        : `${severity || 'This'} exact interaction requires pharmacist approval before checkout.`
+    };
+  }
+
+  if (status === 'UNRESOLVED_REVIEW_REQUIRED') {
+    return {
+      level: 'review',
+      allowedWarning: false,
+      blocking: true,
+      text: 'Submitted for pharmacist verification',
+      detail: 'Pharmacist verification required because one or more medicine identities could not be fully evaluated.'
+    };
+  }
+
+  if (status === 'CLEAR_WITH_LIMITATIONS') {
+    return {
+      level: 'clear',
+      allowedWarning: false,
+      blocking: false,
+      text: 'Governed DDI check completed; checkout cleared for the current cart',
+      detail: result.message || 'No blocking DDI workflow action was found for this medicine set.'
+    };
+  }
+
+  if (status === 'SERVICE_UNAVAILABLE' || fallbackMessage || !status) {
+    return {
+      level: 'review',
+      allowedWarning: false,
+      blocking: true,
+      text: 'DDI service unavailable',
+      detail: fallbackMessage || result?.message || 'The interaction check could not be completed.'
+    };
+  }
+
+  return {
+    level: 'review',
+    allowedWarning: false,
+    blocking: true,
+    text: 'DDI review required',
+    detail: result?.message || 'The DDI service returned an unsupported workflow status.'
+  };
+}
+
 export function extractDdiWarnings(result, fallbackMessage = '') {
   const warnings = [];
 
@@ -51,13 +126,29 @@ export function extractDdiWarnings(result, fallbackMessage = '') {
         ? pair.known_interaction_descriptions.join(' ')
         : pair.message;
 
+    const exactInteraction =
+      pair.interaction_found === true ||
+      pair.known_dataset_record_found === true;
+    const modelSignal = pair.workflow_action === 'FLAG_MODEL_SIGNAL';
+    const severity = exactInteraction ? pair.severity : null;
+
     warnings.push({
       id: `pair-${(pair.product_ids_a || []).join('-')}-${(pair.product_ids_b || []).join('-')}`,
-      label: pair.warning_triggered ? 'Known interaction detected' : 'Pharmacist review required',
+      label: modelSignal
+        ? 'Potential AI interaction signal'
+        : exactInteraction
+          ? severity === 'Unknown'
+            ? 'Exact interaction — severity unknown'
+            : `${severity || 'Exact'} exact interaction`
+          : 'Pharmacist review required',
       title: `${pair.ingredient_a} + ${pair.ingredient_b}`,
       detail:
-        evidence ||
-        'This medicine pair requires pharmacist review before checkout.',
+        modelSignal
+          ? 'Potential model signal only; no governed clinical severity is available.'
+          : evidence ||
+            'This medicine pair requires pharmacist review before checkout.',
+      severity,
+      workflowAction: pair.workflow_action || null,
     });
   }
 
@@ -74,12 +165,12 @@ export function extractDdiWarnings(result, fallbackMessage = '') {
 
     warnings.push({
       id: `product-${product.product_id}`,
-      label: 'Ingredient identity unresolved',
+      label: 'Submitted for pharmacist verification',
       title: product.product_title || `Product ${product.product_id}`,
       detail:
         ingredientState && ingredientState !== 'RESOLVED'
-          ? `Ingredient identity could not be fully resolved (${ingredientState}). Pharmacist review is required.`
-          : 'This product could not be fully evaluated by the governed DDI screen.',
+          ? `Medicine identity or evidence could not be fully evaluated (${ingredientState}). This does not confirm an interaction.`
+          : 'Medicine identity or evidence could not be fully evaluated. This does not confirm an interaction.',
     });
   }
 
@@ -90,8 +181,12 @@ export function extractDdiWarnings(result, fallbackMessage = '') {
   ) {
     warnings.push({
       id: 'ddi-review-required',
-      label: 'Pharmacist review required',
-      title: 'Drug interaction review required',
+      label: result.status === 'UNRESOLVED_REVIEW_REQUIRED'
+        ? 'Submitted for pharmacist verification'
+        : 'Pharmacist review required',
+      title: result.status === 'UNRESOLVED_REVIEW_REQUIRED'
+        ? 'Medicine identity verification required'
+        : 'Drug interaction review required',
       detail:
         result.message ||
         'The cart could not be cleared for checkout by the DDI service.',

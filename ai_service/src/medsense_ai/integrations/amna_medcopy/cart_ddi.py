@@ -36,8 +36,19 @@ from medsense_ai.integrations.amna_medcopy.product_adapter import (
 
 class CartDDIStatus(str, Enum):
     CLEAR_WITH_LIMITATIONS = "CLEAR_WITH_LIMITATIONS"
+    WARNING_CHECKOUT_ALLOWED = "WARNING_CHECKOUT_ALLOWED"
     WARNING_REVIEW_REQUIRED = "WARNING_REVIEW_REQUIRED"
     UNRESOLVED_REVIEW_REQUIRED = "UNRESOLVED_REVIEW_REQUIRED"
+    SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
+
+
+class DDIWorkflowAction(str, Enum):
+    CLEAR = "CLEAR"
+    FLAG_INFORMATIONAL = "FLAG_INFORMATIONAL"
+    FLAG_PHARMACIST = "FLAG_PHARMACIST"
+    FLAG_MODEL_SIGNAL = "FLAG_MODEL_SIGNAL"
+    PHARMACIST_APPROVAL_REQUIRED = "PHARMACIST_APPROVAL_REQUIRED"
+    IDENTITY_REVIEW_REQUIRED = "IDENTITY_REVIEW_REQUIRED"
     SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
 
 
@@ -82,6 +93,9 @@ class CartPairResult(BaseModel):
     rxcui_a: str | None = None
     rxcui_b: str | None = None
     severity: str | None = None
+    interaction_found: bool = False
+    workflow_action: DDIWorkflowAction = DDIWorkflowAction.CLEAR
+    pharmacist_flag_required: bool = False
     state: RuntimeDDIStatus
     model_version: str | None
     model_warning_score: float | None
@@ -107,6 +121,9 @@ class PartnerCartCheckResponse(BaseModel):
     bridge_payload_sha256: str | None
     products: tuple[CartProductResolution, ...]
     pairs: tuple[CartPairResult, ...]
+    pharmacist_flag_required: bool
+    highest_severity: str | None = None
+    workflow_action: DDIWorkflowAction
     review_required: bool
     checkout_allowed: bool
     message: str
@@ -114,11 +131,19 @@ class PartnerCartCheckResponse(BaseModel):
 
     @model_validator(mode="after")
     def validate_policy(self) -> PartnerCartCheckResponse:
-        allowed = self.status is CartDDIStatus.CLEAR_WITH_LIMITATIONS
+        allowed = self.status in {
+            CartDDIStatus.CLEAR_WITH_LIMITATIONS,
+            CartDDIStatus.WARNING_CHECKOUT_ALLOWED,
+        }
         if self.checkout_allowed != allowed:
-            raise ValueError("checkout_allowed must follow the conservative cart DDI policy")
+            raise ValueError("checkout_allowed must follow the risk-based cart DDI policy")
         if self.review_required == allowed:
-            raise ValueError("only CLEAR_WITH_LIMITATIONS may omit required review")
+            raise ValueError("only blocking cart statuses may require pharmacist approval")
+        expected_flag = self.status is CartDDIStatus.WARNING_CHECKOUT_ALLOWED
+        if self.pharmacist_flag_required != expected_flag:
+            raise ValueError(
+                "pharmacist_flag_required must identify an allowed warning cart"
+            )
         return self
 
 
@@ -130,35 +155,174 @@ CART_LIMITATIONS = (
 )
 
 
-def _ddinter_severity(levels: tuple[str, ...]) -> str:
-    """Return one exact source severity without inventing a severity ranking."""
+SEVERITY_RANK = {
+    "Minor": 1,
+    "Moderate": 2,
+    "Unknown": 3,
+    "Major": 4,
+    "Severe": 5,
+    "Critical": 6,
+}
 
+WORKFLOW_RANK = {
+    DDIWorkflowAction.CLEAR: 0,
+    DDIWorkflowAction.FLAG_MODEL_SIGNAL: 1,
+    DDIWorkflowAction.FLAG_INFORMATIONAL: 2,
+    DDIWorkflowAction.FLAG_PHARMACIST: 3,
+    DDIWorkflowAction.PHARMACIST_APPROVAL_REQUIRED: 4,
+    DDIWorkflowAction.IDENTITY_REVIEW_REQUIRED: 5,
+    DDIWorkflowAction.SERVICE_UNAVAILABLE: 6,
+}
+
+
+def _canonical_severity(value: object) -> str:
     canonical = {
         "minor": "Minor",
         "moderate": "Moderate",
         "major": "Major",
+        "critical": "Critical",
+        "severe": "Severe",
         "unknown": "Unknown",
     }
+    normalized = str(value or "").strip().casefold()
+    return canonical.get(normalized, "Unknown")
 
-    resolved: set[str] = set()
 
-    for raw_level in levels:
-        normalized = str(raw_level).strip().casefold()
+def _ddinter_severity(levels: tuple[str, ...]) -> str:
+    """Choose the most conservative trusted exact severity."""
 
-        if not normalized:
-            continue
-
-        mapped = canonical.get(normalized)
-
-        if mapped is None:
-            return "Unknown"
-
-        resolved.add(mapped)
-
-    if len(resolved) != 1:
+    resolved = {
+        _canonical_severity(level)
+        for level in levels
+        if str(level).strip()
+    }
+    if not resolved:
         return "Unknown"
+    return max(resolved, key=lambda item: SEVERITY_RANK[item])
 
-    return next(iter(resolved))
+
+def _pair_with_policy(pair: CartPairResult) -> CartPairResult:
+    if pair.state is RuntimeDDIStatus.MODEL_UNAVAILABLE:
+        return pair.model_copy(
+            update={
+                "interaction_found": False,
+                "severity": None,
+                "workflow_action": DDIWorkflowAction.SERVICE_UNAVAILABLE,
+                "review_required": True,
+                "pharmacist_flag_required": False,
+            }
+        )
+
+    if pair.known_dataset_record_found:
+        severity = _canonical_severity(pair.severity)
+        if severity == "Minor":
+            action = DDIWorkflowAction.FLAG_INFORMATIONAL
+        elif severity == "Moderate":
+            action = DDIWorkflowAction.FLAG_PHARMACIST
+        else:
+            action = DDIWorkflowAction.PHARMACIST_APPROVAL_REQUIRED
+        blocking = action is DDIWorkflowAction.PHARMACIST_APPROVAL_REQUIRED
+        return pair.model_copy(
+            update={
+                "interaction_found": True,
+                "severity": severity,
+                "workflow_action": action,
+                "review_required": blocking,
+                "pharmacist_flag_required": not blocking,
+                "warning_triggered": True,
+                "message": (
+                    f"{pair.message} Trusted exact severity: {severity}."
+                    if severity != "Unknown"
+                    else f"{pair.message} Exact interaction severity is unknown; "
+                    "pharmacist approval is required."
+                ),
+            }
+        )
+
+    if pair.model_warning_triggered is True:
+        return pair.model_copy(
+            update={
+                "interaction_found": False,
+                "severity": None,
+                "workflow_action": DDIWorkflowAction.FLAG_MODEL_SIGNAL,
+                "review_required": False,
+                "pharmacist_flag_required": True,
+                "warning_triggered": True,
+                "message": (
+                    "Potential interaction model signal triggered; no exact governed "
+                    "positive interaction evidence or clinical severity was found."
+                ),
+            }
+        )
+
+    if pair.state in {
+        RuntimeDDIStatus.UNSUPPORTED_INGREDIENT,
+        RuntimeDDIStatus.INVALID_INPUT,
+    }:
+        return pair.model_copy(
+            update={
+                "interaction_found": False,
+                "severity": None,
+                "workflow_action": DDIWorkflowAction.IDENTITY_REVIEW_REQUIRED,
+                "review_required": True,
+                "pharmacist_flag_required": False,
+            }
+        )
+
+    return pair.model_copy(
+        update={
+            "interaction_found": False,
+            "severity": None,
+            "workflow_action": DDIWorkflowAction.CLEAR,
+            "review_required": False,
+            "pharmacist_flag_required": False,
+        }
+    )
+
+
+def _select_cart_workflow(
+    pairs: Iterable[CartPairResult],
+    *,
+    unresolved: bool,
+    service_unavailable: bool,
+) -> tuple[CartDDIStatus, DDIWorkflowAction]:
+    pair_rows = tuple(pairs)
+    if service_unavailable:
+        return (
+            CartDDIStatus.SERVICE_UNAVAILABLE,
+            DDIWorkflowAction.SERVICE_UNAVAILABLE,
+        )
+    if unresolved:
+        return (
+            CartDDIStatus.UNRESOLVED_REVIEW_REQUIRED,
+            DDIWorkflowAction.IDENTITY_REVIEW_REQUIRED,
+        )
+    if any(
+        pair.workflow_action
+        is DDIWorkflowAction.PHARMACIST_APPROVAL_REQUIRED
+        for pair in pair_rows
+    ):
+        return (
+            CartDDIStatus.WARNING_REVIEW_REQUIRED,
+            DDIWorkflowAction.PHARMACIST_APPROVAL_REQUIRED,
+        )
+
+    flag_actions = tuple(
+        pair.workflow_action
+        for pair in pair_rows
+        if pair.workflow_action
+        in {
+            DDIWorkflowAction.FLAG_PHARMACIST,
+            DDIWorkflowAction.FLAG_INFORMATIONAL,
+            DDIWorkflowAction.FLAG_MODEL_SIGNAL,
+        }
+    )
+    if flag_actions:
+        return (
+            CartDDIStatus.WARNING_CHECKOUT_ALLOWED,
+            max(flag_actions, key=lambda item: WORKFLOW_RANK[item]),
+        )
+    return CartDDIStatus.CLEAR_WITH_LIMITATIONS, DDIWorkflowAction.CLEAR
 
 
 def _canonical_json(value: object) -> bytes:
@@ -518,17 +682,6 @@ class PartnerCartDDIService:
                 existing.model_version is not None
             )
 
-            # If the model/runtime row already contains an exact governed
-            # source record, retain it rather than silently replacing its
-            # provenance with a second exact source. Multi-source provenance
-            # requires a future explicit schema extension.
-            if (
-                existing_is_model
-                and existing.known_dataset_record_found
-                and incoming_is_exact
-            ):
-                continue
-
             if existing_is_model and incoming_is_exact:
                 merged_limitations = tuple(
                     dict.fromkeys(
@@ -555,7 +708,7 @@ class PartnerCartDDIService:
                             "evidence_record_identifiers": (
                                 candidate.evidence_record_identifiers
                             ),
-                            "review_required": True,
+                            "review_required": candidate.review_required,
                             "message": (
                                 f"{candidate.message} "
                                 "Frozen-model metadata is retained as a "
@@ -569,11 +722,14 @@ class PartnerCartDDIService:
 
             # Defensive fallback: preserve the first governed row rather
             # than emitting duplicate UI warnings for one RxCUI pair.
-            # Current source precedence is:
-            # runtime exact row > DDInter > official-label fallback.
+            # DDInter is selected before the official-label fallback above;
+            # frozen-model metadata is retained when exact evidence merges.
             continue
 
-        pair_results = consolidated_pair_results
+        pair_results = [
+            _pair_with_policy(pair)
+            for pair in consolidated_pair_results
+        ]
 
         hard_unresolved = any(
             not item.structural_adaptation_succeeded
@@ -584,12 +740,8 @@ class PartnerCartDDIService:
                 IngredientResolutionState.UNMAPPED,
                 IngredientResolutionState.AMBIGUOUS,
                 IngredientResolutionState.REVIEW_REQUIRED,
+                IngredientResolutionState.MODEL_UNSUPPORTED,
             }
-            for item in product_results
-        )
-
-        model_unsupported = any(
-            item.ingredient.state is IngredientResolutionState.MODEL_UNSUPPORTED
             for item in product_results
         )
 
@@ -597,28 +749,50 @@ class PartnerCartDDIService:
             pair.state is RuntimeDDIStatus.MODEL_UNAVAILABLE for pair in pair_results
         )
 
-        warning = any(
-            pair.state is RuntimeDDIStatus.INTERACTION_WARNING
+        exact_severities = [
+            pair.severity
             for pair in pair_results
+            if pair.interaction_found and pair.severity in SEVERITY_RANK
+        ]
+        highest_severity = (
+            max(exact_severities, key=lambda item: SEVERITY_RANK[item])
+            if exact_severities
+            else None
         )
 
-        if service_unavailable:
-            status = CartDDIStatus.SERVICE_UNAVAILABLE
+        status, workflow_action = _select_cart_workflow(
+            pair_results,
+            unresolved=hard_unresolved,
+            service_unavailable=service_unavailable,
+        )
+
+        if status is CartDDIStatus.SERVICE_UNAVAILABLE:
             message = (
                 "The DDI runtime could not complete every required pair evaluation with "
                 "the exact model and evidence artifacts pinned by the bridge."
             )
-        elif hard_unresolved:
-            status = CartDDIStatus.UNRESOLVED_REVIEW_REQUIRED
-            message = "One or more cart products could not be evaluated with complete governed identity."
-        elif warning:
-            status = CartDDIStatus.WARNING_REVIEW_REQUIRED
-            message = "At least one cart ingredient pair produced a DDI warning or exact evidence match."
-        elif model_unsupported:
-            status = CartDDIStatus.UNRESOLVED_REVIEW_REQUIRED
-            message = "One or more cart products are outside the frozen DDI model vocabulary and require review."
+        elif status is CartDDIStatus.UNRESOLVED_REVIEW_REQUIRED:
+            message = (
+                "Pharmacist verification is required because one or more medicine "
+                "identities or evidence paths could not be fully evaluated."
+            )
+        elif status is CartDDIStatus.WARNING_REVIEW_REQUIRED:
+            if highest_severity == "Unknown":
+                message = (
+                    "An exact interaction was confirmed, but its clinical severity is "
+                    "unknown; pharmacist approval is required."
+                )
+            else:
+                message = (
+                    "A Major, Severe, or Critical exact interaction requires "
+                    "pharmacist approval before checkout."
+                )
+        elif status is CartDDIStatus.WARNING_CHECKOUT_ALLOWED:
+            message = (
+                "A non-blocking DDI warning was found. Checkout remains available "
+                "and the order will be flagged for pharmacist review."
+            )
         else:
-            status = CartDDIStatus.CLEAR_WITH_LIMITATIONS
             if len(product_ids_by_token) < 2:
                 message = (
                     "Fewer than two distinct supported ingredients were present, so no pair was scored. "
@@ -630,7 +804,10 @@ class PartnerCartDDIService:
                     "This is not a clinical safety guarantee."
                 )
 
-        allowed = status is CartDDIStatus.CLEAR_WITH_LIMITATIONS
+        allowed = status in {
+            CartDDIStatus.CLEAR_WITH_LIMITATIONS,
+            CartDDIStatus.WARNING_CHECKOUT_ALLOWED,
+        }
         artifact = self._resolver.artifact
         return PartnerCartCheckResponse(
             status=status,
@@ -640,6 +817,11 @@ class PartnerCartDDIService:
             bridge_payload_sha256=artifact.payload_sha256,
             products=tuple(product_results),
             pairs=tuple(pair_results),
+            pharmacist_flag_required=(
+                status is CartDDIStatus.WARNING_CHECKOUT_ALLOWED
+            ),
+            highest_severity=highest_severity,
+            workflow_action=workflow_action,
             review_required=not allowed,
             checkout_allowed=allowed,
             message=message,
@@ -715,6 +897,9 @@ def unavailable_cart_response(
         bridge_payload_sha256=None,
         products=(),
         pairs=(),
+        pharmacist_flag_required=False,
+        highest_severity=None,
+        workflow_action=DDIWorkflowAction.SERVICE_UNAVAILABLE,
         review_required=True,
         checkout_allowed=False,
         message=message,

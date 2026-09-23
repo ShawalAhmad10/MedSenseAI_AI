@@ -5,6 +5,7 @@ import axios from 'axios';
 import {
   checkCartDDI,
   extractDdiWarnings,
+  getDdiPresentation,
 } from '../src/services/storefrontDdiService.js';
 
 test('frontend DDI sends only unique authoritative product IDs', { concurrency: false }, async (t) => {
@@ -73,6 +74,10 @@ test('known interaction warning uses factual label and evidence', () => {
     pairs: [
       {
         warning_triggered: true,
+        interaction_found: true,
+        known_dataset_record_found: true,
+        severity: 'Major',
+        workflow_action: 'PHARMACIST_APPROVAL_REQUIRED',
         review_required: true,
         product_ids_a: [900014],
         product_ids_b: [900009],
@@ -84,7 +89,7 @@ test('known interaction warning uses factual label and evidence', () => {
   });
 
   assert.equal(warnings.length, 1);
-  assert.equal(warnings[0].label, 'Known interaction detected');
+  assert.equal(warnings[0].label, 'Major exact interaction');
   assert.match(warnings[0].detail, /Known governed interaction evidence/);
 });
 
@@ -106,8 +111,9 @@ test('unresolved ingredient produces factual unresolved review item', () => {
   });
 
   assert.equal(warnings.length, 1);
-  assert.equal(warnings[0].label, 'Ingredient identity unresolved');
+  assert.equal(warnings[0].label, 'Submitted for pharmacist verification');
   assert.match(warnings[0].detail, /MODEL_UNSUPPORTED/);
+  assert.match(warnings[0].detail, /does not confirm an interaction/);
 });
 
 test('generic governed block never invents clinical severity', () => {
@@ -142,4 +148,77 @@ test('clear governed result produces no warning items', () => {
   });
 
   assert.deepEqual(warnings, []);
+});
+
+test('non-blocking Moderate warning preserves normal checkout presentation', () => {
+  const presentation = getDdiPresentation({
+    status: 'WARNING_CHECKOUT_ALLOWED',
+    checkout_allowed: true,
+    highest_severity: 'Moderate',
+    workflow_action: 'FLAG_PHARMACIST',
+  });
+
+  assert.equal(presentation.allowedWarning, true);
+  assert.equal(presentation.blocking, false);
+  assert.match(presentation.text, /Moderate exact interaction/);
+  assert.match(presentation.text, /checkout available/);
+});
+
+test('Major and Unknown exact warnings present as blocking approval', () => {
+  for (const severity of ['Major', 'Unknown']) {
+    const presentation = getDdiPresentation({
+      status: 'WARNING_REVIEW_REQUIRED',
+      checkout_allowed: false,
+      highest_severity: severity,
+      workflow_action: 'PHARMACIST_APPROVAL_REQUIRED',
+    });
+
+    assert.equal(presentation.blocking, true);
+    assert.match(presentation.detail, /pharmacist approval/i);
+    assert.match(`${presentation.text} ${presentation.detail}`, new RegExp(severity, 'i'));
+  }
+});
+
+test('unsupported cart says verification rather than confirmed interaction', () => {
+  const presentation = getDdiPresentation({
+    status: 'UNRESOLVED_REVIEW_REQUIRED',
+    checkout_allowed: false,
+    workflow_action: 'IDENTITY_REVIEW_REQUIRED',
+  });
+
+  assert.equal(presentation.text, 'Submitted for pharmacist verification');
+  assert.match(presentation.detail, /identities could not be fully evaluated/);
+  assert.doesNotMatch(presentation.detail, /confirmed.*interaction/i);
+});
+
+test('model-only signal never displays a fabricated clinical severity', () => {
+  const warnings = extractDdiWarnings({
+    status: 'WARNING_CHECKOUT_ALLOWED',
+    checkout_allowed: true,
+    products: [],
+    pairs: [{
+      warning_triggered: true,
+      interaction_found: false,
+      known_dataset_record_found: false,
+      severity: null,
+      workflow_action: 'FLAG_MODEL_SIGNAL',
+      product_ids_a: [1],
+      product_ids_b: [2],
+      ingredient_a: 'Medicine A',
+      ingredient_b: 'Medicine B',
+    }],
+  });
+
+  assert.equal(warnings[0].label, 'Potential AI interaction signal');
+  assert.equal(warnings[0].severity, null);
+  assert.doesNotMatch(JSON.stringify(warnings), /Major|Moderate|Minor/);
+});
+
+test('missing or unknown workflow result never presents as clear', () => {
+  for (const result of [null, { status: 'UNKNOWN_STATUS' }]) {
+    const presentation = getDdiPresentation(result);
+    assert.equal(presentation.level, 'review');
+    assert.equal(presentation.blocking, true);
+    assert.doesNotMatch(presentation.text, /cleared/i);
+  }
 });

@@ -618,13 +618,15 @@ function extractReviewItems(result) {
 
     warnings.push({
       kind:
-        pair.warning_triggered
-          ? 'known_interaction'
+        pair.interaction_found
+          ? 'exact_interaction'
           : 'pair_review_required',
 
       label:
-        pair.warning_triggered
-          ? 'Known interaction detected'
+        pair.interaction_found
+          ? pair.severity === 'Unknown'
+            ? 'Exact interaction with unknown severity'
+            : `${pair.severity || 'Exact'} interaction detected`
           : 'Pharmacist review required',
 
       message:
@@ -661,6 +663,23 @@ function extractReviewItems(result) {
         )
           ? pair.product_ids_b
           : [],
+
+      interaction_found:
+        pair.interaction_found === true,
+
+      severity:
+        pair.severity || null,
+
+      workflow_action:
+        pair.workflow_action || null,
+
+      evidence_source_identifier:
+        pair.evidence_source_identifier || null,
+
+      evidence_record_identifiers:
+        Array.isArray(pair.evidence_record_identifiers)
+          ? pair.evidence_record_identifiers
+          : [],
     });
   }
 
@@ -690,14 +709,22 @@ function extractReviewItems(result) {
         'product_review_required',
 
       label:
-        'Ingredient identity unresolved',
+        'Submitted for pharmacist verification',
 
       message:
         ingredientState &&
         ingredientState !==
           'RESOLVED'
-          ? `Ingredient identity could not be fully resolved (${ingredientState}). Pharmacist review is required.`
-          : 'This product could not be fully evaluated by the governed DDI screen.',
+          ? `Medicine identity or evidence could not be fully evaluated (${ingredientState}). This does not confirm a dangerous interaction.`
+          : 'Medicine identity or evidence could not be fully evaluated. This does not confirm a dangerous interaction.',
+
+      workflow_action:
+        'IDENTITY_REVIEW_REQUIRED',
+
+      identity_problem_reason:
+        ingredientState ||
+        product.structural_limitation ||
+        'GOVERNED_EVALUATION_INCOMPLETE',
 
       product_id:
         Number(

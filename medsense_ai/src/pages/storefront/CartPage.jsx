@@ -6,6 +6,7 @@ import { useCart } from '../../context/CartContext';
 import InteractionBadge from '../../components/storefront/InteractionBadge';
 import InteractionWarningModal from '../../components/storefront/InteractionWarningModal';
 import EscalateToPharmacistModal from '../../components/storefront/EscalateToPharmacistModal';
+import { getDdiPresentation } from '../../services/storefrontDdiService';
 
 export default function CartPage() {
   const {
@@ -18,11 +19,13 @@ export default function CartPage() {
     ddiError,
     ddiWarnings,
     ddiCheckoutAllowed,
+    ddiResult,
   } = useCart();
   const [showWarnings, setShowWarnings] = useState(false);
   const [showEscalation, setShowEscalation] = useState(false);
 
   const deliveryFee = items.length > 0 ? 120 : 0;
+  const ddiPresentation = getDdiPresentation(ddiResult, ddiError || '');
 
   return (
     <div className="storefront-shell">
@@ -36,15 +39,13 @@ export default function CartPage() {
               </p>
             </div>
             <InteractionBadge
-              level={ddiLoading ? 'checking' : ddiCheckoutAllowed ? 'clear' : 'review'}
+              level={ddiLoading ? 'checking' : ddiPresentation.level}
               text={
                 items.length === 0
                   ? 'Add medicines to begin DDI review'
                   : ddiLoading
                     ? 'Checking drug interactions...'
-                    : ddiCheckoutAllowed
-                      ? 'Governed DDI check completed; checkout cleared for the current cart'
-                      : 'Interaction review required'
+                    : ddiPresentation.text
               }
             />
           </div>
@@ -124,15 +125,18 @@ export default function CartPage() {
           {items.length > 0 && (
             <div className="sf-summary-block" style={{ marginTop: '1rem' }}>
               <InteractionBadge
-                level={ddiLoading ? 'checking' : ddiCheckoutAllowed ? 'clear' : 'review'}
+                level={ddiLoading ? 'checking' : ddiPresentation.level}
                 text={
                   ddiLoading
                     ? 'Checking drug interactions...'
-                    : ddiCheckoutAllowed
-                      ? 'Governed DDI check completed; checkout cleared for the current cart'
-                      : ddiError || `${ddiWarnings.length || 1} interaction review item(s) require attention`
+                    : ddiPresentation.text
                 }
               />
+              {!ddiLoading && ddiPresentation.allowedWarning && (
+                <p className="sf-muted" style={{ fontSize: '0.9rem', marginBottom: 0, marginTop: '0.65rem' }}>
+                  {ddiPresentation.detail}
+                </p>
+              )}
             </div>
           )}
 

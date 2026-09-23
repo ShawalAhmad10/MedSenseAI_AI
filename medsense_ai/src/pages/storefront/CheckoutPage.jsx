@@ -8,7 +8,7 @@ import { useCart } from '../../context/CartContext';
 import { createOrder } from '../../services/storefrontOrderService';
 import { getCustomerDetails } from '../../services/customerService';
 import { getFunnelContext, resetFunnelCartId, trackFunnelEventOnce } from '../../services/storefrontFunnelService';
-import { checkCartDDI, extractDdiWarnings } from '../../services/storefrontDdiService';
+import { checkCartDDI, extractDdiWarnings, getDdiPresentation } from '../../services/storefrontDdiService';
 import { clearBuyNowCheckout, getBuyNowCheckoutItems } from '../../services/storefrontCheckoutSession';
 
 const steps = ['address', 'prescription', 'payment', 'review'];
@@ -152,6 +152,7 @@ export default function CheckoutPage() {
     checkoutMode === 'BUY_NOW'
       ? buyNowDdiCheckoutAllowed
       : cartDdiCheckoutAllowed;
+  const ddiPresentation = getDdiPresentation(ddiResult, ddiError || '');
   const [stepIndex, setStepIndex] = useState(0);
   const [showWarnings, setShowWarnings] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -818,24 +819,22 @@ export default function CheckoutPage() {
 
               <p
                 className="sf-muted"
-                style={{ marginBottom: ddiCheckoutAllowed ? 0 : '0.7rem' }}
+                style={{ marginBottom: ddiResult?.status === 'CLEAR_WITH_LIMITATIONS' ? 0 : '0.7rem' }}
               >
                 {ddiLoading
                   ? 'Checking medicines against the governed DDI service...'
-                  : ddiCheckoutAllowed
-                    ? 'Governed DDI check completed; checkout cleared for this medicine set.'
-                    : ddiError ||
-                      ddiResult?.message ||
-                      'Interaction review is required before checkout.'}
+                  : ddiPresentation.detail}
               </p>
 
-              {!ddiLoading && !ddiCheckoutAllowed && (
+              {!ddiLoading && ddiResult?.status !== 'CLEAR_WITH_LIMITATIONS' && (
                 <button
                   className="sf-button-secondary"
                   onClick={() => setShowWarnings(true)}
                   type="button"
                 >
-                  Review interaction warning
+                  {ddiPresentation.allowedWarning
+                    ? 'View non-blocking DDI warning'
+                    : 'Review interaction warning'}
                 </button>
               )}
             </div>

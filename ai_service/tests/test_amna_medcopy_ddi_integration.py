@@ -441,7 +441,8 @@ def test_supplemental_model_only_warning_is_explicitly_potential(
     )
 
     pair = result.pairs[0]
-    assert result.status is CartDDIStatus.WARNING_REVIEW_REQUIRED
+    assert result.status is CartDDIStatus.WARNING_CHECKOUT_ALLOWED
+    assert result.checkout_allowed is True
     assert pair.model_warning_triggered is True
     assert pair.known_dataset_record_found is False
     assert pair.severity is None
@@ -623,7 +624,7 @@ def test_model_unsupported_pair_can_preserve_exact_ddinter_evidence() -> None:
         )
     )
 
-    assert result.status is CartDDIStatus.WARNING_REVIEW_REQUIRED
+    assert result.status is CartDDIStatus.UNRESOLVED_REVIEW_REQUIRED
 
     # Lock the exact-evidence behavior independently of ML support.
     source_record = next(
@@ -693,7 +694,9 @@ def test_model_unsupported_pair_can_preserve_exact_ddinter_evidence() -> None:
     assert evidence_pair["model_warning_triggered"] is None
     assert evidence_pair["warning_triggered"] is True
     assert evidence_pair["known_dataset_record_found"] is True
-    assert evidence_pair["review_required"] is True
+    assert evidence_pair["review_required"] is (
+        expected_severity not in {"Minor", "Moderate"}
+    )
 
     assert set(
         evidence_pair["evidence_record_identifiers"]
@@ -758,7 +761,7 @@ def test_official_label_exact_pair_fills_ddinter_coverage_gap() -> None:
     )
 
     assert result.status is (
-        CartDDIStatus.WARNING_REVIEW_REQUIRED
+        CartDDIStatus.UNRESOLVED_REVIEW_REQUIRED
     )
     assert result.checkout_allowed is False
     assert result.review_required is True
@@ -911,7 +914,9 @@ def test_ddinter_precedes_official_label_overlap_without_duplicate_lookup() -> N
     assert pair.state is RuntimeDDIStatus.INTERACTION_WARNING
     assert pair.known_dataset_record_found is True
     assert pair.warning_triggered is True
-    assert pair.review_required is True
+    assert pair.review_required is (
+        pair.severity not in {"Minor", "Moderate"}
+    )
     assert result.checkout_allowed is False
 
 
@@ -1039,7 +1044,7 @@ def test_etrasimod_official_exact_evidence_creates_single_warning_pair() -> None
         pair = matching[0]
 
         assert result.status is (
-            CartDDIStatus.WARNING_REVIEW_REQUIRED
+            CartDDIStatus.UNRESOLVED_REVIEW_REQUIRED
         )
         assert result.checkout_allowed is False
 

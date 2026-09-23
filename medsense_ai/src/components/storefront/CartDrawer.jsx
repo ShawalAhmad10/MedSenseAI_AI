@@ -5,6 +5,7 @@ import { Minus, Plus, Trash2, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import InteractionBadge from './InteractionBadge';
+import { getDdiPresentation } from '../../services/storefrontDdiService';
 
 export default function CartDrawer({ isOpen, onClose }) {
   const {
@@ -16,7 +17,9 @@ export default function CartDrawer({ isOpen, onClose }) {
     ddiLoading,
     ddiCheckoutAllowed,
     ddiWarnings,
+    ddiResult,
   } = useCart();
+  const ddiPresentation = getDdiPresentation(ddiResult);
 
   return (
     <AnimatePresence>
@@ -91,15 +94,18 @@ export default function CartDrawer({ isOpen, onClose }) {
               {items.length > 0 && (
                 <div style={{ marginBottom: '0.8rem' }}>
                   <InteractionBadge
-                    level={ddiLoading ? 'checking' : ddiCheckoutAllowed ? 'clear' : 'review'}
+                    level={ddiLoading ? 'checking' : ddiPresentation.level}
                     text={
                       ddiLoading
                         ? 'Checking drug interactions...'
-                        : ddiCheckoutAllowed
-                          ? 'Governed DDI check completed; checkout cleared for the current cart'
-                          : `Interaction review required${ddiWarnings.length ? ` (${ddiWarnings.length})` : ''}`
+                        : ddiPresentation.text
                     }
                   />
+                  {!ddiLoading && ddiPresentation.allowedWarning && (
+                    <p className="sf-muted" style={{ fontSize: '0.84rem', marginBottom: 0, marginTop: '0.55rem' }}>
+                      {ddiPresentation.detail}
+                    </p>
+                  )}
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.9rem', fontWeight: 700 }}>

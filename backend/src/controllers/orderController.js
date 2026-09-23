@@ -2,6 +2,7 @@
 
 const { sequelize } = require('../config/database');
 const { createNotification } = require('./notificationController');
+const ddiPharmacistFlagService = require('../services/ddiPharmacistFlagService');
 const User = require('../models/User');
 const ddiService = require('../services/ddiService');
 const consultationService =
@@ -1337,6 +1338,22 @@ exports.createOrder = async (req, res) => {
     }
 
     await transaction.commit();
+
+    // The order is durable before this non-blocking pharmacist flag is sent.
+    // A notification outage must never retry or roll back commerce writes.
+    try {
+      await ddiPharmacistFlagService.emitCompletedOrderFlag({
+        ddiResult: ddi.result,
+        orderId: invoice_id,
+        orderNumber: invoice_number,
+        customerName: customer_name
+      });
+    } catch (ddiFlagError) {
+      console.error(
+        'Failed to create post-order DDI pharmacist flag:',
+        ddiFlagError
+      );
+    }
 
     // Commerce is already committed. Analytics cannot fail this order.
     try {

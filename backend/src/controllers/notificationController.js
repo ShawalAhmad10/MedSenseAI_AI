@@ -270,9 +270,13 @@ exports.createNotification = async (userId, type, title, message, metadata = {})
 // Helper function to create notifications for all pharmacists
 exports.createNotificationForAllPharmacists = async (type, title, message, metadata = {}) => {
   try {
-    // Get all pharmacist users
+    // DDI/order notifications only target eligible pharmacist accounts.
     const pharmacists = await User.findAll({
-      where: { role: 'pharmacist' },
+      where: {
+        role: 'pharmacist',
+        isActive: true,
+        isApproved: true
+      },
       attributes: ['id']
     });
 
