@@ -621,6 +621,82 @@ def test_model_unsupported_pair_can_preserve_exact_ddinter_evidence() -> None:
     )
 
     assert result.status is CartDDIStatus.WARNING_REVIEW_REQUIRED
+
+    # Lock the exact-evidence behavior independently of ML support.
+    source_record = next(
+        record
+        for record in evidence_artifact.pairs
+        if {
+            record.rxcui_a,
+            record.rxcui_b,
+        }
+        == {
+            unsupported_rxcui,
+            supported_rxcui,
+        }
+    )
+
+    payload = result.model_dump()
+    pair_rows = (
+        payload.get("pairs")
+        or payload.get("pair_results")
+        or []
+    )
+
+    matching_pairs = [
+        pair
+        for pair in pair_rows
+        if {
+            str(pair.get("rxcui_a") or ""),
+            str(pair.get("rxcui_b") or ""),
+        }
+        == {
+            unsupported_rxcui,
+            supported_rxcui,
+        }
+        and pair.get("known_dataset_record_found") is True
+    ]
+
+    assert matching_pairs
+
+    evidence_pair = matching_pairs[0]
+
+    normalized_levels = {
+        str(level).strip().casefold()
+        for level in source_record.levels
+        if str(level).strip()
+    }
+
+    severity_map = {
+        "minor": "Minor",
+        "moderate": "Moderate",
+        "major": "Major",
+        "unknown": "Unknown",
+    }
+
+    if (
+        len(normalized_levels) == 1
+        and next(iter(normalized_levels)) in severity_map
+    ):
+        expected_severity = severity_map[
+            next(iter(normalized_levels))
+        ]
+    else:
+        expected_severity = "Unknown"
+
+    assert evidence_pair["severity"] == expected_severity
+    assert evidence_pair["model_version"] is None
+    assert evidence_pair["model_warning_score"] is None
+    assert evidence_pair["model_warning_triggered"] is None
+    assert evidence_pair["warning_triggered"] is True
+    assert evidence_pair["known_dataset_record_found"] is True
+    assert evidence_pair["review_required"] is True
+
+    assert set(
+        evidence_pair["evidence_record_identifiers"]
+    ) == set(
+        source_record.record_identifiers
+    )
     assert result.checkout_allowed is False
     assert result.review_required is True
 
