@@ -16,6 +16,9 @@ from medsense_ai.integrations.amna_medcopy.ddi_rxcui_sidecar import (
     ExactRxCUIIdentityResolver,
     RxCUIInteractionEvidenceIndex,
 )
+from medsense_ai.integrations.amna_medcopy.official_label_ddi_evidence import (
+    OfficialLabelInteractionEvidenceIndex,
+)
 from medsense_ai.integrations.amna_medcopy.prescription_orchestration import PartnerPrescriptionOrchestrationService
 from medsense_ai.logging_config import configure_logging
 
@@ -56,6 +59,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 ),
                 rxcui_evidence_index=(
                     RxCUIInteractionEvidenceIndex.from_artifact()
+                ),
+                official_label_evidence_index=(
+                    OfficialLabelInteractionEvidenceIndex.from_artifact()
                 ),
                 runtime_service=RuntimeDDIService(
                     model_dir=resolved_settings.ddi_model_dir,

@@ -25,6 +25,9 @@ from medsense_ai.integrations.amna_medcopy.ddi_rxcui_sidecar import (
     ExactRxCUIIdentityResolver,
     RxCUIInteractionEvidenceIndex,
 )
+from medsense_ai.integrations.amna_medcopy.official_label_ddi_evidence import (
+    OfficialLabelInteractionEvidenceIndex,
+)
 from medsense_ai.integrations.amna_medcopy.product_adapter import (
     PartnerProductAdaptationError,
     adapt_partner_product,
@@ -194,11 +197,13 @@ class PartnerCartDDIService:
         runtime_service: RuntimeDDIService,
         rxcui_identity_resolver: ExactRxCUIIdentityResolver | None = None,
         rxcui_evidence_index: RxCUIInteractionEvidenceIndex | None = None,
+        official_label_evidence_index: OfficialLabelInteractionEvidenceIndex | None = None,
     ) -> None:
         self._resolver = resolver
         self._runtime = runtime_service
         self._rxcui_identity_resolver = rxcui_identity_resolver
         self._rxcui_evidence_index = rxcui_evidence_index
+        self._official_label_evidence_index = official_label_evidence_index
 
     def evaluate(self, request: PartnerCartCheckRequest) -> PartnerCartCheckResponse:
         digest, snapshot_identifier = request_snapshot(request)
@@ -315,36 +320,135 @@ class PartnerCartDDIService:
             )
 
 
-        if self._rxcui_evidence_index is not None:
+        if (
+            self._rxcui_evidence_index is not None
+            or self._official_label_evidence_index is not None
+        ):
             for rxcui_a, rxcui_b in itertools.combinations(
                 sorted(product_ids_by_rxcui),
                 2,
             ):
-                evidence = self._rxcui_evidence_index.lookup(
-                    rxcui_a,
-                    rxcui_b,
-                )
+                ddinter_evidence = None
+                official_label_evidence = None
 
-                if evidence is None:
+                if self._rxcui_evidence_index is not None:
+                    ddinter_evidence = (
+                        self._rxcui_evidence_index.lookup(
+                            rxcui_a,
+                            rxcui_b,
+                        )
+                    )
+
+                # DDInter is the primary exact-pair evidence source.
+                # Official-label evidence only fills pairs not covered
+                # by DDInter, preventing duplicate pair warnings.
+                if (
+                    ddinter_evidence is None
+                    and self._official_label_evidence_index
+                    is not None
+                ):
+                    official_label_evidence = (
+                        self._official_label_evidence_index.lookup(
+                            rxcui_a,
+                            rxcui_b,
+                        )
+                    )
+
+                if (
+                    ddinter_evidence is None
+                    and official_label_evidence is None
+                ):
                     continue
+
+                if ddinter_evidence is not None:
+                    severity = _ddinter_severity(
+                        ddinter_evidence.levels
+                    )
+                    descriptions = (
+                        ddinter_evidence.descriptions
+                    )
+                    source_identifier = (
+                        ddinter_evidence.source_identifier
+                    )
+                    record_identifiers = (
+                        ddinter_evidence.record_identifiers
+                    )
+                    review_required = True
+                    message = (
+                        "Exact DDInter interaction evidence was "
+                        "found for this governed RxCUI pair. "
+                        "Model support is independent of this "
+                        "exact evidence."
+                    )
+                    evidence_limitation = (
+                        "DDInter evidence is an exact positive "
+                        "record; absence of a DDInter row does "
+                        "not establish absence of interaction."
+                    )
+                else:
+                    assert official_label_evidence is not None
+
+                    severity = (
+                        official_label_evidence.severity
+                    )
+                    descriptions = (
+                        official_label_evidence.descriptions
+                    )
+                    source_identifier = (
+                        official_label_evidence.source_identifier
+                    )
+                    record_identifiers = (
+                        official_label_evidence.record_identifiers
+                    )
+                    review_required = (
+                        official_label_evidence.review_required
+                    )
+                    message = (
+                        "Exact official product-label interaction "
+                        "evidence was found for this governed "
+                        "RxCUI pair. Model support is independent "
+                        "of this exact evidence."
+                    )
+                    evidence_limitation = (
+                        "Official-label evidence records an "
+                        "explicitly named interaction, but does "
+                        "not assign a DDInter-style clinical "
+                        "severity; severity remains Unknown."
+                    )
 
                 pair_results.append(
                     CartPairResult(
                         product_ids_a=tuple(
-                            sorted(product_ids_by_rxcui[rxcui_a])
+                            sorted(
+                                product_ids_by_rxcui[
+                                    rxcui_a
+                                ]
+                            )
                         ),
                         product_ids_b=tuple(
-                            sorted(product_ids_by_rxcui[rxcui_b])
+                            sorted(
+                                product_ids_by_rxcui[
+                                    rxcui_b
+                                ]
+                            )
                         ),
-                        ingredient_a=identity_name_by_rxcui[rxcui_a],
-                        ingredient_b=identity_name_by_rxcui[rxcui_b],
+                        ingredient_a=(
+                            identity_name_by_rxcui[
+                                rxcui_a
+                            ]
+                        ),
+                        ingredient_b=(
+                            identity_name_by_rxcui[
+                                rxcui_b
+                            ]
+                        ),
                         identity_namespace_a="RXNORM",
                         identity_namespace_b="RXNORM",
                         identity_id_a=rxcui_a,
                         identity_id_b=rxcui_b,
                         rxcui_a=rxcui_a,
                         rxcui_b=rxcui_b,
-                        severity=_ddinter_severity(evidence.levels),
+                        severity=severity,
                         state=RuntimeDDIStatus.INTERACTION_WARNING,
                         model_version=None,
                         model_warning_score=None,
@@ -352,24 +456,20 @@ class PartnerCartDDIService:
                         model_warning_triggered=None,
                         warning_triggered=True,
                         known_dataset_record_found=True,
-                        known_interaction_descriptions=evidence.descriptions,
+                        known_interaction_descriptions=(
+                            descriptions
+                        ),
                         evidence_source_identifier=(
-                            evidence.source_identifier
+                            source_identifier
                         ),
                         evidence_record_identifiers=(
-                            evidence.record_identifiers
+                            record_identifiers
                         ),
-                        review_required=True,
-                        message=(
-                            "Exact DDInter interaction evidence was found "
-                            "for this governed RxCUI pair. Model support is "
-                            "independent of this exact evidence."
-                        ),
+                        review_required=review_required,
+                        message=message,
                         limitations=CART_LIMITATIONS
                         + (
-                            "DDInter evidence is an exact positive record; "
-                            "absence of a DDInter row does not establish "
-                            "absence of interaction.",
+                            evidence_limitation,
                         ),
                     )
                 )

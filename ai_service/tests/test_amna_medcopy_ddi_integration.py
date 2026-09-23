@@ -35,6 +35,9 @@ from medsense_ai.integrations.amna_medcopy.ddi_rxcui_sidecar import (
     load_rxcui_evidence_artifact,
     load_rxcui_identity_artifact,
 )
+from medsense_ai.integrations.amna_medcopy.official_label_ddi_evidence import (
+    OfficialLabelInteractionEvidenceIndex,
+)
 from medsense_ai.integrations.amna_medcopy.ddi_supplemental_identity import (
     DEFAULT_SUPPLEMENTAL_IDENTITY_ARTIFACT,
     load_supplemental_identity_artifact,
@@ -722,6 +725,195 @@ def test_model_unsupported_pair_can_preserve_exact_ddinter_evidence() -> None:
         "ddinter_rxcui_evidence_v1.json@sha256:"
         in pair.evidence_source_identifier
     )
+
+
+
+def test_official_label_exact_pair_fills_ddinter_coverage_gap() -> None:
+    service = PartnerCartDDIService(
+        resolver=ExactDDIIngredientResolver.from_artifact(),
+        rxcui_identity_resolver=(
+            ExactRxCUIIdentityResolver.from_artifact()
+        ),
+        rxcui_evidence_index=(
+            RxCUIInteractionEvidenceIndex.from_artifact()
+        ),
+        official_label_evidence_index=(
+            OfficialLabelInteractionEvidenceIndex.from_artifact()
+        ),
+        runtime_service=RuntimeDDIService(
+            model_dir=Path("artifacts/ddi/model"),
+            known_interaction_source=Path(
+                "external/db_drug_interactions.csv"
+            ),
+        ),
+    )
+
+    result = service.evaluate(
+        PartnerCartCheckRequest(
+            products=(
+                product(1, "Sotagliflozin"),
+                product(2, "Digoxin"),
+            )
+        )
+    )
+
+    assert result.status is (
+        CartDDIStatus.WARNING_REVIEW_REQUIRED
+    )
+    assert result.checkout_allowed is False
+    assert result.review_required is True
+
+    matching = [
+        pair
+        for pair in result.pairs
+        if {
+            str(pair.rxcui_a or ""),
+            str(pair.rxcui_b or ""),
+        }
+        == {
+            "2638675",
+            "3407",
+        }
+    ]
+
+    assert len(matching) == 1
+
+    pair = matching[0]
+
+    assert pair.state is RuntimeDDIStatus.INTERACTION_WARNING
+    assert pair.warning_triggered is True
+
+    assert pair.known_dataset_record_found is True
+    assert pair.severity == "Unknown"
+
+    assert pair.model_version is None
+    assert pair.model_warning_score is None
+    assert pair.model_warning_triggered is None
+
+    assert pair.review_required is True
+
+    assert pair.evidence_source_identifier is not None
+    assert pair.evidence_source_identifier.startswith(
+        "official_label_ddi_evidence_v1.json@sha256:"
+    )
+
+    assert any(
+        identifier.startswith("DailyMed:")
+        for identifier in pair.evidence_record_identifiers
+    )
+
+    assert "official product-label" in pair.message
+
+
+
+
+def test_ddinter_precedes_official_label_overlap_without_duplicate_lookup() -> None:
+    bridge = load_ddi_bridge_artifact()
+    identity_artifact = load_rxcui_identity_artifact()
+    ddinter = load_rxcui_evidence_artifact()
+
+    governed_name_by_rxcui: dict[str, str] = {}
+
+    # Main bridge identities.
+    for item in bridge.mappings:
+        governed_name_by_rxcui.setdefault(
+            item.rxcui,
+            item.normalized_lookup_key,
+        )
+
+    # RxCUI sidecar identities retain governed identity even when
+    # the frozen ML model does not support the drug.
+    for item in identity_artifact.mappings:
+        governed_name_by_rxcui.setdefault(
+            item.rxcui,
+            item.normalized_lookup_key,
+        )
+
+    selected = None
+
+    for record in ddinter.pairs:
+        if (
+            record.rxcui_a in governed_name_by_rxcui
+            and record.rxcui_b in governed_name_by_rxcui
+        ):
+            selected = (
+                record.rxcui_a,
+                governed_name_by_rxcui[record.rxcui_a],
+                record.rxcui_b,
+                governed_name_by_rxcui[record.rxcui_b],
+            )
+            break
+
+    assert selected is not None
+
+    rxcui_a, salt_a, rxcui_b, salt_b = selected
+
+    class OfficialLabelMustNotBeCalled:
+        def lookup(
+            self,
+            left_rxcui: str,
+            right_rxcui: str,
+        ):
+            raise AssertionError(
+                "Official-label fallback must not be queried "
+                "when DDInter already has exact pair evidence."
+            )
+
+    service = PartnerCartDDIService(
+        resolver=ExactDDIIngredientResolver.from_artifact(),
+        rxcui_identity_resolver=(
+            ExactRxCUIIdentityResolver.from_artifact()
+        ),
+        rxcui_evidence_index=(
+            RxCUIInteractionEvidenceIndex.from_artifact()
+        ),
+        official_label_evidence_index=(
+            OfficialLabelMustNotBeCalled()
+        ),
+        runtime_service=RuntimeDDIService(
+            model_dir=Path("artifacts/ddi/model"),
+            known_interaction_source=Path(
+                "external/db_drug_interactions.csv"
+            ),
+        ),
+    )
+
+    result = service.evaluate(
+        PartnerCartCheckRequest(
+            products=(
+                product(1, salt_a),
+                product(2, salt_b),
+            )
+        )
+    )
+
+    matching = [
+        pair
+        for pair in result.pairs
+        if {
+            str(pair.rxcui_a or ""),
+            str(pair.rxcui_b or ""),
+        }
+        == {
+            rxcui_a,
+            rxcui_b,
+        }
+        and pair.evidence_source_identifier is not None
+        and pair.evidence_source_identifier.startswith(
+            "ddinter_rxcui_evidence_v1.json@sha256:"
+        )
+    ]
+
+    assert len(matching) == 1
+
+    pair = matching[0]
+
+    assert pair.state is RuntimeDDIStatus.INTERACTION_WARNING
+    assert pair.known_dataset_record_found is True
+    assert pair.warning_triggered is True
+    assert pair.review_required is True
+    assert result.checkout_allowed is False
+
 
 
 def test_cart_api_returns_typed_authoritative_result(client: TestClient) -> None:
