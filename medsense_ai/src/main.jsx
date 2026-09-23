@@ -86,7 +86,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     <Route path="customers" element={<Customers />} />
                     <Route path="record-payment" element={<RecordPayment />} />
                     {/* Doctors, Expenses, Backups routes removed */}
-                    <Route path="orders" element={<Orders />} />
+                    <Route path="orders" element={<Orders initialSurface="orders" />} />
                     <Route path="alerts" element={<InteractionAlerts />} />
                     <Route path="ai-assistant" element={<AIAssistant />} />
                     <Route path="leads" element={<LeadScoring />} />
