@@ -17,6 +17,42 @@
         "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
       ],
       "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "rilpivirine",
+      "ingredient_b": "vonoprazan",
+      "label_section": "7 DRUG INTERACTIONS",
+      "label_set_id": "0cc52ac5-77ec-4d66-a770-762a1a960914",
+      "record_identifiers": [
+        "DailyMed:0cc52ac5-77ec-4d66-a770-762a1a960914:vonoprazan:rilpivirine"
+      ],
+      "review_required": true,
+      "rxcui_a": "1102270",
+      "rxcui_b": "2604577",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "verapamil",
+      "ingredient_b": "finerenone",
+      "label_section": "7 / 12.3",
+      "label_set_id": "fc726765-5d5a-4d6e-b037-b847bda9fb7c",
+      "record_identifiers": [
+        "DailyMed:fc726765-5d5a-4d6e-b037-b847bda9fb7c:finerenone:verapamil"
+      ],
+      "review_required": true,
+      "rxcui_a": "11170",
+      "rxcui_b": "2562811",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
       "ingredient_a": "verapamil",
       "ingredient_b": "capivasertib",
       "label_section": "7 / 12.3",
@@ -27,6 +63,24 @@
       "review_required": true,
       "rxcui_a": "11170",
       "rxcui_b": "2669967",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "warfarin",
+      "ingredient_b": "tirzepatide",
+      "label_section": "7.2 Oral Medications",
+      "label_set_id": "487cd7e7-434c-4925-99fa-aa80b1cc776b",
+      "record_identifiers": [
+        "DailyMed:487cd7e7-434c-4925-99fa-aa80b1cc776b:tirzepatide:warfarin"
+      ],
+      "review_required": true,
+      "rxcui_a": "11289",
+      "rxcui_b": "2601723",
       "severity": "Unknown",
       "source_system": "DailyMed/FDA"
     },
@@ -53,6 +107,42 @@
         "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
       ],
       "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "nelfinavir",
+      "ingredient_b": "vonoprazan",
+      "label_section": "7 DRUG INTERACTIONS",
+      "label_set_id": "0cc52ac5-77ec-4d66-a770-762a1a960914",
+      "record_identifiers": [
+        "DailyMed:0cc52ac5-77ec-4d66-a770-762a1a960914:vonoprazan:nelfinavir"
+      ],
+      "review_required": true,
+      "rxcui_a": "134527",
+      "rxcui_b": "2604577",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "efavirenz",
+      "ingredient_b": "finerenone",
+      "label_section": "7 / 12.3",
+      "label_set_id": "fc726765-5d5a-4d6e-b037-b847bda9fb7c",
+      "record_identifiers": [
+        "DailyMed:fc726765-5d5a-4d6e-b037-b847bda9fb7c:finerenone:efavirenz"
+      ],
+      "review_required": true,
+      "rxcui_a": "195085",
+      "rxcui_b": "2562811",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
       "ingredient_a": "efavirenz",
       "ingredient_b": "capivasertib",
       "label_section": "7 / 12.3",
@@ -63,6 +153,42 @@
       "review_required": true,
       "rxcui_a": "195085",
       "rxcui_b": "2669967",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "efavirenz",
+      "ingredient_b": "suzetrigine",
+      "label_section": "7 / 12.3",
+      "label_set_id": "f0976da4-1d20-4517-945c-b60ed2f41c12",
+      "record_identifiers": [
+        "DailyMed:f0976da4-1d20-4517-945c-b60ed2f41c12:suzetrigine:efavirenz"
+      ],
+      "review_required": true,
+      "rxcui_a": "195085",
+      "rxcui_b": "2704819",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "cilostazol",
+      "ingredient_b": "vonoprazan",
+      "label_section": "7 DRUG INTERACTIONS",
+      "label_set_id": "0cc52ac5-77ec-4d66-a770-762a1a960914",
+      "record_identifiers": [
+        "DailyMed:0cc52ac5-77ec-4d66-a770-762a1a960914:vonoprazan:cilostazol"
+      ],
+      "review_required": true,
+      "rxcui_a": "21107",
+      "rxcui_b": "2604577",
       "severity": "Unknown",
       "source_system": "DailyMed/FDA"
     },
@@ -179,6 +305,96 @@
         "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
       ],
       "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "citalopram",
+      "ingredient_b": "vonoprazan",
+      "label_section": "7 DRUG INTERACTIONS",
+      "label_set_id": "0cc52ac5-77ec-4d66-a770-762a1a960914",
+      "record_identifiers": [
+        "DailyMed:0cc52ac5-77ec-4d66-a770-762a1a960914:vonoprazan:citalopram"
+      ],
+      "review_required": true,
+      "rxcui_a": "2556",
+      "rxcui_b": "2604577",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "finerenone",
+      "ingredient_b": "itraconazole",
+      "label_section": "7 / 12.3",
+      "label_set_id": "fc726765-5d5a-4d6e-b037-b847bda9fb7c",
+      "record_identifiers": [
+        "DailyMed:fc726765-5d5a-4d6e-b037-b847bda9fb7c:finerenone:itraconazole"
+      ],
+      "review_required": true,
+      "rxcui_a": "2562811",
+      "rxcui_b": "28031",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "finerenone",
+      "ingredient_b": "erythromycin",
+      "label_section": "7 / 12.3",
+      "label_set_id": "fc726765-5d5a-4d6e-b037-b847bda9fb7c",
+      "record_identifiers": [
+        "DailyMed:fc726765-5d5a-4d6e-b037-b847bda9fb7c:finerenone:erythromycin"
+      ],
+      "review_required": true,
+      "rxcui_a": "2562811",
+      "rxcui_b": "4053",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "finerenone",
+      "ingredient_b": "amiodarone",
+      "label_section": "7 / 12.3",
+      "label_set_id": "fc726765-5d5a-4d6e-b037-b847bda9fb7c",
+      "record_identifiers": [
+        "DailyMed:fc726765-5d5a-4d6e-b037-b847bda9fb7c:finerenone:amiodarone"
+      ],
+      "review_required": true,
+      "rxcui_a": "2562811",
+      "rxcui_b": "703",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "finerenone",
+      "ingredient_b": "rifampicin",
+      "label_section": "7 / 12.3",
+      "label_set_id": "fc726765-5d5a-4d6e-b037-b847bda9fb7c",
+      "record_identifiers": [
+        "DailyMed:fc726765-5d5a-4d6e-b037-b847bda9fb7c:finerenone:rifampicin"
+      ],
+      "review_required": true,
+      "rxcui_a": "2562811",
+      "rxcui_b": "9384",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
       "ingredient_a": "abrocitinib",
       "ingredient_b": "fluvoxamine",
       "label_section": "7 / 12.3",
@@ -263,6 +479,96 @@
       "rxcui_b": "9384",
       "severity": "Unknown",
       "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "vonoprazan",
+      "ingredient_b": "clopidogrel",
+      "label_section": "7 DRUG INTERACTIONS",
+      "label_set_id": "0cc52ac5-77ec-4d66-a770-762a1a960914",
+      "record_identifiers": [
+        "DailyMed:0cc52ac5-77ec-4d66-a770-762a1a960914:vonoprazan:clopidogrel"
+      ],
+      "review_required": true,
+      "rxcui_a": "2604577",
+      "rxcui_b": "32968",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "vonoprazan",
+      "ingredient_b": "atazanavir",
+      "label_section": "7 DRUG INTERACTIONS",
+      "label_set_id": "0cc52ac5-77ec-4d66-a770-762a1a960914",
+      "record_identifiers": [
+        "DailyMed:0cc52ac5-77ec-4d66-a770-762a1a960914:vonoprazan:atazanavir"
+      ],
+      "review_required": true,
+      "rxcui_a": "2604577",
+      "rxcui_b": "343047",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "linzagolix",
+      "ingredient_b": "sorafenib",
+      "label_section": "4.5 Interaction with other medicinal products",
+      "label_set_id": "Yselty-EPAR",
+      "record_identifiers": [
+        "EMA:Yselty-EPAR:linzagolix:sorafenib"
+      ],
+      "review_required": true,
+      "rxcui_a": "2621019",
+      "rxcui_b": "495881",
+      "severity": "Unknown",
+      "source_system": "EMA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "linzagolix",
+      "ingredient_b": "paclitaxel",
+      "label_section": "4.5 Interaction with other medicinal products",
+      "label_set_id": "Yselty-EPAR",
+      "record_identifiers": [
+        "EMA:Yselty-EPAR:linzagolix:paclitaxel"
+      ],
+      "review_required": true,
+      "rxcui_a": "2621019",
+      "rxcui_b": "56946",
+      "severity": "Unknown",
+      "source_system": "EMA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "linzagolix",
+      "ingredient_b": "repaglinide",
+      "label_section": "4.5 Interaction with other medicinal products",
+      "label_set_id": "Yselty-EPAR",
+      "record_identifiers": [
+        "EMA:Yselty-EPAR:linzagolix:repaglinide"
+      ],
+      "review_required": true,
+      "rxcui_a": "2621019",
+      "rxcui_b": "73044",
+      "severity": "Unknown",
+      "source_system": "EMA"
     },
     {
       "descriptions": [
@@ -467,6 +773,114 @@
         "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
       ],
       "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "resmetirom",
+      "ingredient_b": "rosuvastatin",
+      "label_section": "7 DRUG INTERACTIONS",
+      "label_set_id": "e67ea09f-a840-439c-86c8-f98585f978b2",
+      "record_identifiers": [
+        "DailyMed:e67ea09f-a840-439c-86c8-f98585f978b2:resmetirom:rosuvastatin"
+      ],
+      "review_required": true,
+      "rxcui_a": "2677894",
+      "rxcui_b": "301542",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "resmetirom",
+      "ingredient_b": "clopidogrel",
+      "label_section": "7 DRUG INTERACTIONS",
+      "label_set_id": "e67ea09f-a840-439c-86c8-f98585f978b2",
+      "record_identifiers": [
+        "DailyMed:e67ea09f-a840-439c-86c8-f98585f978b2:resmetirom:clopidogrel"
+      ],
+      "review_required": true,
+      "rxcui_a": "2677894",
+      "rxcui_b": "32968",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "resmetirom",
+      "ingredient_b": "simvastatin",
+      "label_section": "7 DRUG INTERACTIONS",
+      "label_set_id": "e67ea09f-a840-439c-86c8-f98585f978b2",
+      "record_identifiers": [
+        "DailyMed:e67ea09f-a840-439c-86c8-f98585f978b2:resmetirom:simvastatin"
+      ],
+      "review_required": true,
+      "rxcui_a": "2677894",
+      "rxcui_b": "36567",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "resmetirom",
+      "ingredient_b": "pravastatin",
+      "label_section": "7 DRUG INTERACTIONS",
+      "label_set_id": "e67ea09f-a840-439c-86c8-f98585f978b2",
+      "record_identifiers": [
+        "DailyMed:e67ea09f-a840-439c-86c8-f98585f978b2:resmetirom:pravastatin"
+      ],
+      "review_required": true,
+      "rxcui_a": "2677894",
+      "rxcui_b": "42463",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "resmetirom",
+      "ingredient_b": "gemfibrozil",
+      "label_section": "7 DRUG INTERACTIONS",
+      "label_set_id": "e67ea09f-a840-439c-86c8-f98585f978b2",
+      "record_identifiers": [
+        "DailyMed:e67ea09f-a840-439c-86c8-f98585f978b2:resmetirom:gemfibrozil"
+      ],
+      "review_required": true,
+      "rxcui_a": "2677894",
+      "rxcui_b": "4719",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "resmetirom",
+      "ingredient_b": "atorvastatin",
+      "label_section": "7 DRUG INTERACTIONS",
+      "label_set_id": "e67ea09f-a840-439c-86c8-f98585f978b2",
+      "record_identifiers": [
+        "DailyMed:e67ea09f-a840-439c-86c8-f98585f978b2:resmetirom:atorvastatin"
+      ],
+      "review_required": true,
+      "rxcui_a": "2677894",
+      "rxcui_b": "83367",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
       "ingredient_a": "vadadustat",
       "ingredient_b": "rosuvastatin",
       "label_section": "7 DRUG INTERACTIONS",
@@ -557,6 +971,78 @@
         "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
       ],
       "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "suzetrigine",
+      "ingredient_b": "itraconazole",
+      "label_section": "7 / 12.3",
+      "label_set_id": "f0976da4-1d20-4517-945c-b60ed2f41c12",
+      "record_identifiers": [
+        "DailyMed:f0976da4-1d20-4517-945c-b60ed2f41c12:suzetrigine:itraconazole"
+      ],
+      "review_required": true,
+      "rxcui_a": "2704819",
+      "rxcui_b": "28031",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "suzetrigine",
+      "ingredient_b": "fluconazole",
+      "label_section": "7 / 12.3",
+      "label_set_id": "f0976da4-1d20-4517-945c-b60ed2f41c12",
+      "record_identifiers": [
+        "DailyMed:f0976da4-1d20-4517-945c-b60ed2f41c12:suzetrigine:fluconazole"
+      ],
+      "review_required": true,
+      "rxcui_a": "2704819",
+      "rxcui_b": "4450",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "suzetrigine",
+      "ingredient_b": "midazolam",
+      "label_section": "7 / 12.3",
+      "label_set_id": "f0976da4-1d20-4517-945c-b60ed2f41c12",
+      "record_identifiers": [
+        "DailyMed:f0976da4-1d20-4517-945c-b60ed2f41c12:suzetrigine:midazolam"
+      ],
+      "review_required": true,
+      "rxcui_a": "2704819",
+      "rxcui_b": "6960",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
+      "ingredient_a": "suzetrigine",
+      "ingredient_b": "rifampin",
+      "label_section": "7 / 12.3",
+      "label_set_id": "f0976da4-1d20-4517-945c-b60ed2f41c12",
+      "record_identifiers": [
+        "DailyMed:f0976da4-1d20-4517-945c-b60ed2f41c12:suzetrigine:rifampin"
+      ],
+      "review_required": true,
+      "rxcui_a": "2704819",
+      "rxcui_b": "9384",
+      "severity": "Unknown",
+      "source_system": "DailyMed/FDA"
+    },
+    {
+      "descriptions": [
+        "Official product labeling contains explicitly named interaction evidence for this exact governed RxCUI pair. Consult the cited label section for clinical management."
+      ],
+      "evidence_type": "OFFICIAL_LABEL_NAMED_INTERACTION",
       "ingredient_a": "atrasentan",
       "ingredient_b": "cyclosporine",
       "label_section": "12.3 Drug Interaction Studies",
@@ -607,12 +1093,12 @@
       "source_system": "DailyMed/FDA"
     }
   ],
-  "payload_sha256": "6f3651c858f99a87294beb120398e2d60e96ba69ec8b0b71571ab76fed441f2e",
+  "payload_sha256": "d04d1d7cfc721cc45b3b0addc1ef3672cbe30194173390a036bc9185132b4f70",
   "provenance": {
     "bridge_file": "ddi_bridge_v1.json",
     "bridge_payload_sha256": "5091ec7361b094b1d4fcf9653be30ddaf3f284b9204c96d2f5dc8a0b70df5ed6",
     "manifest_file": "official_label_ddi_manifest_v1.json",
-    "manifest_sha256": "40ac70029b9ccf38bb17c76c80aeae1acdadc4d2e24b5a7bc62883721c6577fe",
+    "manifest_sha256": "3618d5baeab2fb3d154ef934892bf45f6410ed86bcce78d5b9fd406552e1d893",
     "policy": "Explicitly named official-label interaction evidence only; no class-to-pair expansion, fuzzy identity inference, negative-study conversion, or clinical severity invention.",
     "rxcui_identity_file": "ddi_rxcui_identity_v1.json",
     "rxcui_identity_payload_sha256": "d2eb1eb194dc754718be9f7fc59d1ef2b67bc51b3c4746bcceccf97f66c83082"

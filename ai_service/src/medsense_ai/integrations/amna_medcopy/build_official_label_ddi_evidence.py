@@ -134,8 +134,24 @@ def build_payload(
 
         seen_pairs.add(pair_key)
 
+        source_namespace_by_system = {
+            "DailyMed/FDA": "DailyMed",
+            "EMA": "EMA",
+        }
+
+        source_system = row["source_system"]
+
+        if source_system not in source_namespace_by_system:
+            raise ValueError(
+                f"unsupported official-label source system: {source_system}"
+            )
+
+        source_namespace = source_namespace_by_system[
+            source_system
+        ]
+
         source_record_identifier = (
-            f"DailyMed:{row['label_set_id']}:"
+            f"{source_namespace}:{row['label_set_id']}:"
             f"{row['drug_source_text']}:{row['partner_source_text']}"
         )
 

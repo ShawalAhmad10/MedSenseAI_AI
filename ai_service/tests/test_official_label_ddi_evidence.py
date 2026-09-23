@@ -20,7 +20,7 @@ def test_official_label_artifact_loads_with_expected_scope() -> None:
         "amna-official-label-ddi-evidence-v1"
     )
 
-    assert len(artifact.pairs) == 33
+    assert len(artifact.pairs) == 60
     assert len(artifact.excluded_records) == 1
 
     excluded = artifact.excluded_records[0]
@@ -112,3 +112,42 @@ def test_official_label_loader_rejects_manifest_drift(
         load_official_label_ddi_evidence_artifact(
             manifest_path=manifest
         )
+
+
+def test_official_label_ema_pair_preserves_source_provenance() -> None:
+    index = OfficialLabelInteractionEvidenceIndex.from_artifact()
+
+    # Linzagolix <-> paclitaxel
+    evidence = index.lookup(
+        "2621019",
+        "56946",
+    )
+
+    assert evidence is not None
+    assert evidence.severity == "Unknown"
+    assert evidence.review_required is True
+    assert evidence.source_system == "EMA"
+    assert evidence.label_set_id == "Yselty-EPAR"
+
+    assert evidence.record_identifiers == (
+        "EMA:Yselty-EPAR:linzagolix:paclitaxel",
+    )
+
+
+def test_tirzepatide_warfarin_official_label_pair_is_governed() -> None:
+    index = OfficialLabelInteractionEvidenceIndex.from_artifact()
+
+    evidence = index.lookup(
+        "2601723",
+        "11289",
+    )
+
+    assert evidence is not None
+    assert evidence.severity == "Unknown"
+    assert evidence.review_required is True
+    assert evidence.source_system == "DailyMed/FDA"
+
+    assert evidence.record_identifiers == (
+        "DailyMed:487cd7e7-434c-4925-99fa-aa80b1cc776b:"
+        "tirzepatide:warfarin",
+    )
