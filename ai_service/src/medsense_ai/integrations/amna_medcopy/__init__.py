@@ -17,6 +17,8 @@ from medsense_ai.integrations.amna_medcopy.cart_ddi import (
 )
 from medsense_ai.integrations.amna_medcopy.ddi_bridge import (
     ExactDDIIngredientResolver,
+    IngredientIdentityNamespace,
+    IngredientIdentitySource,
     IngredientResolutionState,
     ResolvedDDIIngredient,
 )
@@ -24,6 +26,8 @@ from medsense_ai.integrations.amna_medcopy.ddi_bridge import (
 __all__ = [
     "CartDDIStatus",
     "ExactDDIIngredientResolver",
+    "IngredientIdentityNamespace",
+    "IngredientIdentitySource",
     "IngredientResolutionState",
     "PartnerCartCheckRequest",
     "PartnerCartCheckResponse",

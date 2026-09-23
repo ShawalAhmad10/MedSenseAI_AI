@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import re
+import shutil
 
 from fastapi.testclient import TestClient
 import pytest
@@ -12,6 +13,7 @@ from pydantic import ValidationError
 
 from medsense_ai.ddi_runtime import RuntimeDDIService
 from medsense_ai.ddi_runtime.contracts import RuntimeDDIStatus
+from medsense_ai.ddi_model.inference import DDIInferenceModel
 from medsense_ai.integrations.amna_medcopy.cart_ddi import (
     CartDDIStatus,
     PartnerCartCheckRequest,
@@ -21,7 +23,9 @@ from medsense_ai.integrations.amna_medcopy.cart_ddi import (
 from medsense_ai.integrations.amna_medcopy.contracts import PartnerProductRecord
 from medsense_ai.integrations.amna_medcopy.ddi_bridge import (
     DEFAULT_BRIDGE_ARTIFACT,
+    DDIBridgeMapping,
     ExactDDIIngredientResolver,
+    IngredientIdentityNamespace,
     IngredientResolutionState,
     load_ddi_bridge_artifact,
 )
@@ -30,6 +34,10 @@ from medsense_ai.integrations.amna_medcopy.ddi_rxcui_sidecar import (
     RxCUIInteractionEvidenceIndex,
     load_rxcui_evidence_artifact,
     load_rxcui_identity_artifact,
+)
+from medsense_ai.integrations.amna_medcopy.ddi_supplemental_identity import (
+    DEFAULT_SUPPLEMENTAL_IDENTITY_ARTIFACT,
+    load_supplemental_identity_artifact,
 )
 
 
@@ -63,6 +71,11 @@ def cart_service(resolver: ExactDDIIngredientResolver) -> PartnerCartDDIService:
     )
     assert runtime.ready
     return PartnerCartDDIService(resolver=resolver, runtime_service=runtime)
+
+
+@pytest.fixture(scope="module")
+def frozen_model() -> DDIInferenceModel:
+    return DDIInferenceModel(Path("artifacts/ddi/model"))
 
 
 def test_packaged_bridge_has_deterministic_governed_overlap() -> None:
@@ -117,8 +130,194 @@ def test_aspirin_resolves_through_same_rxcui_model_identity(
     assert result.state is IngredientResolutionState.RESOLVED
     assert result.normalized_salt == "aspirin"
     assert result.rxcui == "1191"
+    assert result.identity_namespace is IngredientIdentityNamespace.RXNORM
+    assert result.identity_id == "1191"
     assert result.frozen_model_token == "Acetylsalicylic acid"
     assert result.review_required is False
+
+
+@pytest.mark.parametrize(
+    ("source_salt", "expected_token"),
+    (
+        ("Cefoperazone", "Cefoperazone"),
+        ("Dydrogesterone", "Dydrogesterone"),
+        ("Norethisterone", "Norethisterone"),
+        ("Dexketoprofen", "Dexketoprofen"),
+        ("Etoricoxib", "Etoricoxib"),
+        ("Rupatadine", "Rupatadine"),
+        ("Fusidic acid", "Fusidic acid"),
+    ),
+)
+def test_supplemental_model_identities_resolve_and_are_inference_ready(
+    resolver: ExactDDIIngredientResolver,
+    frozen_model: DDIInferenceModel,
+    source_salt: str,
+    expected_token: str,
+) -> None:
+    result = resolver.resolve(source_salt)
+
+    assert result.state is IngredientResolutionState.RESOLVED
+    assert result.frozen_model_token == expected_token
+    assert result.identity_namespace is IngredientIdentityNamespace.PUBCHEM
+    assert result.identity_id
+    assert result.rxcui is None
+    assert result.review_required is False
+
+    forward = frozen_model.predict(expected_token, "Warfarin")
+    reverse = frozen_model.predict("Warfarin", expected_token)
+    assert forward.warning_score == reverse.warning_score
+    assert forward.warning_triggered == reverse.warning_triggered
+
+
+@pytest.mark.parametrize(
+    ("source_salt", "expected_token"),
+    (
+        ("Cefoperazone sodium", "Cefoperazone"),
+        ("Dexketoprofen trometamol", "Dexketoprofen"),
+        ("Rupatadine fumarate", "Rupatadine"),
+        ("Fusidic Acid", "Fusidic acid"),
+        ("Sterile Cefoperazone sodium Injection", "Cefoperazone"),
+        ("Cefoperazone as Sodium", "Cefoperazone"),
+        ("Cefoperazone (as sodium", "Cefoperazone"),
+        ("equivalent to Cefoperazone", "Cefoperazone"),
+        ("eq. to Cefoperazone", "Cefoperazone"),
+        ("Cefoperazone Lyophilized Powder", "Cefoperazone"),
+        ("Cefoperazone pentahydrate", "Cefoperazone"),
+    ),
+)
+def test_conservative_formulation_candidates_resolve_uniquely(
+    resolver: ExactDDIIngredientResolver,
+    source_salt: str,
+    expected_token: str,
+) -> None:
+    result = resolver.resolve(source_salt)
+
+    assert result.state is IngredientResolutionState.RESOLVED
+    assert result.frozen_model_token == expected_token
+    assert result.identity_namespace is IngredientIdentityNamespace.PUBCHEM
+    assert result.rxcui is None
+
+
+@pytest.mark.parametrize(
+    ("source_salt", "expected_token"),
+    (
+        ("amoxycillin", "Amoxicillin"),
+        ("sulbactum", "Sulbactam"),
+        ("tazobactum", "Tazobactam"),
+        ("cefipime", "Cefepime"),
+        ("ceflriaxone", "Ceftriaxone"),
+        ("fosmomycin", "Fosfomycin"),
+        ("slidenafil", "Sildenafil"),
+    ),
+)
+def test_only_versioned_governed_spelling_aliases_are_applied(
+    resolver: ExactDDIIngredientResolver,
+    source_salt: str,
+    expected_token: str,
+) -> None:
+    result = resolver.resolve(source_salt)
+
+    assert result.state is IngredientResolutionState.RESOLVED
+    assert result.frozen_model_token == expected_token
+    assert result.identity_namespace is IngredientIdentityNamespace.RXNORM
+
+
+def test_existing_rxnorm_identity_is_preferred_over_supplemental_collision(
+    resolver: ExactDDIIngredientResolver,
+) -> None:
+    assert resolver.supplemental_artifact is not None
+    collision = resolver.supplemental_artifact.mappings[0].model_copy(
+        update={
+            "normalized_lookup_key": "aspirin",
+            "normalized_model_name": "aspirin",
+        }
+    )
+    supplemental = resolver.supplemental_artifact.model_copy(
+        update={"mappings": (collision, *resolver.supplemental_artifact.mappings)}
+    )
+    collision_resolver = ExactDDIIngredientResolver(resolver.artifact, supplemental)
+
+    result = collision_resolver.resolve("Aspirin")
+
+    assert result.identity_namespace is IngredientIdentityNamespace.RXNORM
+    assert result.rxcui == "1191"
+    assert result.frozen_model_token == "Acetylsalicylic acid"
+
+
+def test_ambiguous_formulation_candidates_fail_closed(
+    resolver: ExactDDIIngredientResolver,
+) -> None:
+    warfarin = next(
+        item for item in resolver.artifact.mappings
+        if item.normalized_lookup_key == "warfarin"
+    )
+    amiodarone = next(
+        item for item in resolver.artifact.mappings
+        if item.normalized_lookup_key == "amiodarone"
+    )
+    conflicting_candidate = DDIBridgeMapping(
+        normalized_lookup_key="warfarin sodium",
+        matched_source_text="warfarin sodium",
+        canonical_display_name=amiodarone.canonical_display_name,
+        rxcui=amiodarone.rxcui,
+        match_source=amiodarone.match_source,
+        frozen_model_token=amiodarone.frozen_model_token,
+    )
+    artifact = resolver.artifact.model_copy(
+        update={"mappings": (*resolver.artifact.mappings, conflicting_candidate)}
+    )
+    ambiguous_resolver = ExactDDIIngredientResolver(artifact)
+
+    result = ambiguous_resolver.resolve("Sterile Warfarin sodium")
+
+    assert warfarin.rxcui != conflicting_candidate.rxcui
+    assert result.state is IngredientResolutionState.AMBIGUOUS
+    assert result.frozen_model_token is None
+    assert result.review_required is True
+
+
+def test_combination_text_requires_separate_active_ingredients(
+    resolver: ExactDDIIngredientResolver,
+) -> None:
+    result = resolver.resolve("Amoxicillin + Clavulanic acid")
+
+    assert result.state is IngredientResolutionState.REVIEW_REQUIRED
+    assert result.frozen_model_token is None
+    assert result.review_required is True
+    assert "separate active ingredients" in result.message
+
+
+def test_supplemental_loader_rejects_payload_tampering(tmp_path: Path) -> None:
+    payload = json.loads(
+        DEFAULT_SUPPLEMENTAL_IDENTITY_ARTIFACT.read_text(encoding="utf-8")
+    )
+    payload["matching_policy"] = "tampered"
+    path = tmp_path / "supplemental.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="payload checksum mismatch"):
+        load_supplemental_identity_artifact(path)
+
+
+def test_supplemental_loader_rejects_model_source_hash_mismatch(
+    tmp_path: Path,
+) -> None:
+    source_model_dir = Path("artifacts/ddi/model")
+    copied_model_dir = tmp_path / "model"
+    copied_model_dir.mkdir()
+    for filename in (
+        "model_metadata.json",
+        "inference_drug_features.csv",
+        "inference_morgan_fingerprints.npz",
+    ):
+        shutil.copy2(source_model_dir / filename, copied_model_dir / filename)
+    with (copied_model_dir / "inference_drug_features.csv").open(
+        "a", encoding="utf-8"
+    ) as handle:
+        handle.write("\n")
+
+    with pytest.raises(ValueError, match="model artifact hash mismatch"):
+        load_supplemental_identity_artifact(model_dir=copied_model_dir)
 
 
 @pytest.mark.parametrize(
@@ -209,6 +408,41 @@ def test_known_evidence_pair_requires_review(cart_service: PartnerCartDDIService
     assert result.pairs[0].warning_triggered is True
     assert result.pairs[0].known_dataset_record_found is True
     assert result.pairs[0].evidence_record_identifiers
+
+
+def test_supplemental_exact_evidence_has_unknown_severity_and_requires_review(
+    cart_service: PartnerCartDDIService,
+) -> None:
+    result = cart_service.evaluate(
+        PartnerCartCheckRequest(
+            products=(product(1, "Cefoperazone"), product(2, "Warfarin"))
+        )
+    )
+
+    pair = result.pairs[0]
+    assert result.status is CartDDIStatus.WARNING_REVIEW_REQUIRED
+    assert result.checkout_allowed is False
+    assert pair.known_dataset_record_found is True
+    assert pair.severity == "Unknown"
+    assert pair.rxcui_a is None or pair.rxcui_b is None
+    assert pair.review_required is True
+
+
+def test_supplemental_model_only_warning_is_explicitly_potential(
+    cart_service: PartnerCartDDIService,
+) -> None:
+    result = cart_service.evaluate(
+        PartnerCartCheckRequest(
+            products=(product(1, "Etoricoxib"), product(2, "Metformin"))
+        )
+    )
+
+    pair = result.pairs[0]
+    assert result.status is CartDDIStatus.WARNING_REVIEW_REQUIRED
+    assert pair.model_warning_triggered is True
+    assert pair.known_dataset_record_found is False
+    assert pair.severity is None
+    assert "Potential interaction model signal" in pair.message
 
 
 def test_below_threshold_pair_is_clear_only_with_limitations(

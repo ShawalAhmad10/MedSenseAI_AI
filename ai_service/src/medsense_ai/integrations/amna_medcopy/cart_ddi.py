@@ -72,8 +72,13 @@ class CartPairResult(BaseModel):
     product_ids_b: tuple[int, ...]
     ingredient_a: str
     ingredient_b: str
-    rxcui_a: str
-    rxcui_b: str
+    identity_namespace_a: str
+    identity_namespace_b: str
+    identity_id_a: str
+    identity_id_b: str
+    rxcui_a: str | None = None
+    rxcui_b: str | None = None
+    severity: str | None = None
     state: RuntimeDDIStatus
     model_version: str | None
     model_warning_score: float | None
@@ -198,7 +203,8 @@ class PartnerCartDDIService:
 
             if ingredient.state is IngredientResolutionState.RESOLVED:
                 assert ingredient.frozen_model_token is not None
-                assert ingredient.rxcui is not None
+                assert ingredient.identity_namespace is not None
+                assert ingredient.identity_id is not None
 
                 product_ids_by_token[
                     ingredient.frozen_model_token
@@ -208,16 +214,17 @@ class PartnerCartDDIService:
                     ingredient.frozen_model_token
                 ] = ingredient
 
-                product_ids_by_rxcui[
-                    ingredient.rxcui
-                ].append(record.product_id)
+                if ingredient.rxcui is not None:
+                    product_ids_by_rxcui[
+                        ingredient.rxcui
+                    ].append(record.product_id)
 
-                identity_name_by_rxcui[
-                    ingredient.rxcui
-                ] = (
-                    ingredient.canonical_display_name
-                    or ingredient.frozen_model_token
-                )
+                    identity_name_by_rxcui[
+                        ingredient.rxcui
+                    ] = (
+                        ingredient.canonical_display_name
+                        or ingredient.frozen_model_token
+                    )
 
             elif sidecar_identity is not None:
                 product_ids_by_rxcui[
@@ -256,7 +263,10 @@ class PartnerCartDDIService:
                 artifact_alignment_failure = True
             identity_a = identity_by_token[token_a]
             identity_b = identity_by_token[token_b]
-            assert identity_a.rxcui is not None and identity_b.rxcui is not None
+            assert identity_a.identity_namespace is not None
+            assert identity_b.identity_namespace is not None
+            assert identity_a.identity_id is not None
+            assert identity_b.identity_id is not None
             pair_results.append(
                 _pair_result(
                     runtime_result,
@@ -264,6 +274,10 @@ class PartnerCartDDIService:
                     product_ids_b=product_ids_by_token[token_b],
                     ingredient_a=token_a,
                     ingredient_b=token_b,
+                    identity_namespace_a=identity_a.identity_namespace.value,
+                    identity_namespace_b=identity_b.identity_namespace.value,
+                    identity_id_a=identity_a.identity_id,
+                    identity_id_b=identity_b.identity_id,
                     rxcui_a=identity_a.rxcui,
                     rxcui_b=identity_b.rxcui,
                 )
@@ -293,8 +307,13 @@ class PartnerCartDDIService:
                         ),
                         ingredient_a=identity_name_by_rxcui[rxcui_a],
                         ingredient_b=identity_name_by_rxcui[rxcui_b],
+                        identity_namespace_a="RXNORM",
+                        identity_namespace_b="RXNORM",
+                        identity_id_a=rxcui_a,
+                        identity_id_b=rxcui_b,
                         rxcui_a=rxcui_a,
                         rxcui_b=rxcui_b,
+                        severity="Unknown",
                         state=RuntimeDDIStatus.INTERACTION_WARNING,
                         model_version=None,
                         model_warning_score=None,
@@ -383,16 +402,37 @@ def _pair_result(
     product_ids_b: Iterable[int],
     ingredient_a: str,
     ingredient_b: str,
-    rxcui_a: str,
-    rxcui_b: str,
+    identity_namespace_a: str,
+    identity_namespace_b: str,
+    identity_id_a: str,
+    identity_id_b: str,
+    rxcui_a: str | None,
+    rxcui_b: str | None,
 ) -> CartPairResult:
+    has_exact_evidence = result.known_dataset_record_found
+    if result.model_warning_triggered and not has_exact_evidence:
+        message = (
+            "Potential interaction model signal triggered; no exact clinical interaction "
+            "record or clinical severity was found."
+        )
+    elif has_exact_evidence:
+        message = (
+            f"{result.message} No exact clinical severity is available; severity is Unknown."
+        )
+    else:
+        message = result.message
     return CartPairResult(
         product_ids_a=tuple(sorted(product_ids_a)),
         product_ids_b=tuple(sorted(product_ids_b)),
         ingredient_a=ingredient_a,
         ingredient_b=ingredient_b,
+        identity_namespace_a=identity_namespace_a,
+        identity_namespace_b=identity_namespace_b,
+        identity_id_a=identity_id_a,
+        identity_id_b=identity_id_b,
         rxcui_a=rxcui_a,
         rxcui_b=rxcui_b,
+        severity="Unknown" if has_exact_evidence else None,
         state=result.status,
         model_version=result.model_version,
         model_warning_score=result.model_warning_score,
@@ -404,7 +444,7 @@ def _pair_result(
         evidence_source_identifier=result.evidence_source_identifier,
         evidence_record_identifiers=result.evidence_record_identifiers,
         review_required=result.manual_review_required,
-        message=result.message,
+        message=message,
         limitations=result.limitations,
     )
 

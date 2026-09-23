@@ -48,7 +48,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         try:
             application.state.amna_cart_ddi_service = PartnerCartDDIService(
-                resolver=ExactDDIIngredientResolver.from_artifact(),
+                resolver=ExactDDIIngredientResolver.from_artifact(
+                    model_dir=resolved_settings.ddi_model_dir,
+                ),
                 rxcui_identity_resolver=(
                     ExactRxCUIIdentityResolver.from_artifact()
                 ),
