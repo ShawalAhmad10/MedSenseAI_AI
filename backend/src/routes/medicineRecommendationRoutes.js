@@ -19,6 +19,14 @@ router.get(
   recommendationController.byProduct
 );
 
+// Interaction-aware recommendations:
+// cart product ids are untrusted input, while all
+// product details and stock are reloaded from
+// authoritative PostgreSQL before the DDI re-check.
+router.post(
+  '/products/:productId/interaction-aware',
+  recommendationController.interactionAware
+);
 // Prescription-derived recommendations are
 // customer-owned and require a confirmed
 // prescription lifecycle record.

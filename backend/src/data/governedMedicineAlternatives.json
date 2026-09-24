@@ -1,0 +1,5 @@
+{
+  "schema_version": "medsense-governed-alternatives-v1",
+  "purpose": "Exact product-to-product therapeutic alternatives approved by pharmacy clinical governance. Entries must never be inferred from category, brand, salt similarity, language models, or DDI model scores.",
+  "mappings": []
+}

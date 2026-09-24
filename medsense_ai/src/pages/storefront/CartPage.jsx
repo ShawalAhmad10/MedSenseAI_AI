@@ -7,7 +7,86 @@ import InteractionBadge from '../../components/storefront/InteractionBadge';
 import InteractionWarningModal from '../../components/storefront/InteractionWarningModal';
 import EscalateToPharmacistModal from '../../components/storefront/EscalateToPharmacistModal';
 import { getDdiPresentation } from '../../services/storefrontDdiService';
+import { getInteractionAwareRecommendations } from '../../services/storefrontInteractionAwareRecommendationService';
 
+function cartProductId(
+  item
+) {
+  const raw =
+    item?.product_id ??
+    item?.productId ??
+    item?.id;
+
+  const cleaned =
+    typeof raw === 'string'
+      ? raw.replace(/^prod-/, '')
+      : raw;
+
+  const parsed =
+    Number(cleaned);
+
+  return (
+    Number.isSafeInteger(parsed) &&
+    parsed > 0
+  )
+    ? parsed
+    : null;
+}
+
+function harmfulDdiProductIds(
+  result
+) {
+  const ids =
+    new Set();
+
+  for (
+    const pair
+    of result?.pairs || []
+  ) {
+    if (
+      pair?.interaction_found !==
+      true
+    ) {
+      continue;
+    }
+
+    const severity =
+      String(
+        pair?.severity || ''
+      )
+        .trim()
+        .toLowerCase();
+
+    if (
+      severity ===
+      'minor'
+    ) {
+      continue;
+    }
+
+    for (
+      const value
+      of [
+        ...(pair?.product_ids_a || []),
+        ...(pair?.product_ids_b || []),
+      ]
+    ) {
+      const id =
+        Number(value);
+
+      if (
+        Number.isSafeInteger(id) &&
+        id > 0
+      ) {
+        ids.add(id);
+      }
+    }
+  }
+
+  return [
+    ...ids,
+  ];
+}
 export default function CartPage() {
   const {
     items,
@@ -24,8 +103,88 @@ export default function CartPage() {
   const [showWarnings, setShowWarnings] = useState(false);
   const [showEscalation, setShowEscalation] = useState(false);
 
+  const [
+    alternativeLoadingId,
+    setAlternativeLoadingId,
+  ] = useState(null);
+
+  const [
+    alternativeReview,
+    setAlternativeReview,
+  ] = useState(null);
+
+  const [
+    alternativeError,
+    setAlternativeError,
+  ] = useState('');
+
   const deliveryFee = items.length > 0 ? 120 : 0;
   const ddiPresentation = getDdiPresentation(ddiResult, ddiError || '');
+
+  const harmfulProductIds =
+    harmfulDdiProductIds(
+      ddiResult
+    );
+
+  const cartProductIds =
+    items
+      .map(
+        cartProductId
+      )
+      .filter(Boolean);
+
+  const cartSignature =
+    [...cartProductIds]
+      .sort(
+        (a, b) =>
+          a - b
+      )
+      .join('-');
+
+  const visibleAlternativeReview =
+    alternativeReview?.cartSignature ===
+      cartSignature
+      ? alternativeReview
+      : null;
+
+  const handleGovernedAlternativeCheck =
+    async (
+      sourceProductId
+    ) => {
+      setAlternativeLoadingId(
+        sourceProductId
+      );
+
+      setAlternativeError('');
+
+      try {
+        const result =
+          await getInteractionAwareRecommendations(
+            sourceProductId,
+            items,
+            5
+          );
+
+        setAlternativeReview({
+          sourceProductId,
+          cartSignature,
+          result,
+        });
+      } catch (error) {
+        setAlternativeReview(
+          null
+        );
+
+        setAlternativeError(
+          error?.message ||
+          'Could not check governed alternatives.'
+        );
+      } finally {
+        setAlternativeLoadingId(
+          null
+        );
+      }
+    };
 
   return (
     <div className="storefront-shell">
@@ -157,6 +316,223 @@ export default function CartPage() {
             <button className="sf-button-secondary" onClick={() => setShowWarnings(true)} type="button">
               Review Interaction Check
             </button>
+              {harmfulProductIds.length > 0 && (
+                <div
+                  style={{
+                    marginTop: '0.9rem',
+                    padding: '0.9rem',
+                    border: '1px solid #f59e0b',
+                    borderRadius: '10px',
+                    background: '#fffbeb',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.45rem',
+                      marginBottom: '0.35rem',
+                    }}
+                  >
+                    <ShieldAlert size={17} />
+
+                    <strong>
+                      Governed alternative review
+                    </strong>
+                  </div>
+
+                  <p
+                    style={{
+                      margin:
+                        '0 0 0.7rem',
+                      fontSize:
+                        '0.82rem',
+                      lineHeight:
+                        1.45,
+                    }}
+                  >
+                    Only pharmacy-approved alternative mappings can be checked here.
+                    The system does not infer substitutes from brand, category, salt similarity,
+                    or AI model scores.
+                  </p>
+
+                  <div
+                    style={{
+                      display:
+                        'flex',
+                      flexWrap:
+                        'wrap',
+                      gap:
+                        '0.5rem',
+                    }}
+                  >
+                    {harmfulProductIds.map(
+                      (sourceProductId) => {
+                        const item =
+                          items.find(
+                            (entry) =>
+                              cartProductId(
+                                entry
+                              ) ===
+                              sourceProductId
+                          );
+
+                        return (
+                          <button
+                            key={
+                              `governed-alt-${sourceProductId}`
+                            }
+                            type="button"
+                            className="sf-button-secondary"
+                            disabled={
+                              alternativeLoadingId ===
+                              sourceProductId
+                            }
+                            onClick={() =>
+                              handleGovernedAlternativeCheck(
+                                sourceProductId
+                              )
+                            }
+                          >
+                            {alternativeLoadingId ===
+                            sourceProductId
+                              ? 'Checking...'
+                              : `Check alternative for ${
+                                  item?.name ||
+                                  item?.title ||
+                                  `Product ${sourceProductId}`
+                                }`}
+                          </button>
+                        );
+                      }
+                    )}
+                  </div>
+
+                  {alternativeError && (
+                    <div
+                      className="sf-badge-warning"
+                      style={{
+                        marginTop:
+                          '0.75rem',
+                      }}
+                    >
+                      {alternativeError}
+                    </div>
+                  )}
+
+                  {visibleAlternativeReview && (
+                    <div
+                      style={{
+                        marginTop:
+                          '0.8rem',
+                        padding:
+                          '0.75rem',
+                        background:
+                          '#fff',
+                        borderRadius:
+                          '8px',
+                        border:
+                          '1px solid #e5e7eb',
+                      }}
+                    >
+                      <strong>
+                        {visibleAlternativeReview
+                          .result
+                          .status ===
+                        'INTERACTION_CHECKED_ALTERNATIVES_AVAILABLE'
+                          ? 'Interaction-checked governed candidate available'
+                          : 'Pharmacist review required'}
+                      </strong>
+
+                      <p
+                        style={{
+                          margin:
+                            '0.35rem 0 0',
+                          fontSize:
+                            '0.82rem',
+                          lineHeight:
+                            1.45,
+                        }}
+                      >
+                        {
+                          visibleAlternativeReview
+                            .result
+                            .message
+                        }
+                      </p>
+
+                      {visibleAlternativeReview
+                        .result
+                        .recommendations
+                        ?.length > 0 && (
+                        <div
+                          style={{
+                            marginTop:
+                              '0.7rem',
+                          }}
+                        >
+                          {visibleAlternativeReview
+                            .result
+                            .recommendations
+                            .map(
+                              (
+                                candidate
+                              ) => (
+                                <div
+                                  key={
+                                    candidate.id ||
+                                    candidate.product_id
+                                  }
+                                  style={{
+                                    padding:
+                                      '0.6rem 0',
+                                    borderTop:
+                                      '1px solid #e5e7eb',
+                                  }}
+                                >
+                                  <strong>
+                                    {
+                                      candidate.name ||
+                                      candidate.title ||
+                                      candidate.genericName ||
+                                      'Governed candidate'
+                                    }
+                                  </strong>
+
+                                  <div
+                                    style={{
+                                      fontSize:
+                                        '0.78rem',
+                                      marginTop:
+                                        '0.2rem',
+                                    }}
+                                  >
+                                    DDI re-check: CLEAR
+                                    {' · '}
+                                    Pharmacist confirmation required
+                                  </div>
+                                </div>
+                              )
+                            )}
+                        </div>
+                      )}
+
+                      <p
+                        style={{
+                          margin:
+                            '0.65rem 0 0',
+                          fontSize:
+                            '0.75rem',
+                          color:
+                            '#6b7280',
+                        }}
+                      >
+                        No medicine is replaced or added automatically. Any actual substitution still requires pharmacist confirmation.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             {items.length > 0 && !ddiLoading && !ddiCheckoutAllowed && (
               <button
                 className="sf-button-secondary"

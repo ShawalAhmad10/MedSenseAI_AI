@@ -1,6 +1,9 @@
 const recommendationService =
   require('../services/medicineRecommendationService');
 
+const interactionAwareRecommendationService =
+  require('../services/interactionAwareRecommendationService');
+
 function sendError(
   res,
   error
@@ -75,6 +78,39 @@ exports.byPrescription =
     } catch (error) {
       console.error(
         'Prescription recommendation error:',
+        error
+      );
+
+      sendError(
+        res,
+        error
+      );
+    }
+  };
+
+exports.interactionAware =
+  async (req, res) => {
+    try {
+      const result =
+        await interactionAwareRecommendationService
+          .recommendForInteraction({
+            sourceProductId:
+              req.params.productId,
+
+            cartProductIds:
+              req.body?.cart_product_ids,
+
+            limit:
+              req.body?.limit,
+          });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      console.error(
+        'Interaction-aware recommendation error:',
         error
       );
 
