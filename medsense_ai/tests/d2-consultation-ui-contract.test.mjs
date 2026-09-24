@@ -38,7 +38,7 @@ test(
 
     assert.match(
       source,
-      /items\.length > 0 && !ddiLoading && !ddiCheckoutAllowed/
+      /items\.length > 0\s*&&\s*!ddiLoading\s*&&\s*!ddiCheckoutAllowed\s*&&\s*!cartConsultation/
     );
   }
 );

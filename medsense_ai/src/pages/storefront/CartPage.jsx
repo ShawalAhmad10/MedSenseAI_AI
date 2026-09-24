@@ -1,5 +1,5 @@
 // Cart review with real-time data from database
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ArrowRight, ShieldAlert } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
@@ -8,6 +8,8 @@ import InteractionWarningModal from '../../components/storefront/InteractionWarn
 import EscalateToPharmacistModal from '../../components/storefront/EscalateToPharmacistModal';
 import { getDdiPresentation } from '../../services/storefrontDdiService';
 import { getInteractionAwareRecommendations } from '../../services/storefrontInteractionAwareRecommendationService';
+import { listCustomerConsultations } from '../../services/storefrontConsultationService';
+import { getFunnelCartId } from '../../services/storefrontFunnelService';
 
 function cartProductId(
   item
@@ -87,6 +89,107 @@ function harmfulDdiProductIds(
     ...ids,
   ];
 }
+function normalizedConsultationSnapshot(
+  value
+) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (
+    typeof value === 'string'
+  ) {
+    try {
+      const parsed =
+        JSON.parse(value);
+
+      return Array.isArray(parsed)
+        ? parsed
+        : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+function cartReviewSignature(
+  rows
+) {
+  return JSON.stringify(
+    (rows || [])
+      .map((item) => ({
+        product_id:
+          cartProductId(item),
+
+        quantity:
+          Math.max(
+            1,
+            Number(
+              item?.quantity
+            ) || 1
+          ),
+      }))
+      .filter(
+        (item) =>
+          Number.isSafeInteger(
+            item.product_id
+          ) &&
+          item.product_id > 0
+      )
+      .sort(
+        (a, b) =>
+          a.product_id -
+            b.product_id ||
+          a.quantity -
+            b.quantity
+      )
+  );
+}
+
+function consultationMatchesCurrentCart(
+  consultation,
+  items,
+  cartInstanceId
+) {
+  const consultationCartId =
+    consultation?.cart_instance_id ??
+    consultation?.cartInstanceId ??
+    null;
+
+  if (
+    !cartInstanceId ||
+    consultationCartId !==
+      cartInstanceId
+  ) {
+    return false;
+  }
+
+  if (
+    String(
+      consultation?.source || ''
+    ).toLowerCase() !==
+      'cart'
+  ) {
+    return false;
+  }
+
+  const snapshot =
+    normalizedConsultationSnapshot(
+      consultation?.cart_snapshot
+    );
+
+  return (
+    cartReviewSignature(
+      snapshot
+    ) ===
+    cartReviewSignature(
+      items
+    )
+  );
+}
+
 export default function CartPage() {
   const {
     items,
@@ -102,6 +205,156 @@ export default function CartPage() {
   } = useCart();
   const [showWarnings, setShowWarnings] = useState(false);
   const [showEscalation, setShowEscalation] = useState(false);
+
+  const [
+    cartConsultation,
+    setCartConsultation,
+  ] = useState(null);
+
+  const [
+    cartConsultationLoading,
+    setCartConsultationLoading,
+  ] = useState(false);
+
+  const refreshCartConsultation =
+    useCallback(
+      async () => {
+        if (
+          items.length === 0 ||
+          ddiCheckoutAllowed
+        ) {
+          setCartConsultation(
+            null
+          );
+
+          setCartConsultationLoading(
+            false
+          );
+
+          return;
+        }
+
+        const cartInstanceId =
+          getFunnelCartId();
+
+        setCartConsultationLoading(
+          true
+        );
+
+        try {
+          const consultations =
+            await listCustomerConsultations();
+
+          const matches =
+            consultations
+              .filter(
+                (consultation) =>
+                  consultationMatchesCurrentCart(
+                    consultation,
+                    items,
+                    cartInstanceId
+                  )
+              )
+              .sort(
+                (a, b) =>
+                  Number(
+                    b?.consultation_id ||
+                    0
+                  ) -
+                  Number(
+                    a?.consultation_id ||
+                    0
+                  )
+              );
+
+          setCartConsultation(
+            matches[0] ||
+            null
+          );
+        } catch (error) {
+          console.warn(
+            'Could not refresh pharmacist review status:',
+            error?.message ||
+              error
+          );
+        } finally {
+          setCartConsultationLoading(
+            false
+          );
+        }
+      },
+      [
+        items,
+        ddiCheckoutAllowed,
+      ]
+    );
+
+  useEffect(
+    () => {
+      void refreshCartConsultation();
+
+      if (
+        items.length === 0 ||
+        ddiCheckoutAllowed
+      ) {
+        return undefined;
+      }
+
+      const onFocus =
+        () => {
+          void refreshCartConsultation();
+        };
+
+      const onVisibilityChange =
+        () => {
+          if (
+            document.visibilityState ===
+              'visible'
+          ) {
+            void refreshCartConsultation();
+          }
+        };
+
+      window.addEventListener(
+        'focus',
+        onFocus
+      );
+
+      document.addEventListener(
+        'visibilitychange',
+        onVisibilityChange
+      );
+
+      const interval =
+        window.setInterval(
+          () => {
+            void refreshCartConsultation();
+          },
+          5000
+        );
+
+      return () => {
+        window.removeEventListener(
+          'focus',
+          onFocus
+        );
+
+        document.removeEventListener(
+          'visibilitychange',
+          onVisibilityChange
+        );
+
+        window.clearInterval(
+          interval
+        );
+      };
+    },
+    [
+      refreshCartConsultation,
+      items.length,
+      ddiCheckoutAllowed,
+    ]
+  );
 
   const [
     alternativeLoadingId,
@@ -185,6 +438,78 @@ export default function CartPage() {
         );
       }
     };
+
+  const cartConsultationStatus =
+    String(
+      cartConsultation?.status ||
+      ''
+    ).toLowerCase();
+
+  const cartConsultationDecision =
+    String(
+      cartConsultation?.decision ||
+      ''
+    ).toLowerCase();
+
+  const approvalConsumed =
+    Boolean(
+      cartConsultation
+        ?.checkout_consumed_at
+    );
+
+  const cartApprovalReady =
+    cartConsultationStatus ===
+      'responded' &&
+    cartConsultationDecision ===
+      'approved' &&
+    !approvalConsumed;
+
+  const cartReviewRejected =
+    cartConsultationStatus ===
+      'responded' &&
+    cartConsultationDecision ===
+      'rejected';
+
+  const cartReviewPending =
+    cartConsultationStatus ===
+      'pending';
+
+  const cartReviewResponded =
+    cartConsultationStatus ===
+      'responded' &&
+    !cartApprovalReady &&
+    !cartReviewRejected &&
+    !approvalConsumed;
+
+  const cartCheckoutTarget =
+    ddiCheckoutAllowed
+      ? '/checkout'
+      : cartApprovalReady
+        ? `/checkout?ddi_consultation_id=${cartConsultation.consultation_id}`
+        : (
+            cartReviewPending ||
+            cartReviewRejected ||
+            cartReviewResponded ||
+            approvalConsumed
+          )
+          ? '/consult/pharmacist'
+          : '/checkout';
+
+  const cartCheckoutLabel =
+    ddiCheckoutAllowed
+      ? 'Continue to Checkout'
+      : cartApprovalReady
+        ? 'Continue Approved Checkout'
+        : cartReviewRejected
+          ? 'View Pharmacist Guidance'
+          : (
+              cartReviewPending ||
+              cartReviewResponded
+            )
+            ? 'View Pharmacist Review'
+            : approvalConsumed
+              ? 'View Pharmacist Review'
+              : 'Continue to Pharmacist Review';
 
   return (
     <div className="storefront-shell">
@@ -533,7 +858,10 @@ export default function CartPage() {
                   )}
                 </div>
               )}
-            {items.length > 0 && !ddiLoading && !ddiCheckoutAllowed && (
+            {items.length > 0 &&
+              !ddiLoading &&
+              !ddiCheckoutAllowed &&
+              !cartConsultation && (
               <button
                 className="sf-button-secondary"
                 onClick={() => setShowEscalation(true)}
@@ -542,7 +870,62 @@ export default function CartPage() {
                 Escalate to Pharmacist
               </button>
             )}
-            {ddiLoading ? (
+            {!ddiLoading &&
+              !ddiCheckoutAllowed &&
+              cartConsultation && (
+                <div
+                  className={
+                    cartApprovalReady
+                      ? 'sf-badge-success'
+                      : 'sf-badge-warning'
+                  }
+                  style={{
+                    display:
+                      'block',
+                    padding:
+                      '0.75rem',
+                    lineHeight:
+                      1.45,
+                  }}
+                >
+                  <strong
+                    style={{
+                      display:
+                        'block',
+                      marginBottom:
+                        '0.25rem',
+                    }}
+                  >
+                    {cartApprovalReady
+                      ? 'Pharmacist checkout approval received'
+                      : cartReviewRejected
+                        ? 'Current cart not approved'
+                        : cartReviewPending
+                          ? 'Pharmacist review pending'
+                          : approvalConsumed
+                            ? 'Approval already used'
+                            : 'Pharmacist guidance available'}
+                  </strong>
+
+                  <span>
+                    {cartApprovalReady
+                      ? 'Approval applies only to this exact reviewed cart. The interaction warning remains visible and the server will revalidate before creating the order.'
+                      : cartReviewRejected
+                        ? 'Open the pharmacist review to read the guidance. This medicine combination remains blocked.'
+                        : cartReviewPending
+                          ? 'This exact cart is waiting for pharmacist review. Status will update automatically.'
+                          : approvalConsumed
+                            ? 'This approval has already been consumed by checkout.'
+                            : 'Open the pharmacist review to see the latest guidance.'}
+                  </span>
+                </div>
+              )}
+
+            {ddiLoading ||
+            (
+              !ddiCheckoutAllowed &&
+              cartConsultationLoading
+            ) ? (
               <button
                 aria-disabled="true"
                 className="sf-button-secondary"
@@ -550,17 +933,15 @@ export default function CartPage() {
                 style={{ opacity: 0.45, cursor: 'not-allowed' }}
                 type="button"
               >
-                Checking DDI...
+                {ddiLoading ? 'Checking DDI...' : 'Checking Pharmacist Review...'}
               </button>
             ) : (
               <Link
                 className="sf-button"
                 style={{ textAlign: 'center', textDecoration: 'none' }}
-                to="/checkout"
+                to={cartCheckoutTarget}
               >
-                {ddiCheckoutAllowed
-                  ? 'Continue to Checkout'
-                  : 'Continue to Pharmacist Review'}{' '}
+                {cartCheckoutLabel}{' '}
                 <ArrowRight size={15} style={{ marginLeft: 4, verticalAlign: 'text-bottom' }} />
               </Link>
             )}
