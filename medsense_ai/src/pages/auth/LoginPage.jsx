@@ -7,7 +7,11 @@ import { useGoogleLogin } from '@react-oauth/google';
 import Button from '../../components/common/Button';
 import { usePharmacistAuth } from '../../hooks/usePharmacistAuth';
 import { useToast } from '../../hooks/useToast';
-import { authService } from '../../services/authService';
+import {
+  authService,
+  savePharmacistGoogleOnboarding,
+} from '../../services/authService';
+import { writePharmacistAuth } from '../../services/pharmacistAuthSession';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -20,7 +24,6 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const { login, isLoading } = usePharmacistAuth();
   const { showToast } = useToast();
-  const AUTH_KEY = 'medsense_auth_user';
   function validate() {
     const errs = {};
     if (!email) errs.email = 'Email is required';
@@ -43,12 +46,18 @@ export default function LoginPage() {
         if (r.success) {
           if (r.data?.requiresPharmacyDetails || r.data?.isNewAccount) {
             // New account — send to register page to complete pharmacy details
+            if (!savePharmacistGoogleOnboarding(r.data)) {
+              setErrors({ form: 'Google onboarding session was not created. Please sign in with Google again.' });
+              return;
+            }
             showToast({ type: 'info', message: 'Please complete your pharmacy details to finish registration.' });
-            navigate('/pharmacist/register', { state: { googleEmail: r.data?.email, googleName: r.data?.fullName, googleId: r.data?.id, fromGoogle: true } });
+            navigate('/pharmacist/register', { state: { fromGoogle: true } });
             return;
           }
-          const s = rememberMe ? localStorage : sessionStorage;
-          s.setItem(AUTH_KEY, JSON.stringify({ ...r.data.user, token: r.data.token, loginAt: new Date().toISOString() }));
+          writePharmacistAuth(
+            { ...r.data.user, token: r.data.token, loginAt: new Date().toISOString() },
+            rememberMe
+          );
           showToast({ type: 'success', message: 'Google login successful!' });
           navigate('/pharmacist/dashboard');
         }

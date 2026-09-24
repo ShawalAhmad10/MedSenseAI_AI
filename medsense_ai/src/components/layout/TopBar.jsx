@@ -5,8 +5,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Settings, Bell, Package, ShoppingCart, CheckCircle, X, LogOut, Check } from 'lucide-react';
 import { usePharmacistAuth } from '../../hooks/usePharmacistAuth';
 import api from '../../services/api';
-
-const AUTH_KEY = 'medsense_auth_user';
 const POLL_INTERVAL = 10000; // 10 seconds for real-time feel
 
 const tabs = [
@@ -16,13 +14,6 @@ const tabs = [
   { id: 'orders',    label: 'Orders',       path: '/pharmacist/dashboard/orders' },
   { id: 'ai',        label: 'AI Assistant', path: '/pharmacist/dashboard/ai-assistant' },
 ];
-
-function getStoredUser() {
-  try {
-    const raw = localStorage.getItem(AUTH_KEY) || sessionStorage.getItem(AUTH_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
 
 function getTimeAgo(dateStr) {
   if (!dateStr) return '';

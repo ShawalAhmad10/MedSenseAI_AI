@@ -1,28 +1,17 @@
 import axios from 'axios';
+import { readPharmacistAuth } from './pharmacistAuthSession';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 // Helper to get auth token
-function getAuthToken() {
-  try {
-    const sessionValue = sessionStorage.getItem('medsense_customer_auth');
-    if (sessionValue) {
-      const parsed = JSON.parse(sessionValue);
-      if (parsed?.token) return parsed.token;
-    }
-    const localValue = localStorage.getItem('medsense_customer_auth');
-    if (localValue) {
-      const parsed = JSON.parse(localValue);
-      if (parsed?.token) return parsed.token;
-    }
-  } catch {}
-  return null;
+function getPharmacistToken() {
+  return readPharmacistAuth()?.token ?? null;
 }
 
 // List all customers
 export async function listCustomers(params = {}) {
   try {
-    const token = getAuthToken();
+    const token = getPharmacistToken();
     const response = await axios.get(`${API_URL}/customer`, {
       params,
       headers: token ? { Authorization: `Bearer ${token}` } : {}
@@ -37,7 +26,7 @@ export async function listCustomers(params = {}) {
 // Get customer details
 export async function getCustomerDetails(customerId) {
   try {
-    const token = getAuthToken();
+    const token = getPharmacistToken();
     const response = await axios.get(`${API_URL}/customer/${customerId}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     });
@@ -80,7 +69,7 @@ export async function getCustomerDetails(customerId) {
 // Create customer
 export async function createCustomer(data) {
   try {
-    const token = getAuthToken();
+    const token = getPharmacistToken();
     const response = await axios.post(`${API_URL}/customer`, data, {
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     });
@@ -94,7 +83,7 @@ export async function createCustomer(data) {
 // Update customer
 export async function updateCustomer(customerId, data) {
   try {
-    const token = getAuthToken();
+    const token = getPharmacistToken();
     const response = await axios.put(`${API_URL}/customer/${customerId}`, data, {
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     });
@@ -108,7 +97,7 @@ export async function updateCustomer(customerId, data) {
 // Get customer ledger
 export async function getCustomerLedger(customerId, params = {}) {
   try {
-    const token = getAuthToken();
+    const token = getPharmacistToken();
     const response = await axios.get(`${API_URL}/customer/${customerId}/ledger`, {
       params,
       headers: token ? { Authorization: `Bearer ${token}` } : {}
@@ -123,7 +112,7 @@ export async function getCustomerLedger(customerId, params = {}) {
 // Record payment
 export async function recordPayment(customerId, data) {
   try {
-    const token = getAuthToken();
+    const token = getPharmacistToken();
     const response = await axios.post(`${API_URL}/customer/${customerId}/payment`, data, {
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     });
@@ -156,4 +145,11 @@ export async function registerCustomer(customerData) {
     console.error('Customer registration error:', error);
     throw new Error(error.response?.data?.message || 'Registration failed');
   }
+}
+
+export async function getCurrentCustomerProfile(token) {
+  const response = await axios.get(`${API_URL}/customer/auth/profile`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return response.data;
 }

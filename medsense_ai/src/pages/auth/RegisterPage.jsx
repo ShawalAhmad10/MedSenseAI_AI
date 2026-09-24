@@ -6,9 +6,13 @@ import { User, Mail, Lock, Eye, EyeOff, Building2, FileText, MapPin, Phone, Chev
 import { useGoogleLogin } from '@react-oauth/google';
 import Button from '../../components/common/Button';
 import { useToast } from '../../hooks/useToast';
-import { authService } from '../../services/authService';
-
-const AUTH_KEY = 'medsense_auth_user';
+import {
+  authService,
+  clearPharmacistGoogleOnboarding,
+  getPharmacistGoogleOnboarding,
+  savePharmacistGoogleOnboarding,
+} from '../../services/authService';
+import { writePharmacistAuth } from '../../services/pharmacistAuthSession';
 
 export default function RegisterPage() {
   const [currentStep, setCurrentStep] = useState(0);
@@ -20,7 +24,7 @@ export default function RegisterPage() {
 
   // Google signup state — tracks if we came from Google (no password flow)
   const [isGoogleSignup, setIsGoogleSignup] = useState(false);
-  const [googlePharmacistId, setGooglePharmacistId] = useState(null);
+  const [googleOnboarding, setGoogleOnboarding] = useState(null);
 
   // Step 1: Account
   const [fullName, setFullName] = useState('');
@@ -42,13 +46,16 @@ export default function RegisterPage() {
 
   // If redirected from login page after Google sign-in with incomplete profile
   useEffect(() => {
-    const state = location.state;
-    if (state?.fromGoogle) {
+    const context = getPharmacistGoogleOnboarding();
+    if (context) {
       setIsGoogleSignup(true);
-      setGooglePharmacistId(state.googleId ?? null);
-      setEmail(state.googleEmail ?? '');
-      setFullName(state.googleName ?? '');
+      setGoogleOnboarding(context);
+      setEmail(context.email);
+      setFullName(context.fullName);
       setCurrentStep(1); // skip to profile details
+    } else if (location.state?.fromGoogle) {
+      showToast({ type: 'error', message: 'Your Google onboarding session is invalid or expired. Please sign in with Google again.' });
+      navigate('/pharmacist/login', { replace: true });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -112,17 +119,24 @@ export default function RegisterPage() {
         if (result.success) {
           if (result.data?.isNewAccount || result.data?.requiresPharmacyDetails) {
             // New Google account — skip account step, go straight to profile details
+            if (!savePharmacistGoogleOnboarding(result.data)) {
+              showToast({ type: 'error', message: 'Google onboarding session was not created. Please sign in with Google again.' });
+              return;
+            }
+            const context = getPharmacistGoogleOnboarding();
             setEmail(result.data?.email ?? '');
             setFullName(result.data?.fullName ?? '');
             setIsGoogleSignup(true);
-            setGooglePharmacistId(result.data?.id ?? null);
+            setGoogleOnboarding(context);
             showToast({ type: 'success', message: 'Google account linked! Please complete your profile details.' });
             setDirection(1);
             setCurrentStep(1); // Go directly to profile step
           } else if (result.data?.token) {
             // Existing approved account — log them in directly
-            const s = sessionStorage;
-            s.setItem(AUTH_KEY, JSON.stringify({ ...result.data.user, token: result.data.token }));
+            writePharmacistAuth(
+              { ...result.data.user, token: result.data.token },
+              false
+            );
             showToast({ type: 'success', message: 'Google login successful!' });
             navigate('/pharmacist/dashboard');
           } else {
@@ -153,17 +167,32 @@ export default function RegisterPage() {
       if (isGoogleSignup) {
         // Google user — save details via completeGoogleProfile endpoint
         try {
-          const result = await authService.updateGooglePharmacistDetails({
-            email,
-            licenseNumber,
-            city,
-            province,
-            phone,
-            address,
-          });
+          const context = googleOnboarding || getPharmacistGoogleOnboarding();
+          if (!context) {
+            clearPharmacistGoogleOnboarding();
+            showToast({ type: 'error', message: 'Your Google onboarding session is invalid or expired. Please sign in with Google again.' });
+            navigate('/pharmacist/login');
+            return;
+          }
+
+          const result = await authService.updateGooglePharmacistDetails(
+            {
+              email,
+              licenseNumber,
+              city,
+              province,
+              phone,
+              address,
+            },
+            context.onboardingToken
+          );
           // Backend returns a token after completing profile — log in directly
           if (result?.data?.token) {
-            sessionStorage.setItem(AUTH_KEY, JSON.stringify({ ...result.data.user, token: result.data.token }));
+            clearPharmacistGoogleOnboarding();
+            writePharmacistAuth(
+              { ...result.data.user, token: result.data.token },
+              false
+            );
             showToast({ type: 'success', message: 'Profile complete! Welcome to MedSenseAI.' });
             navigate('/pharmacist/dashboard');
           } else {
@@ -171,6 +200,19 @@ export default function RegisterPage() {
             navigate('/pharmacist/pending-approval', { state: { email } });
           }
         } catch (err) {
+          const code = err.response?.data?.code;
+          if ([
+            'ONBOARDING_TOKEN_REQUIRED',
+            'ONBOARDING_TOKEN_EXPIRED',
+            'INVALID_ONBOARDING_TOKEN',
+            'WRONG_ONBOARDING_TOKEN_TYPE',
+            'ONBOARDING_IDENTITY_MISMATCH',
+          ].includes(code)) {
+            clearPharmacistGoogleOnboarding();
+            showToast({ type: 'error', message: 'Your Google onboarding session is invalid or expired. Please sign in with Google again.' });
+            navigate('/pharmacist/login');
+            return;
+          }
           showToast({ type: 'error', message: err.response?.data?.message || 'Failed to save details. Please try again.' });
         }
         return;
@@ -511,7 +553,7 @@ export default function RegisterPage() {
           </div>
 
           <Button variant="primary" size="lg" loading={isVerifying} icon={ShieldCheck} iconPosition="right" onClick={() => handleVerify()} style={{ width: '100%' }}>Verify Email</Button>
-          
+
           <Button variant="ghost" onClick={goBack} style={{ marginTop: '1rem', width: '100%', fontSize: '0.85rem' }} type="button">Back to edit email</Button>
         </div>
       );
@@ -527,7 +569,7 @@ export default function RegisterPage() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
-            
+
             {/* Basic Plan */}
             <motion.div
               onClick={() => setSelectedPlan('basic')}

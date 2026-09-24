@@ -1,5 +1,8 @@
 node_modules/
 dist/
+medsense_ai/test-results/
+medsense_ai/playwright-report/
+medsense_ai/debug.log
 .env
 .env.*
 !.env.example

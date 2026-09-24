@@ -1,83 +1,91 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { loginCustomer, registerCustomer } from '../services/customerService';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  getCurrentCustomerProfile,
+  loginCustomer,
+  registerCustomer,
+} from '../services/customerService';
+import {
+  CUSTOMER_AUTH_KEY,
+  clearCustomerAuth,
+  readCustomerAuth,
+  writeCustomerAuth,
+} from '../services/customerAuthSession';
 
 const AuthContext = createContext(null);
 
-const AUTH_KEY = 'medsense_customer_auth';
-const SESSION_ID_KEY = 'medsense_session_id';
-
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      // Check if current session ID matches stored session ID
-      const currentSessionId = sessionStorage.getItem(SESSION_ID_KEY);
-      const storedSessionId = localStorage.getItem(SESSION_ID_KEY);
-      
-      // If session IDs don't match or no session ID exists, clear auth
-      if (!currentSessionId || currentSessionId !== storedSessionId) {
-        localStorage.removeItem(AUTH_KEY);
-        localStorage.removeItem(SESSION_ID_KEY);
-        return null;
-      }
-      
-      const raw = localStorage.getItem(AUTH_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [user, setUser] = useState(null);
+  const [authStatus, setAuthStatus] = useState(() => (
+    readCustomerAuth() ? 'checking' : 'anonymous'
+  ));
   const [authModalState, setAuthModalState] = useState({ open: false, intent: 'checkout' });
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
 
-  // Generate unique session ID on mount
-  useEffect(() => {
-    const existingSessionId = sessionStorage.getItem(SESSION_ID_KEY);
-    if (!existingSessionId) {
-      const newSessionId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-      sessionStorage.setItem(SESSION_ID_KEY, newSessionId);
+  const validateStoredCustomer = useCallback(async () => {
+    const stored = readCustomerAuth();
+    if (!stored) {
+      setUser(null);
+      setAuthStatus('anonymous');
+      return;
+    }
+
+    setAuthStatus('checking');
+    try {
+      const response = await getCurrentCustomerProfile(stored.token);
+      if (!response?.success || !response.data) {
+        clearCustomerAuth();
+        setUser(null);
+        setAuthStatus('anonymous');
+        return;
+      }
+
+      const authoritativeUser = {
+        ...response.data,
+        token: stored.token,
+      };
+      writeCustomerAuth(authoritativeUser);
+      setUser(authoritativeUser);
+      setAuthStatus('authenticated');
+    } catch (error) {
+      const status = error.response?.status;
+      if (status === 401 || status === 403) {
+        clearCustomerAuth();
+        setUser(null);
+        setAuthStatus('anonymous');
+        return;
+      }
+
+      setUser(null);
+      setAuthStatus('unavailable');
     }
   }, []);
 
   useEffect(() => {
-    if (user) {
-      localStorage.setItem(AUTH_KEY, JSON.stringify(user));
-      // Store current session ID in both storage types
-      const currentSessionId = sessionStorage.getItem(SESSION_ID_KEY);
-      if (currentSessionId) {
-        localStorage.setItem(SESSION_ID_KEY, currentSessionId);
-      }
-      return;
-    }
-    localStorage.removeItem(AUTH_KEY);
-    localStorage.removeItem(SESSION_ID_KEY);
-  }, [user]);
+    validateStoredCustomer();
+  }, [validateStoredCustomer]);
 
-  // Auto-logout on visibility change (new tab/window opened)
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden && user) {
-        // Check if session ID still matches
-        const currentSessionId = sessionStorage.getItem(SESSION_ID_KEY);
-        const storedSessionId = localStorage.getItem(SESSION_ID_KEY);
-        
-        if (!currentSessionId || currentSessionId !== storedSessionId) {
-          // Another tab/window has been opened, logout this session
-          setUser(null);
-        }
+    const handleStorage = (event) => {
+      if (event.key !== CUSTOMER_AUTH_KEY || event.storageArea !== localStorage) return;
+      if (event.newValue === null) {
+        setUser(null);
+        setAuthStatus('anonymous');
+        return;
       }
+      validateStoredCustomer();
     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [user]);
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [validateStoredCustomer]);
 
   const register = async (payload) => {
     setAuthLoading(true);
     setAuthError('');
     try {
       const response = await registerCustomer(payload);
-      setUser({
+      const authenticatedUser = {
         id: response.data.customer.id,
         name: response.data.customer.name,
         email: response.data.customer.email,
@@ -85,7 +93,12 @@ export function AuthProvider({ children }) {
         city: response.data.customer.city,
         address: response.data.customer.address,
         token: response.data.token,
-      });
+      };
+      if (!writeCustomerAuth(authenticatedUser)) {
+        throw new Error('Invalid customer authentication response');
+      }
+      setUser(authenticatedUser);
+      setAuthStatus('authenticated');
       setAuthModalState((current) => ({ ...current, open: false }));
       return response;
     } catch (error) {
@@ -101,7 +114,7 @@ export function AuthProvider({ children }) {
     setAuthError('');
     try {
       const response = await loginCustomer(payload);
-      setUser({
+      const authenticatedUser = {
         id: response.data.customer.id,
         name: response.data.customer.name,
         email: response.data.customer.email,
@@ -109,7 +122,12 @@ export function AuthProvider({ children }) {
         city: response.data.customer.city,
         address: response.data.customer.address,
         token: response.data.token,
-      });
+      };
+      if (!writeCustomerAuth(authenticatedUser)) {
+        throw new Error('Invalid customer authentication response');
+      }
+      setUser(authenticatedUser);
+      setAuthStatus('authenticated');
       setAuthModalState((current) => ({ ...current, open: false }));
       return response;
     } catch (error) {
@@ -121,7 +139,9 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    clearCustomerAuth();
     setUser(null);
+    setAuthStatus('anonymous');
     setAuthError('');
   };
 
@@ -141,14 +161,16 @@ export function AuthProvider({ children }) {
       login,
       register,
       logout,
-      isAuthenticated: Boolean(user),
+      isAuthenticated: authStatus === 'authenticated' && Boolean(user),
+      authStatus,
+      retryAuthValidation: validateStoredCustomer,
       authModalState,
       openAuthModal,
       closeAuthModal,
       authError,
       authLoading,
     }),
-    [authModalState, user, authError, authLoading],
+    [authModalState, user, authError, authLoading, authStatus, validateStoredCustomer],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

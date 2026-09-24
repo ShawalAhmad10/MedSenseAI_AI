@@ -22,6 +22,7 @@ const badge = read('src/components/storefront/InteractionBadge.jsx');
 const ddiService = read('src/services/storefrontDdiService.js');
 const orderService = read('src/services/storefrontOrderService.js');
 const customerService = read('src/services/customerService.js');
+const customerAuthSession = read('src/services/customerAuthSession.js');
 const productService = read('src/services/storefrontProductService.js');
 const main = read('src/main.jsx');
 
@@ -115,7 +116,7 @@ test('storefront browser APIs use same-origin /api paths', () => {
 });
 
 test('customer auth storage key is aligned', () => {
-  assert.match(customerService, /medsense_customer_auth/);
+  assert.match(customerAuthSession, /medsense_customer_auth/);
   assert.match(orderService, /medsense_customer_auth/);
 });
 

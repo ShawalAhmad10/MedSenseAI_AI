@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { Customer } = require('../models');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -7,13 +8,97 @@ if (!JWT_SECRET) {
 }
 
 // Verify customer JWT token
-exports.verifyCustomerToken = (req, res, next) => {
+function customerIdentity(customer) {
+  return {
+    id: customer.customer_id,
+    email: customer.email,
+    type: 'customer'
+  };
+}
+
+function isCustomerInactive(customer) {
+  return (
+    customer.is_active === false ||
+    customer.is_active === 0 ||
+    customer.status === 0
+  );
+}
+
+async function loadCurrentCustomer(decoded, res) {
+  if (decoded?.type !== 'customer') {
+    res.status(403).json({
+      success: false,
+      code: 'INVALID_TOKEN',
+      message: 'Invalid customer token type'
+    });
+    return null;
+  }
+
+  const customerId = Number(decoded.id);
+  if (!Number.isSafeInteger(customerId) || customerId <= 0) {
+    res.status(401).json({
+      success: false,
+      code: 'CUSTOMER_ACCOUNT_INVALID',
+      message: 'Customer account is no longer valid'
+    });
+    return null;
+  }
+
+  const customer = await Customer.findByPk(customerId);
+  if (!customer) {
+    res.status(401).json({
+      success: false,
+      code: 'CUSTOMER_ACCOUNT_INVALID',
+      message: 'Customer account is no longer valid'
+    });
+    return null;
+  }
+
+  if (isCustomerInactive(customer)) {
+    res.status(403).json({
+      success: false,
+      code: 'CUSTOMER_ACCOUNT_INACTIVE',
+      message: 'Customer account is inactive'
+    });
+    return null;
+  }
+
+  return customer;
+}
+
+function handleCustomerTokenError(error, res) {
+  if (error.name === 'TokenExpiredError') {
+    return res.status(401).json({
+      success: false,
+      code: 'TOKEN_EXPIRED',
+      message: 'Token expired. Please login again.'
+    });
+  }
+
+  if (error.name === 'JsonWebTokenError') {
+    return res.status(401).json({
+      success: false,
+      code: 'INVALID_TOKEN',
+      message: 'Invalid token. Please login again.'
+    });
+  }
+
+  console.error('Customer auth middleware error:', error);
+  return res.status(500).json({
+    success: false,
+    code: 'AUTHENTICATION_FAILED',
+    message: 'Authentication failed'
+  });
+}
+
+exports.verifyCustomerToken = async (req, res, next) => {
   try {
     // Get token from header
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         success: false,
+        code: 'AUTH_REQUIRED',
         message: 'No token provided. Please login.'
       });
     }
@@ -23,59 +108,36 @@ exports.verifyCustomerToken = (req, res, next) => {
     // Verify token
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    // Check if token is for customer
-    if (decoded.type !== 'customer') {
-      return res.status(403).json({
-        success: false,
-        message: 'Invalid token type'
-      });
-    }
+    const customer = await loadCurrentCustomer(decoded, res);
+    if (!customer) return;
 
-    // Attach user to request
-    req.user = {
-      id: decoded.id,
-      email: decoded.email,
-      type: decoded.type
-    };
+    req.user = customerIdentity(customer);
 
-    next();
+    return next();
   } catch (error) {
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Token expired. Please login again.'
-      });
-    }
-
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid token. Please login again.'
-      });
-    }
-
-    console.error('Customer auth middleware error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Authentication failed'
-    });
+    return handleCustomerTokenError(error, res);
   }
 };
 
 // Optional customer identity for public storefront requests.
 // Anonymous requests remain valid. Identity is trusted only
 // after customer JWT verification.
-exports.optionalCustomerToken = (req, res, next) => {
+exports.optionalCustomerToken = async (req, res, next) => {
   req.customerUser = null;
 
   const authHeader =
     req.headers.authorization;
 
-  if (
-    !authHeader ||
-    !authHeader.startsWith('Bearer ')
-  ) {
+  if (!authHeader) {
     return next();
+  }
+
+  if (!authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      success: false,
+      code: 'INVALID_TOKEN',
+      message: 'Invalid authorization header'
+    });
   }
 
   try {
@@ -85,30 +147,14 @@ exports.optionalCustomerToken = (req, res, next) => {
     const decoded =
       jwt.verify(token, JWT_SECRET);
 
-    if (decoded.type !== 'customer') {
-      return next();
-    }
+    const customer = await loadCurrentCustomer(decoded, res);
+    if (!customer) return;
 
-    const customerId =
-      Number(decoded.id);
-
-    if (
-      !Number.isSafeInteger(customerId) ||
-      customerId <= 0
-    ) {
-      return next();
-    }
-
-    req.customerUser = {
-      id: customerId,
-      email: decoded.email,
-      type: 'customer'
-    };
-  } catch {
-    req.customerUser = null;
+    req.customerUser = customerIdentity(customer);
+    return next();
+  } catch (error) {
+    return handleCustomerTokenError(error, res);
   }
-
-  return next();
 };
 
 // AUTHENTICATED_ORDER_IDENTITY_GUARD_V1

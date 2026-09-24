@@ -9,8 +9,7 @@ import {
   Tags, Truck,
 } from 'lucide-react';
 import UpgradePlanModal from '../modals/UpgradePlanModal';
-
-const AUTH_KEY = 'medsense_auth_user';
+import { clearPharmacistAuth } from '../../services/pharmacistAuthSession';
 
 const homeNav = [
   { icon: LayoutDashboard, label: 'Overview', path: '/pharmacist/dashboard' },
@@ -109,9 +108,8 @@ export default function Sidebar() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem(AUTH_KEY);
-    sessionStorage.removeItem(AUTH_KEY);
-    navigate('/pharmacist/login');
+    clearPharmacistAuth();
+    navigate('/pharmacist/login', { replace: true });
   };
 
   return (

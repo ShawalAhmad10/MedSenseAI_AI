@@ -1,6 +1,9 @@
 // src/controllers/authController.js
 const { Pharmacist } = require('../models');
-const { generateToken } = require('../utils/jwt');
+const {
+  generateToken,
+  generatePharmacistOnboardingToken,
+} = require('../utils/jwt');
 const { sendOTPEmail, sendWelcomeEmail } = require('../utils/email');
 const { OAuth2Client } = require('google-auth-library');
 
@@ -146,7 +149,7 @@ exports.verifyOtp = async (req, res) => {
         'SELECT * FROM team_members WHERE user_id = :userId',
         { replacements: { userId: pharmacist.id } }
       );
-      
+
       if (existing.length === 0) {
         // Add to team members
         await sequelize.query(
@@ -352,7 +355,7 @@ exports.googleLogin = async (req, res) => {
         const response = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
-        
+
         payload = {
           sub: response.data.sub,
           email: response.data.email,
@@ -393,20 +396,6 @@ exports.googleLogin = async (req, res) => {
 
     if (pharmacist) {
       // Existing user
-      if (!pharmacist.licenseNumber || pharmacist.licenseNumber === 'Pending') {
-        return res.status(200).json({
-          success: true,
-          message: 'Please complete your pharmacy details',
-          data: {
-            requiresPharmacyDetails: true,
-            isNewAccount: false,
-            email: pharmacist.email,
-            fullName: pharmacist.fullName,
-            id: pharmacist.id,
-          },
-        });
-      }
-
       // Check account status
       if (!pharmacist.isActive) {
         return res.status(403).json({
@@ -419,10 +408,42 @@ exports.googleLogin = async (req, res) => {
       // Update googleId if not set
       if (!pharmacist.googleId) {
         pharmacist.googleId = googleId;
+      } else if (pharmacist.googleId !== googleId) {
+        return res.status(409).json({
+          success: false,
+          code: 'GOOGLE_ACCOUNT_MISMATCH',
+          message: 'This pharmacist account is linked to a different Google account',
+        });
       }
       pharmacist.isEmailVerified = true;
+      await pharmacist.save();
+
+      if (!pharmacist.licenseNumber || pharmacist.licenseNumber === 'Pending') {
+        const onboardingToken = generatePharmacistOnboardingToken({
+          id: pharmacist.id,
+          email: pharmacist.email,
+        });
+
+        return res.status(200).json({
+          success: true,
+          message: 'Please complete your pharmacy details',
+          data: {
+            requiresPharmacyDetails: true,
+            isNewAccount: false,
+            email: pharmacist.email,
+            fullName: pharmacist.fullName,
+            id: pharmacist.id,
+            licenseNumber: pharmacist.licenseNumber,
+            city: pharmacist.city,
+            province: pharmacist.province,
+            phone: pharmacist.phone,
+            address: pharmacist.address,
+            onboardingToken,
+          },
+        });
+      }
+
       pharmacist.isApproved = true;
-      pharmacist.isActive = true;
       await pharmacist.save();
 
       // Generate token
@@ -456,6 +477,11 @@ exports.googleLogin = async (req, res) => {
         role: 'pharmacist',
       });
 
+      const onboardingToken = generatePharmacistOnboardingToken({
+        id: pharmacist.id,
+        email: pharmacist.email,
+      });
+
       return res.status(200).json({
         success: true,
         message: 'Google account linked. Please complete your pharmacy details.',
@@ -465,6 +491,7 @@ exports.googleLogin = async (req, res) => {
           email: pharmacist.email,
           fullName: pharmacist.fullName,
           id: pharmacist.id,
+          onboardingToken,
         },
       });
     }
@@ -483,7 +510,6 @@ exports.googleLogin = async (req, res) => {
 exports.completeProfile = async (req, res) => {
   try {
     const {
-      email,
       licenseNumber,
       city,
       province,
@@ -491,18 +517,50 @@ exports.completeProfile = async (req, res) => {
       address,
     } = req.body;
 
-    if (!email || !licenseNumber || !city || !province || !phone) {
+    if (!licenseNumber || !city || !province || !phone) {
       return res.status(400).json({
         success: false,
         message: 'Please provide all required fields',
       });
     }
 
-    const user = await Pharmacist.findOne({ where: { email } });
+    const user = await Pharmacist.findByPk(req.onboardingUser.id);
     if (!user) {
       return res.status(404).json({
         success: false,
         message: 'User not found',
+      });
+    }
+
+    if (user.email !== req.onboardingUser.email) {
+      return res.status(401).json({
+        success: false,
+        code: 'ONBOARDING_IDENTITY_MISMATCH',
+        message: 'Onboarding identity no longer matches this account',
+      });
+    }
+
+    if (!user.googleId || !user.isEmailVerified) {
+      return res.status(403).json({
+        success: false,
+        code: 'GOOGLE_IDENTITY_REQUIRED',
+        message: 'A verified Google-linked account is required',
+      });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({
+        success: false,
+        code: 'ACCOUNT_SUSPENDED',
+        message: 'Your account has been suspended',
+      });
+    }
+
+    if (user.licenseNumber && user.licenseNumber !== 'Pending') {
+      return res.status(409).json({
+        success: false,
+        code: 'PROFILE_ALREADY_COMPLETE',
+        message: 'This pharmacist profile has already been completed',
       });
     }
 
@@ -513,7 +571,6 @@ exports.completeProfile = async (req, res) => {
     user.phone = phone;
     user.address = address;
     user.isApproved = true; // Approve immediately after completing profile
-    user.isActive = true;
     await user.save();
 
     // ✅ AUTO-ADD TO TEAM MEMBERS
@@ -523,7 +580,7 @@ exports.completeProfile = async (req, res) => {
         'SELECT * FROM team_members WHERE user_id = :userId',
         { replacements: { userId: user.id } }
       );
-      
+
       if (existing.length === 0) {
         await sequelize.query(
           `INSERT INTO team_members (user_id, position, joined_date, is_active, created_at, updated_at)
@@ -544,7 +601,7 @@ exports.completeProfile = async (req, res) => {
     }
 
     // Send welcome email — non-blocking
-    try { await sendWelcomeEmail(email, user.fullName); } catch (e) { console.error('Welcome email failed:', e.message); }
+    try { await sendWelcomeEmail(user.email, user.fullName); } catch (e) { console.error('Welcome email failed:', e.message); }
 
     // Generate token
     const token = generateToken({

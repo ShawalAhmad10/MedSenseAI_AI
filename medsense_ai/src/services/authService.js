@@ -1,6 +1,85 @@
 // src/services/authService.js
 import api from './api';
 
+export const PHARMACIST_GOOGLE_ONBOARDING_KEY =
+  'medsense_pharmacist_google_onboarding';
+
+function decodeJwtPayload(token) {
+  const encodedPayload = token.split('.')[1];
+  const base64 = encodedPayload
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+  const padded = base64.padEnd(
+    Math.ceil(base64.length / 4) * 4,
+    '='
+  );
+
+  return JSON.parse(atob(padded));
+}
+
+function isUsablePharmacistOnboarding(context) {
+  const payload = decodeJwtPayload(context?.onboardingToken ?? '');
+
+  return Boolean(
+    context?.email &&
+    context?.id &&
+    payload?.type === 'pharmacist_onboarding' &&
+    payload?.id === context.id &&
+    payload?.email === context.email &&
+    Number.isFinite(payload?.exp) &&
+    payload.exp * 1000 > Date.now()
+  );
+}
+
+export function clearPharmacistGoogleOnboarding() {
+  sessionStorage.removeItem(PHARMACIST_GOOGLE_ONBOARDING_KEY);
+}
+
+export function savePharmacistGoogleOnboarding(data) {
+  const context = {
+    onboardingToken: data?.onboardingToken,
+    email: data?.email,
+    fullName: data?.fullName ?? '',
+    id: data?.id,
+  };
+
+  try {
+    if (!isUsablePharmacistOnboarding(context)) {
+      clearPharmacistGoogleOnboarding();
+      return false;
+    }
+  } catch {
+    clearPharmacistGoogleOnboarding();
+    return false;
+  }
+
+  sessionStorage.setItem(
+    PHARMACIST_GOOGLE_ONBOARDING_KEY,
+    JSON.stringify(context)
+  );
+  return true;
+}
+
+export function getPharmacistGoogleOnboarding() {
+  try {
+    const raw = sessionStorage.getItem(
+      PHARMACIST_GOOGLE_ONBOARDING_KEY
+    );
+    if (!raw) return null;
+
+    const context = JSON.parse(raw);
+    if (!isUsablePharmacistOnboarding(context)) {
+      clearPharmacistGoogleOnboarding();
+      return null;
+    }
+
+    return context;
+  } catch {
+    clearPharmacistGoogleOnboarding();
+    return null;
+  }
+}
+
 /**
  * Auth Service
  * Pharmacist → /api/auth/pharmacist/...
@@ -31,8 +110,16 @@ export const authService = {
     api.post('/auth/pharmacist/reset-password', { email, otp, newPassword }).then(r => r.data),
 
   // Save pharmacy details for Google-registered pharmacists (no password needed)
-  updateGooglePharmacistDetails: (data) =>
-    api.post('/auth/pharmacist/complete-profile', data).then(r => r.data),
+  updateGooglePharmacistDetails: (data, onboardingToken) =>
+    api.post(
+      '/auth/pharmacist/complete-profile',
+      data,
+      {
+        headers: {
+          Authorization: `Bearer ${onboardingToken}`,
+        },
+      }
+    ).then(r => r.data),
 
   checkApprovalStatus: (email) =>
     api.get('/auth/pharmacist/status',          { params: { email } }).then(r => r.data),

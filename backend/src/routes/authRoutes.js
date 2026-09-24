@@ -2,7 +2,10 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
-const { authenticateToken } = require('../middleware/auth');
+const {
+  authenticateToken,
+  verifyPharmacistOnboardingToken,
+} = require('../middleware/auth');
 const { body } = require('express-validator');
 
 // Validation middleware
@@ -30,7 +33,11 @@ router.post('/pharmacist/resend-otp', authController.resendOtp);
 router.post('/pharmacist/forgot-password', authController.forgotPassword);
 router.post('/pharmacist/reset-password', authController.resetPassword);
 router.post('/pharmacist/google', authController.googleLogin);
-router.post('/pharmacist/complete-profile', authController.completeProfile);
+router.post(
+  '/pharmacist/complete-profile',
+  verifyPharmacistOnboardingToken,
+  authController.completeProfile
+);
 router.get('/pharmacist/status', authController.checkStatus);
 router.post('/pharmacist/select-plan', authController.selectPlan);
 

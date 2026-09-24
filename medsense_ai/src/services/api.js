@@ -1,7 +1,9 @@
 // src/services/api.js
 import axios from 'axios';
-
-const AUTH_KEY = 'medsense_auth_user';
+import {
+  clearPharmacistAuth,
+  readPharmacistAuth,
+} from './pharmacistAuthSession';
 
 const api = axios.create({
   baseURL: '/api',
@@ -12,13 +14,9 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     try {
-      // sessionStorage takes priority (more recent login)
-      const raw = sessionStorage.getItem(AUTH_KEY) || localStorage.getItem(AUTH_KEY);
-      if (raw) {
-        const userData = JSON.parse(raw);
-        if (userData?.token) {
-          config.headers.Authorization = `Bearer ${userData.token}`;
-        }
+      const userData = readPharmacistAuth();
+      if (userData?.token && !config.headers.Authorization) {
+        config.headers.Authorization = `Bearer ${userData.token}`;
       }
     } catch {
       // ignore parse errors
@@ -35,9 +33,8 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       const code = error.response?.data?.code;
       // Only auto-logout on expired/invalid token, not on wrong credentials
-      if (code === 'TOKEN_EXPIRED' || error.response?.data?.message === 'Invalid token.') {
-        localStorage.removeItem(AUTH_KEY);
-        sessionStorage.removeItem(AUTH_KEY);
+      if (['TOKEN_EXPIRED', 'INVALID_TOKEN', 'STAFF_ACCOUNT_INVALID'].includes(code)) {
+        clearPharmacistAuth();
         window.location.href = '/pharmacist/login';
       }
     }

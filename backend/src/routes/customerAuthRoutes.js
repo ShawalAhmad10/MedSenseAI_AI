@@ -1,20 +1,77 @@
 const express = require('express');
 const router = express.Router();
-const customerAuthController = require('../controllers/customerAuthController');
-const { verifyCustomerToken } = require('../middleware/customerAuth');
 
-// Public routes
-router.post('/register', customerAuthController.register);
-router.post('/login', customerAuthController.login);
+const customerAuthController =
+  require('../controllers/customerAuthController');
 
-// Protected routes (require customer token)
-router.get('/profile', verifyCustomerToken, customerAuthController.getProfile);
-router.put('/profile', verifyCustomerToken, customerAuthController.updateProfile);
-router.put('/change-password', verifyCustomerToken, customerAuthController.changePassword);
+const {
+  verifyCustomerToken
+} = require('../middleware/customerAuth');
 
-// Dashboard routes (for pharmacist to manage customer)
-router.get('/list', customerAuthController.listCustomers);
-router.post('/create', customerAuthController.createCustomer);
-router.put('/update/:customerId', customerAuthController.updateCustomer);
+const {
+  authenticateToken
+} = require('../middleware/auth');
+
+
+// ============================================================
+// Public customer authentication
+// ============================================================
+
+router.post(
+  '/register',
+  customerAuthController.register
+);
+
+router.post(
+  '/login',
+  customerAuthController.login
+);
+
+
+// ============================================================
+// Customer-owned account routes
+// ============================================================
+
+router.get(
+  '/profile',
+  verifyCustomerToken,
+  customerAuthController.getProfile
+);
+
+router.put(
+  '/profile',
+  verifyCustomerToken,
+  customerAuthController.updateProfile
+);
+
+router.put(
+  '/change-password',
+  verifyCustomerToken,
+  customerAuthController.changePassword
+);
+
+
+// ============================================================
+// Pharmacist customer-management routes
+// ============================================================
+
+router.get(
+  '/list',
+  authenticateToken,
+  customerAuthController.listCustomers
+);
+
+router.post(
+  '/create',
+  authenticateToken,
+  customerAuthController.createCustomer
+);
+
+router.put(
+  '/update/:customerId',
+  authenticateToken,
+  customerAuthController.updateCustomer
+);
+
 
 module.exports = router;
