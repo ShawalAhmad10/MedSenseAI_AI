@@ -27,6 +27,7 @@ const consultationRoutes = require('./routes/consultationRoutes');
 const prescriptionRoutes = require('./routes/prescriptionRoutes');
 const customerRefillRoutes = require('./routes/customerRefillRoutes');
 const medicineRecommendationRoutes = require('./routes/medicineRecommendationRoutes');
+const assistantRoutes = require('./routes/assistantRoutes');
 const alertRoutes  = require('./routes/alertRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 
@@ -121,6 +122,7 @@ app.use('/api/consultations', consultationRoutes);
 app.use('/api/prescriptions', prescriptionRoutes);
 app.use('/api/refills', customerRefillRoutes);
 app.use('/api/recommendations', medicineRecommendationRoutes);
+app.use('/api/assistant', assistantRoutes);
 app.use('/api/alerts', alertRoutes);
 
 // ─── Error Handling ──────────────────────────────────────────────────────────
