@@ -1,0 +1,185 @@
+{
+  "schema_version": "amna-ddi-supplemental-identity-v1",
+  "matching_policy": "Exact governed lookup after NFKC/casefold/whitespace normalization; conservative enumerated formulation candidates and versioned DRAP-corpus aliases only; no fuzzy matching or arbitrary prefix inference.",
+  "provenance": {
+    "source": "PubChem/model feature identity",
+    "generated_validated_source_description": "Values copied deterministically from the hash-pinned frozen model feature table and validated against its aligned Morgan fingerprint artifact.",
+    "frozen_model_version": "med-ddi-binary-1.0.0",
+    "rxnorm_bridge_file": "ddi_bridge_v1.json",
+    "rxnorm_bridge_payload_sha256": "5091ec7361b094b1d4fcf9653be30ddaf3f284b9204c96d2f5dc8a0b70df5ed6",
+    "model_metadata_file": "model_metadata.json",
+    "model_metadata_sha256": "617d59114b6e3024b64f75219308c6aae229643091c1a60cf2ce8e7ef36dfff2",
+    "inference_drug_features_file": "inference_drug_features.csv",
+    "inference_drug_features_sha256": "f62939268fc81c5804f2498dbd8d6ab5d82c80e4cf2e419e494d919e4b5573b1",
+    "inference_morgan_fingerprints_file": "inference_morgan_fingerprints.npz",
+    "inference_morgan_fingerprints_sha256": "a1559dc5fe7d0722ca1230b249b57ef738fd4ea51d8cb6cbb138c9215ebabfb5"
+  },
+  "mappings": [
+    {
+      "normalized_lookup_key": "cefoperazone",
+      "canonical_display_name": "Cefoperazone",
+      "original_model_name": "Cefoperazone",
+      "normalized_model_name": "cefoperazone",
+      "identity_namespace": "PUBCHEM",
+      "identity_id": "44187",
+      "pubchem_cid": "44187",
+      "canonical_smiles": "CCN1CCN(C(=O)C1=O)C(=O)NC(C2=CC=C(C=C2)O)C(=O)NC3C4N(C3=O)C(=C(CS4)CSC5=NN=NN5C)C(=O)O",
+      "isomeric_smiles": "CCN1CCN(C(=O)C1=O)C(=O)N[C@H](C2=CC=C(C=C2)O)C(=O)N[C@H]3[C@@H]4N(C3=O)C(=C(CS4)CSC5=NN=NN5C)C(=O)O",
+      "fingerprint_index": 280,
+      "frozen_model_token": "Cefoperazone",
+      "match_source": "SUPPLEMENTAL_MODEL_IDENTITY"
+    },
+    {
+      "normalized_lookup_key": "dexketoprofen",
+      "canonical_display_name": "Dexketoprofen",
+      "original_model_name": "Dexketoprofen",
+      "normalized_model_name": "dexketoprofen",
+      "identity_namespace": "PUBCHEM",
+      "identity_id": "667550",
+      "pubchem_cid": "667550",
+      "canonical_smiles": "CC(C1=CC(=CC=C1)C(=O)C2=CC=CC=C2)C(=O)O",
+      "isomeric_smiles": "C[C@@H](C1=CC(=CC=C1)C(=O)C2=CC=CC=C2)C(=O)O",
+      "fingerprint_index": 450,
+      "frozen_model_token": "Dexketoprofen",
+      "match_source": "SUPPLEMENTAL_MODEL_IDENTITY"
+    },
+    {
+      "normalized_lookup_key": "dydrogesterone",
+      "canonical_display_name": "Dydrogesterone",
+      "original_model_name": "Dydrogesterone",
+      "normalized_model_name": "dydrogesterone",
+      "identity_namespace": "PUBCHEM",
+      "identity_id": "9051",
+      "pubchem_cid": "9051",
+      "canonical_smiles": "CC(=O)C1CCC2C1(CCC3C2C=CC4=CC(=O)CCC34C)C",
+      "isomeric_smiles": "CC(=O)[C@H]1CC[C@@H]2[C@@]1(CC[C@@H]3[C@H]2C=CC4=CC(=O)CC[C@@]34C)C",
+      "fingerprint_index": 535,
+      "frozen_model_token": "Dydrogesterone",
+      "match_source": "SUPPLEMENTAL_MODEL_IDENTITY"
+    },
+    {
+      "normalized_lookup_key": "etoricoxib",
+      "canonical_display_name": "Etoricoxib",
+      "original_model_name": "Etoricoxib",
+      "normalized_model_name": "etoricoxib",
+      "identity_namespace": "PUBCHEM",
+      "identity_id": "123619",
+      "pubchem_cid": "123619",
+      "canonical_smiles": "CC1=NC=C(C=C1)C2=C(C=C(C=N2)Cl)C3=CC=C(C=C3)S(=O)(=O)C",
+      "isomeric_smiles": "CC1=NC=C(C=C1)C2=C(C=C(C=N2)Cl)C3=CC=C(C=C3)S(=O)(=O)C",
+      "fingerprint_index": 616,
+      "frozen_model_token": "Etoricoxib",
+      "match_source": "SUPPLEMENTAL_MODEL_IDENTITY"
+    },
+    {
+      "normalized_lookup_key": "fusidic acid",
+      "canonical_display_name": "Fusidic acid",
+      "original_model_name": "Fusidic acid",
+      "normalized_model_name": "fusidic acid",
+      "identity_namespace": "PUBCHEM",
+      "identity_id": "3000226",
+      "pubchem_cid": "3000226",
+      "canonical_smiles": "CC1C2CCC3(C(C2(CCC1O)C)C(CC4C3(CC(C4=C(CCC=C(C)C)C(=O)O)OC(=O)C)C)O)C",
+      "isomeric_smiles": "C[C@H]1[C@@H]2CC[C@]3([C@H]([C@]2(CC[C@H]1O)C)[C@@H](C[C@@H]\\4[C@@]3(C[C@@H](/C4=C(/CCC=C(C)C)\\C(=O)O)OC(=O)C)C)O)C",
+      "fingerprint_index": 698,
+      "frozen_model_token": "Fusidic acid",
+      "match_source": "SUPPLEMENTAL_MODEL_IDENTITY"
+    },
+    {
+      "normalized_lookup_key": "norethisterone",
+      "canonical_display_name": "Norethisterone",
+      "original_model_name": "Norethisterone",
+      "normalized_model_name": "norethisterone",
+      "identity_namespace": "PUBCHEM",
+      "identity_id": "6230",
+      "pubchem_cid": "6230",
+      "canonical_smiles": "CC12CCC3C(C1CCC2(C#C)O)CCC4=CC(=O)CCC34",
+      "isomeric_smiles": "C[C@]12CC[C@H]3[C@H]([C@@H]1CC[C@]2(C#C)O)CCC4=CC(=O)CC[C@H]34",
+      "fingerprint_index": 1111,
+      "frozen_model_token": "Norethisterone",
+      "match_source": "SUPPLEMENTAL_MODEL_IDENTITY"
+    },
+    {
+      "normalized_lookup_key": "rupatadine",
+      "canonical_display_name": "Rupatadine",
+      "original_model_name": "Rupatadine",
+      "normalized_model_name": "rupatadine",
+      "identity_namespace": "PUBCHEM",
+      "identity_id": "133017",
+      "pubchem_cid": "133017",
+      "canonical_smiles": "CC1=CC(=CN=C1)CN2CCC(=C3C4=C(CCC5=C3N=CC=C5)C=C(C=C4)Cl)CC2",
+      "isomeric_smiles": "CC1=CC(=CN=C1)CN2CCC(=C3C4=C(CCC5=C3N=CC=C5)C=C(C=C4)Cl)CC2",
+      "fingerprint_index": 1388,
+      "frozen_model_token": "Rupatadine",
+      "match_source": "SUPPLEMENTAL_MODEL_IDENTITY"
+    }
+  ],
+  "governed_aliases": [
+    {
+      "normalized_alias": "amoxycillin",
+      "normalized_target": "amoxicillin",
+      "source": "DRAP_CORPUS_OBSERVED_ALIAS"
+    },
+    {
+      "normalized_alias": "cefipime",
+      "normalized_target": "cefepime",
+      "source": "DRAP_CORPUS_OBSERVED_ALIAS"
+    },
+    {
+      "normalized_alias": "ceflriaxone",
+      "normalized_target": "ceftriaxone",
+      "source": "DRAP_CORPUS_OBSERVED_ALIAS"
+    },
+    {
+      "normalized_alias": "cefoiaxone",
+      "normalized_target": "ceftriaxone",
+      "source": "DRAP_CORPUS_OBSERVED_ALIAS"
+    },
+    {
+      "normalized_alias": "cefriaxone",
+      "normalized_target": "ceftriaxone",
+      "source": "DRAP_CORPUS_OBSERVED_ALIAS"
+    },
+    {
+      "normalized_alias": "ceftriarone",
+      "normalized_target": "ceftriaxone",
+      "source": "DRAP_CORPUS_OBSERVED_ALIAS"
+    },
+    {
+      "normalized_alias": "ceftrizone",
+      "normalized_target": "ceftriaxone",
+      "source": "DRAP_CORPUS_OBSERVED_ALIAS"
+    },
+    {
+      "normalized_alias": "fosmomycin",
+      "normalized_target": "fosfomycin",
+      "source": "DRAP_CORPUS_OBSERVED_ALIAS"
+    },
+    {
+      "normalized_alias": "salbacatam",
+      "normalized_target": "sulbactam",
+      "source": "DRAP_CORPUS_OBSERVED_ALIAS"
+    },
+    {
+      "normalized_alias": "salbactam",
+      "normalized_target": "sulbactam",
+      "source": "DRAP_CORPUS_OBSERVED_ALIAS"
+    },
+    {
+      "normalized_alias": "slidenafil",
+      "normalized_target": "sildenafil",
+      "source": "DRAP_CORPUS_OBSERVED_ALIAS"
+    },
+    {
+      "normalized_alias": "sulbactum",
+      "normalized_target": "sulbactam",
+      "source": "DRAP_CORPUS_OBSERVED_ALIAS"
+    },
+    {
+      "normalized_alias": "tazobactum",
+      "normalized_target": "tazobactam",
+      "source": "DRAP_CORPUS_OBSERVED_ALIAS"
+    }
+  ],
+  "payload_sha256": "68785ebe71feed7adb958b7f2b9c25e3a65b371b5e460a565b119126b18ac2ad"
+}

@@ -1,0 +1,42 @@
+{
+  "name": "medsenseai-backend",
+  "version": "1.0.0",
+  "description": "MedSenseAI Backend API - Authentication & Core Services",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "setup": "node setup.js",
+    "db:init": "node src/db/init.js",
+    "db:migrate": "node src/db/migrate.js",
+    "db:seed": "node src/db/seed.js",
+    "db:migrate:new": "sequelize-cli db:migrate --migrations-path src/migrations",
+    "db:migrate:undo": "sequelize-cli db:migrate:undo --migrations-path src/migrations",
+    "db:seed:all": "node src/seeders/run-all-seeders.js",
+    "db:seed:undo": "node src/seeders/run-all-seeders.js --undo",
+    "admin:create": "node src/utils/create-admin.js",
+    "test:d1": "node --test"
+  },
+  "dependencies": {
+    "axios": "^1.19.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.3.1",
+    "express-validator": "^7.1.0",
+    "google-auth-library": "^9.11.0",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "nodemailer": "^6.9.13",
+    "pg": "^8.12.0",
+    "sequelize": "^6.35.2",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4",
+    "sequelize-cli": "^6.6.2"
+  }
+}

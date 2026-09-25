@@ -1,0 +1,368 @@
+/* src/index.css */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600&display=swap');
+
+:root {
+  /* Global Tokens (assuming they might not be included if index.css is empty) */
+  --white: #ffffff;
+  --off-white: #f8fafc;
+  --navy: #0d1117;
+  --navy-soft: #1a2332;
+  --blue: #2563eb;
+  --blue-light: #dbeafe;
+  --blue-mid: #93c5fd;
+  --gray-100: #f1f5f9;
+  --gray-200: #e2e8f0;
+  --gray-400: #94a3b8;
+  --gray-600: #475569;
+  --gray-800: #1e293b;
+  --green: #10b981;
+  --red: #ef4444;
+  --amber: #f59e0b;
+  --amber-light: #fef3c7;
+  --font-display: 'Plus Jakarta Sans', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --radius-card: 20px;
+  --radius-btn: 12px;
+  --radius-md: 12px;
+  --radius-full: 9999px;
+
+  /* AUTH SPECIFIC DESIGN SYSTEM */
+  --auth-panel-bg: linear-gradient(145deg, #1e3a8a 0%, #2563eb 45%, #7c3aed 100%);
+  --auth-card-bg: #ffffff;
+  --auth-input-bg: #f8fafc;
+  --auth-input-border: #e2e8f0;
+  --auth-input-focus: #2563eb;
+  --auth-input-radius: 10px;
+  --auth-input-height: 48px;
+
+  /* Password strength colors */
+  --strength-weak:   #ef4444;
+  --strength-fair:   #f59e0b;
+  --strength-good:   #3b82f6;
+  --strength-strong: #10b981;
+
+  /* Step indicator */
+  --step-inactive: #e2e8f0;
+  --step-active: #2563eb;
+  --step-done: #10b981;
+}
+
+/* Keyframes */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes panelFloat {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  33%       { transform: translateY(-12px) rotate(0.5deg); }
+  66%       { transform: translateY(-6px) rotate(-0.3deg); }
+}
+@keyframes dotOrbit {
+  from { transform: rotate(0deg) translateX(40px) rotate(0deg); }
+  to   { transform: rotate(360deg) translateX(40px) rotate(-360deg); }
+}
+@keyframes strengthPulse {
+  0%,100% { opacity: 1; }
+  50%     { opacity: 0.7; }
+}
+@keyframes checkDraw {
+  from { stroke-dashoffset: 40; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes otpShake {
+  0%,100% { transform: translateX(0); }
+  20%     { transform: translateX(-8px); }
+  40%     { transform: translateX(8px); }
+  60%     { transform: translateX(-5px); }
+  80%     { transform: translateX(5px); }
+}
+@keyframes clockTick {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes approvalPulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(37,99,235,0.3); }
+  50%     { box-shadow: 0 0 0 20px rgba(37,99,235,0); }
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Input focus styles */
+.auth-input {
+  width: 100%;
+  height: var(--auth-input-height);
+  background: var(--auth-input-bg);
+  border: 1.5px solid var(--auth-input-border);
+  border-radius: var(--auth-input-radius);
+  padding: 0 1rem;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--navy);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  box-sizing: border-box;
+}
+.auth-input:focus {
+  border-color: var(--auth-input-focus);
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+}
+.auth-input.error {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px rgba(239,68,68,0.1);
+}
+.auth-input::placeholder { color: var(--gray-400); font-weight: 300; }
+
+.auth-label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--gray-800);
+  margin-bottom: 0.4rem;
+  letter-spacing: 0.01em;
+}
+.auth-field { margin-bottom: 1.25rem; position: relative; }
+.auth-error-msg {
+  font-size: 0.75rem;
+  color: var(--red);
+  margin-top: 0.3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* Global resets for Auth pages */
+body, html {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: var(--font-body);
+}
+
+*, *:before, *:after {
+  box-sizing: inherit;
+}
+
+/* ═══════════════════════════════════════════════
+   DASHBOARD DESIGN SYSTEM TOKENS
+═══════════════════════════════════════════════ */
+:root {
+  /* Dashboard specific */
+  --dash-bg: #f4f5f7;
+  --dash-card: #ffffff;
+  --dash-card-dark: #0f0f0f;
+  --dash-border: rgba(0,0,0,0.06);
+  --dash-radius: 20px;
+  --dash-radius-sm: 12px;
+  --dash-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04);
+  --dash-shadow-hover: 0 8px 32px rgba(0,0,0,0.1);
+
+  /* Sidebar */
+  --sidebar-width: 220px;
+  --sidebar-bg: #ffffff;
+  --sidebar-active-bg: #0f0f0f;
+  --sidebar-active-text: #ffffff;
+  --sidebar-text: #64748b;
+  --sidebar-hover-bg: #f4f5f7;
+
+  /* Typography scale */
+  --text-metric: 2rem;
+  --text-metric-sm: 1.5rem;
+  --text-label: 0.75rem;
+  --text-body: 0.875rem;
+
+  /* Severity */
+  --severity-critical: #ef4444;
+  --severity-critical-bg: #fff1f0;
+  --severity-warning: #f59e0b;
+  --severity-warning-bg: #fffbeb;
+  --severity-info: #3b82f6;
+  --severity-info-bg: #eff6ff;
+
+  /* Extended colors */
+  --gray-300: #cbd5e1;
+  --red-light: #fff1f0;
+  --green-light: #f0fdf4;
+}
+
+/* ═══════════════════════════════════════════════
+   DASHBOARD KEYFRAMES
+═══════════════════════════════════════════════ */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes alertPulse {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.05); }
+}
+@keyframes barGrow {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+@keyframes dotFadeIn {
+  from { opacity: 0; transform: scale(0); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes typingDot {
+  0%, 100% { opacity: 0.3; transform: translateY(0); }
+  50%       { opacity: 1;   transform: translateY(-3px); }
+}
+@keyframes shimmerLoad {
+  from { background-position: -200% 0; }
+  to   { background-position:  200% 0; }
+}
+@keyframes tickerScroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* ═══════════════════════════════════════════════
+   DASHBOARD UTILITY CLASSES
+═══════════════════════════════════════════════ */
+.dash-card {
+  background: var(--dash-card);
+  border: 1px solid var(--dash-border);
+  border-radius: var(--dash-radius);
+  box-shadow: var(--dash-shadow);
+}
+
+.dash-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmerLoad 1.5s infinite;
+  border-radius: var(--dash-radius);
+}
+
+/* Hide scrollbars but keep functionality */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Recharts tooltip global override */
+.recharts-tooltip-wrapper { z-index: 100; }
+.recharts-default-tooltip {
+  border-radius: 12px !important;
+  border: 1px solid var(--dash-border) !important;
+  box-shadow: var(--dash-shadow-hover) !important;
+}
+
+/* ═══════════════════════════════════════════════
+   PRESCRIPTION REVIEW SPECIFIC
+═══════════════════════════════════════════════ */
+:root {
+  --rx-pending: #f59e0b;
+  --rx-pending-bg: #fffbeb;
+  --rx-approved: #10b981;
+  --rx-approved-bg: #d1fae5;
+  --rx-flagged: #f97316;
+  --rx-flagged-bg: #fff7ed;
+  --rx-rejected: #ef4444;
+  --rx-rejected-bg: #fee2e2;
+
+  --confidence-high: #10b981;
+  --confidence-medium: #f59e0b;
+  --confidence-low: #ef4444;
+
+  --viewer-bg: #1a1a2e;
+  --viewer-controls: rgba(255,255,255,0.08);
+}
+
+@keyframes scanLine {
+  from { transform: translateY(-100%); opacity: 0.6; }
+  to   { transform: translateY(400%); opacity: 0; }
+}
+@keyframes pulseRing {
+  0%   { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(2); opacity: 0; }
+}
+@keyframes slidePanel {
+  from { opacity: 0; transform: translateX(40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes processingPulse {
+  0%,100% { opacity: 1; }
+  50%     { opacity: 0.4; }
+}
+@keyframes checkStroke {
+  from { stroke-dashoffset: 60; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes rejectShake {
+  0%,100% { transform: translateX(0); }
+  20%     { transform: translateX(-6px); }
+  40%     { transform: translateX(6px); }
+  60%     { transform: translateX(-4px); }
+  80%     { transform: translateX(4px); }
+}
+
+/* Zoom/pan cursor */
+.viewer-grab { cursor: grab; }
+.viewer-grab:active { cursor: grabbing; }
+
+/* Rich text note */
+.rx-note-textarea {
+  width: 100%;
+  min-height: 80px;
+  background: var(--dash-bg);
+  border: 1.5px solid var(--dash-border);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--navy);
+  font-weight: 300;
+  line-height: 1.6;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.rx-note-textarea:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+  background: white;
+}
+.rx-note-textarea::placeholder {
+  color: var(--gray-400);
+  font-style: italic;
+}
+
+/* Table row hover */
+.rx-table-row {
+  transition: background 0.15s;
+  cursor: pointer;
+}
+.rx-table-row:hover { background: var(--dash-bg); }
+.rx-table-row.selected {
+  background: rgba(37,99,235,0.04);
+  border-left: 3px solid var(--blue);
+}
+
+/* ═══════════════════════════════════════════════
+   PRINT STYLES FOR ORDERS
+═══════════════════════════════════════════════ */
+@media print {
+  body * { visibility: hidden; }
+  .print-container, .print-container * { visibility: visible; }
+  .print-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    box-shadow: none !important;
+    background: white !important;
+  }
+  .no-print { display: none !important; }
+  .print-only, .print-only-header, .print-only-footer { display: block !important; }
+  .print-body { flex-direction: column !important; }
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+}
