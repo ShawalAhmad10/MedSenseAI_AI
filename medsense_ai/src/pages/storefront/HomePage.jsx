@@ -93,12 +93,12 @@ export default function HomePage() {
     <div className="storefront-shell">
       <section className="sf-hero sf-grid-hero">
         <div>
-          <span className="sf-badge">Public storefront · pharmacist-themed web experience</span>
+          <span className="sf-badge">MedSenseAI Smart Pharmacy</span>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(2.5rem, 5vw, 4.4rem)', lineHeight: 1.02, margin: '1rem 0 0.85rem' }}>
-            Trusted pharmacy shopping with faster browsing, safer checkout, and prescription-ready care.
+            Smart pharmacy shopping with DDI-aware checkout and prescription OCR.
           </h1>
           <p className="sf-section-subcopy" style={{ fontSize: '1.05rem', maxWidth: 650 }}>
-            Order medicines, wellness essentials, and everyday care products with a guest-first storefront that stays visually aligned with MedSenseAI&apos;s pharmacist experience.
+            Browse the pharmacy catalogue, review medicines, upload prescriptions, and complete the governed checkout workflow.
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.8rem', margin: '1.4rem 0' }}>
             <Link className="sf-button" to="/search">
@@ -135,13 +135,13 @@ export default function HomePage() {
             </div>
             <div className="sf-hero-visual-card">
               <div className="sf-badge-danger" style={{ marginBottom: '0.75rem', width: 'fit-content' }}>
-                Up to 25% off on everyday care
+                Live catalogue and current availability
               </div>
               <strong style={{ display: 'block', fontSize: '1.3rem', marginBottom: '0.35rem' }}>
-                Website-first pharmacy shopping
+                Integrated pharmacy shopping
               </strong>
               <p className="sf-muted" style={{ marginBottom: 0 }}>
-                Structured like a modern ecommerce homepage, but re-skinned with the pharmacist portal&apos;s blue, navy, radius, and shadow system.
+                Catalogue browsing, prescription OCR, cart interaction checks, and pharmacist review remain connected in one application flow.
               </p>
             </div>
           </div>
@@ -174,7 +174,7 @@ export default function HomePage() {
           <div>
             <h2 className="sf-section-heading">Shop by Category</h2>
             <p className="sf-section-subcopy" style={{ marginBottom: 0 }}>
-              Ecommerce-first category navigation without a login wall.
+              Browse medicine categories from the current pharmacy catalogue.
             </p>
           </div>
           <Link className="sf-link" to="/search">
@@ -204,7 +204,7 @@ export default function HomePage() {
           <div>
             <h2 className="sf-section-heading">Top Deals</h2>
             <p className="sf-section-subcopy" style={{ marginBottom: 0 }}>
-              Mock merchandising carousel ready for real storefront APIs.
+              Current discounted medicines loaded from the pharmacy catalogue.
             </p>
           </div>
           <Link className="sf-link" to="/search?sort=discount">
@@ -212,7 +212,7 @@ export default function HomePage() {
           </Link>
         </div>
         {loading ? (
-          <div className="sf-loading">Loading today&apos;s mock deal cards...</div>
+          <div className="sf-loading">Loading current medicine deals...</div>
         ) : error ? (
           <div className="sf-error">{error}</div>
         ) : (
@@ -263,7 +263,7 @@ export default function HomePage() {
               Upload prescriptions once, then review editable OCR results before checkout.
             </h2>
             <p style={{ color: 'rgba(255,255,255,0.76)', lineHeight: 1.8 }}>
-              This banner is the strong secondary CTA from the homepage structure, using the actual pharmacist-side blue and navy brand instead of the earlier teal placeholder palette.
+              Uploaded prescription images are processed through the OCR workflow and reviewed before confirmation.
             </p>
           </div>
           <div style={{ textAlign: 'right' }}>
@@ -277,9 +277,9 @@ export default function HomePage() {
       <section className="sf-card sf-section-card" style={{ marginTop: '1.2rem' }}>
         <div className="sf-page-header">
           <div>
-            <h2 className="sf-section-heading">Curated essentials</h2>
+            <h2 className="sf-section-heading">Quick actions</h2>
             <p className="sf-section-subcopy" style={{ marginBottom: 0 }}>
-              Focused entry points for common shopping missions, designed to feel calm and modern.
+              Open the catalogue, prescription OCR, or refill workflow directly.
             </p>
           </div>
         </div>
@@ -302,7 +302,7 @@ export default function HomePage() {
           <div>
             <h2 className="sf-section-heading">Services and Smart Care</h2>
             <p className="sf-section-subcopy" style={{ marginBottom: 0 }}>
-              Storefront-specific value props that still feel part of the same product family.
+              Operational workflows available in the current MedSenseAI application.
             </p>
           </div>
         </div>
@@ -337,13 +337,13 @@ export default function HomePage() {
       <section className="sf-card sf-section-card" style={{ marginTop: '1.2rem' }}>
         <div className="sf-page-header">
           <div>
-            <h2 className="sf-section-heading">From the MedSenseAI blog</h2>
+            <h2 className="sf-section-heading">Using MedSenseAI</h2>
             <p className="sf-section-subcopy" style={{ marginBottom: 0 }}>
-              Helpful reading for safer medicine routines, prescription prep, and smarter refills.
+              Short guidance for prescription, interaction-check, and refill workflows.
             </p>
           </div>
           <Link className="sf-link" to="/account">
-            View all articles
+            Manage account
           </Link>
         </div>
         <div className="sf-blog-grid">

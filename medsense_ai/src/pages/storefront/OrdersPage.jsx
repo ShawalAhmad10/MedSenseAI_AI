@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Package, Loader2 } from 'lucide-react';
-import { getCustomerOrders } from '../../services/storefrontOrderService';
+import { getCustomerOrders, getOrderById } from '../../services/storefrontOrderService';
 import api from '../../services/api';
 
 export default function OrdersPage() {
@@ -29,8 +29,14 @@ export default function OrdersPage() {
         const ordersWithItems = await Promise.all(
           customerOrders.map(async (order) => {
             try {
-              const itemsRes = await api.get(`/orders/${order.invoice_id}`);
-              const orderData = itemsRes.data?.data || {};
+              const itemsRes =
+                await getOrderById(
+                  order.invoice_id,
+                  user.id,
+                  user.email,
+                  user.phone
+                );
+              const orderData = itemsRes.data || {};
               return {
                 ...order,
                 items: orderData.items || []

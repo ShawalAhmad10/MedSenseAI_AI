@@ -309,7 +309,10 @@ test('createOrder keeps stock allocation inside transaction rollback boundary', 
     scope.indexOf('STOCK_ALLOCATION_FAILED: product ');
 
   const commit =
-    scope.indexOf('await transaction.commit()');
+    scope.indexOf(
+      'await transaction.commit()',
+      allocationFailure
+    );
 
   const rollbackAfterFailure =
     scope.indexOf('await transaction.rollback()', allocationFailure);

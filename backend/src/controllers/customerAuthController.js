@@ -156,8 +156,7 @@ exports.register = async (req, res) => {
     console.error('Customer registration error:', error);
     res.status(500).json({
       success: false,
-      message: 'Registration failed',
-      error: error.message
+      message: 'Registration failed'
     });
   }
 };
@@ -235,8 +234,7 @@ exports.login = async (req, res) => {
     console.error('Customer login error:', error);
     res.status(500).json({
       success: false,
-      message: 'Login failed',
-      error: error.message
+      message: 'Login failed'
     });
   }
 };
@@ -275,8 +273,7 @@ exports.getProfile = async (req, res) => {
     console.error('Get customer profile error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch profile',
-      error: error.message
+      message: 'Failed to fetch profile'
     });
   }
 };
@@ -323,8 +320,7 @@ exports.updateProfile = async (req, res) => {
     console.error('Update customer profile error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to update profile',
-      error: error.message
+      message: 'Failed to update profile'
     });
   }
 };
@@ -382,8 +378,7 @@ exports.changePassword = async (req, res) => {
     console.error('Change password error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to change password',
-      error: error.message
+      message: 'Failed to change password'
     });
   }
 };
@@ -414,8 +409,7 @@ exports.listCustomers = async (req, res) => {
     console.error('List customer error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch customer',
-      error: error.message
+      message: 'Failed to fetch customer'
     });
   }
 };
@@ -478,8 +472,7 @@ exports.createCustomer = async (req, res) => {
     console.error('Create customer error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to create customer',
-      error: error.message
+      message: 'Failed to create customer'
     });
   }
 };
@@ -543,8 +536,7 @@ exports.updateCustomer = async (req, res) => {
     console.error('Update customer error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to update customer',
-      error: error.message
+      message: 'Failed to update customer'
     });
   }
 };

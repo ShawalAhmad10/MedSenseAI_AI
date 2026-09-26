@@ -63,20 +63,24 @@ function boundedText(
 }
 
 function normalizeCartInstanceId(value) {
-  if (
-    value === null ||
-    value === undefined
-  ) {
-    return null;
-  }
-
   const normalized =
     boundedText(
       value,
       128
     );
 
-  return normalized || null;
+  if (
+    !normalized ||
+    !/^(?:cart-safe-|buy-now-)[A-Za-z0-9-]{12,118}$/
+      .test(normalized)
+  ) {
+    throw consultationError(
+      'CONSULT_CART_INSTANCE_REQUIRED',
+      'A valid checkout safety lifecycle is required'
+    );
+  }
+
+  return normalized;
 }
 
 
@@ -1857,12 +1861,9 @@ async function consumeApprovedCheckout({
   }
 
   if (
-    consultation.cart_instance_id &&
-    (
-      !cartInstanceId ||
-      cartInstanceId !==
-        consultation.cart_instance_id
-    )
+    !consultation.cart_instance_id ||
+    cartInstanceId !==
+      consultation.cart_instance_id
   ) {
     throw consultationError(
       'CONSULT_APPROVAL_STALE',
@@ -1894,8 +1895,7 @@ async function consumeApprovedCheckout({
       source:
         'cart',
       cartInstanceId:
-        consultation.cart_instance_id ||
-        null,
+        cartInstanceId,
       ddiStatus:
         ddi.status,
       interactionDetails,

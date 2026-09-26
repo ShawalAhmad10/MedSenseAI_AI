@@ -9,6 +9,7 @@ import { getProductBySlug } from '../../services/storefrontProductService';
 import { getProductRecommendations } from '../../services/storefrontRecommendationService';
 import { trackFunnelEventOnce } from '../../services/storefrontFunnelService';
 import { useCart } from '../../context/CartContext';
+import { useAuth } from '../../context/AuthContext';
 import { startBuyNowCheckout } from '../../services/storefrontCheckoutSession';
 
 const tabs = ['Description', 'Usage', 'Side Effects', 'Interaction Info'];
@@ -17,6 +18,7 @@ export default function ProductPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const { addItem } = useCart();
+  const { isAuthenticated, user } = useAuth();
   const [product, setProduct] = useState(null);
   const [recommendation, setRecommendation] = useState(null);
   const [recommendationLoading, setRecommendationLoading] = useState(false);
@@ -198,7 +200,12 @@ export default function ProductPage() {
                 className="sf-button-secondary"
                 disabled={!product.stockQty || product.stockQty <= 0}
                 onClick={() => {
-                  startBuyNowCheckout(product);
+                  startBuyNowCheckout(
+                    product,
+                    isAuthenticated && user?.id
+                      ? user.id
+                      : null
+                  );
                   navigate('/checkout?mode=buy-now');
                 }}
                 style={{

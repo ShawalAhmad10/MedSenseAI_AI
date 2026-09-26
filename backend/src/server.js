@@ -138,10 +138,25 @@ app.use((req, res) => {
 // Global error handler
 app.use((err, req, res, next) => {
   console.error('Error:', err);
-  res.status(err.status || 500).json({
+
+  const status =
+    Number.isInteger(err?.status) &&
+    err.status >= 400 &&
+    err.status < 600
+      ? err.status
+      : 500;
+
+  const message =
+    status >= 500
+      ? 'Internal server error'
+      : (
+          err?.message ||
+          'Request failed'
+        );
+
+  res.status(status).json({
     success: false,
-    message: err.message || 'Internal server error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+    message,
   });
 });
 

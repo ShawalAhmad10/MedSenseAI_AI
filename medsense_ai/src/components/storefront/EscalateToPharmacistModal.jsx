@@ -19,7 +19,10 @@ export default function EscalateToPharmacistModal({
     openAuthModal,
   } = useAuth();
 
-  const { clearCart } = useCart();
+  const {
+    clearCart,
+    cartInstanceId,
+  } = useCart();
 
   const [requestState, setRequestState] =
     useState('idle');
@@ -67,6 +70,7 @@ export default function EscalateToPharmacistModal({
       const result =
         await createCartConsultation(
           items,
+          cartInstanceId,
           message
         );
 

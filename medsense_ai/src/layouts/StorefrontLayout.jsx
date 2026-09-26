@@ -2,8 +2,6 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import Navbar from '../components/storefront/Navbar';
 import Footer from '../components/storefront/Footer';
-import ChatWidget from '../components/storefront/ChatWidget';
-
 export default function StorefrontLayout() {
   return (
     <div className="storefront-app">
@@ -12,7 +10,6 @@ export default function StorefrontLayout() {
         <Outlet />
       </main>
       <Footer />
-      <ChatWidget />
     </div>
   );
 }

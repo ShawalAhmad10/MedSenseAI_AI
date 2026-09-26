@@ -7,7 +7,12 @@ const CUSTOMER_AUTH_KEY = 'medsense_customer_auth';
 function getCustomerToken() {
   try {
     const raw =
-      localStorage.getItem(CUSTOMER_AUTH_KEY);
+      sessionStorage.getItem(
+        CUSTOMER_AUTH_KEY
+      ) ||
+      localStorage.getItem(
+        CUSTOMER_AUTH_KEY
+      );
 
     if (!raw) {
       return null;

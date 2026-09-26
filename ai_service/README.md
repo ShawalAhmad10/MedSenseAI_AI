@@ -1,50 +1,126 @@
 # MedSenseAI AI Service
 
-Production-oriented foundation for MedSenseAI's independent Python service, including a deterministic pinned RxNorm CPC identity-ingestion boundary. It does **not** implement drug-interaction, recommendation, dosage, contraindication, or other medical decision logic.
+This directory contains the Python AI/runtime layer used by the integrated MedSenseAI FYP.
 
-## Safety boundary
+## Current Integrated Runtime
 
-Medical and safety-critical results must eventually come from verified structured sources and deterministic logic, with provenance attached. An absent result is unknown—not safe. LLM output is never authoritative medical data.
+The integrated application uses one operational PostgreSQL database:
 
-## Requirements
+`medsenseai_pharm`
 
-- Python 3.11+
+There is no separate operational AI database in the current application flow.
 
-## Local setup
+## Services
+
+### Main AI Service
+
+Application:
+
+`medsense_ai.main:app`
+
+Port:
+
+`8000`
+
+Health endpoint:
+
+`GET /api/v1/health`
+
+Current responsibilities include the integrated DDI and prescription/OCR workflows.
+
+### Lead Scoring Runtime
+
+Application:
+
+`medsense_ai.lead_runtime:app`
+
+Port:
+
+`8002`
+
+Health endpoint:
+
+`GET /api/v1/lead-runtime/health`
+
+The Express backend supplies application customer and order features to this runtime for inference.
+
+The current lead model was trained using synthetic-development commerce histories.
+
+Therefore the score is suitable for FYP/development demonstration and must not be described as a validated real-world conversion probability.
+
+### Historical Sales Demo Service
+
+`medsense_ai.sales_api:app`, historically run on port `8001`, is a synthetic-development demonstration service.
+
+It is not required by the current integrated application and should not be started during normal application runtime.
+
+## Database
+
+Current operational database:
+
+`medsenseai_pharm`
+
+Example configuration:
+
+```env
+MEDSENSE_DATABASE_URL=postgresql+psycopg://postgres:CHANGE_ME@localhost:5432/medsenseai_pharm
+MEDSENSE_API_PREFIX=/api/v1
+MEDSENSE_DDI_MODEL_DIR=artifacts/ddi/model
+MEDSENSE_DDI_KNOWN_INTERACTION_SOURCE=external/db_drug_interactions.csv
+```
+
+The PostgreSQL Python driver is supplied through:
+
+`psycopg[binary]>=3.2,<4.0`
+
+## Local Setup
 
 ```powershell
 python -m venv .venv
-.venv\Scripts\Activate.ps1
+.\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -e ".[test]"
 Copy-Item .env.example .env
 ```
 
-Configuration uses environment variables prefixed with `MEDSENSE_`. The local default is SQLite; set `MEDSENSE_DATABASE_URL` to a SQLAlchemy-compatible PostgreSQL URL when a PostgreSQL driver and deployment environment are introduced.
+Update the local `.env` with the correct PostgreSQL credentials before starting the service.
 
-## Run
-
-```powershell
-uvicorn medsense_ai.main:app --reload
-```
-
-The health endpoint is available at `GET /api/v1/health`. It reports `503 Service Unavailable` when database connectivity cannot be verified.
-
-## Test
+## Run Main AI Service
 
 ```powershell
-pytest
+$env:PYTHONPATH="src"
+python -m uvicorn medsense_ai.main:app --host 127.0.0.1 --port 8000
 ```
 
-## RxNorm CPC identity ingestion
+## Run Lead Runtime
 
-The administrative importer requires an exact release and a local extracted `RXNCONSO.RRF`; it never downloads data or selects a latest release.
+The lead model uses its dependency-compatible Python environment.
 
 ```powershell
-medsense-ingest-rxnorm-cpc --release "<exact-release>" --source-path "C:\path\to\RXNCONSO.RRF" --checksum "sha256:<file-checksum>"
+$env:PYTHONPATH="src"
+python -m uvicorn medsense_ai.lead_runtime:app --host 127.0.0.1 --port 8002
 ```
 
-See [docs/rxnorm-cpc-ingestion.md](docs/rxnorm-cpc-ingestion.md) before obtaining or importing a release. The repository's test fixture only mimics the documented row structure with synthetic identifiers and names; it is not medical data.
+## Safety Boundary
 
-See [docs/architecture.md](docs/architecture.md) for package responsibilities and intentionally deferred work.
-The provenance and normalized medical-data schema is documented in [docs/medical-data-foundation.md](docs/medical-data-foundation.md).
+DDI and OCR features are FYP decision-support workflows.
+
+An absent or unresolved interaction result must not be interpreted as proof of safety.
+
+OCR output remains subject to human review and correction.
+
+The lead-scoring model has explicit synthetic-development training provenance.
+
+## Historical Documentation
+
+Files under `docs/` include engineering reports from earlier project stages.
+
+Some historical documents describe SQLite, synthetic-only DDI, or features that had not yet been integrated at the time they were written.
+
+Those files are retained as development evidence.
+
+For the current integrated architecture use:
+
+- repository root `README.md`
+- repository root `CURRENT_SYSTEM_STATUS.md`
+- this `ai_service/README.md`

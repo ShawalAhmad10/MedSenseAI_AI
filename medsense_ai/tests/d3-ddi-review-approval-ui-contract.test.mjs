@@ -136,9 +136,23 @@ test(
       /cart_instance_id/
     );
 
-    assert.match(
+    // Consultation safety must use the dedicated cart lifecycle,
+    // never observational funnel telemetry identity.
+    assert.doesNotMatch(
       consultService,
       /getFunnelCartId/
+    );
+
+    // Clearing invalidates the rejected safety lifecycle.
+    assert.match(
+      cartContext,
+      /clearStoredCartInstanceId/
+    );
+
+    // A later add to the empty cart starts a fresh safety lifecycle.
+    assert.match(
+      cartContext,
+      /startFreshCartInstanceId/
     );
 
     assert.match(

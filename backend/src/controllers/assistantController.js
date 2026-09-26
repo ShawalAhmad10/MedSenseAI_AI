@@ -27,6 +27,7 @@ function statusFor(error) {
     [
       'ASSISTANT_MODEL_UNAVAILABLE',
       'ASSISTANT_MODEL_INVALID_RESPONSE',
+      'ASSISTANT_CLASSIFIER_INVALID_RESPONSE',
     ].includes(
       error?.code
     )

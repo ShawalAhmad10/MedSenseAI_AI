@@ -1,12 +1,9 @@
 import axios from 'axios';
 
-import {
-  getFunnelCartId,
-} from './storefrontFunnelService';
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
-  'http://localhost:5005/api';
+  '/api';
 
 const CUSTOMER_AUTH_KEY =
   'medsense_customer_auth';
@@ -78,6 +75,32 @@ function normalizeProductId(value) {
   return parsed;
 }
 
+function normalizeCartInstanceId(
+  value
+) {
+  const normalized =
+    typeof value === 'string'
+      ? value.trim()
+      : '';
+
+  if (
+    !/^cart-safe-[A-Za-z0-9-]{12,118}$/
+      .test(normalized)
+  ) {
+    const error =
+      new Error(
+        'A valid cart safety lifecycle is required'
+      );
+
+    error.code =
+      'CONSULT_CART_INSTANCE_REQUIRED';
+
+    throw error;
+  }
+
+  return normalized;
+}
+
 function normalizeCartItems(items) {
   if (
     !Array.isArray(items) ||
@@ -135,6 +158,7 @@ function normalizeCartItems(items) {
 
 export async function createCartConsultation(
   items,
+  cartInstanceId,
   customerMessage = ''
 ) {
   const payload = {
@@ -142,7 +166,9 @@ export async function createCartConsultation(
       'cart',
 
     cart_instance_id:
-      getFunnelCartId(),
+      normalizeCartInstanceId(
+        cartInstanceId
+      ),
 
     items:
       normalizeCartItems(

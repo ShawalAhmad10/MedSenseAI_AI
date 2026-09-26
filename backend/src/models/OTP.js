@@ -1,4 +1,5 @@
 // src/models/OTP.js
+const { randomInt } = require('crypto');
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
 
@@ -52,7 +53,7 @@ OTP.prototype.isValid = function () {
 
 // Class method to generate 6-digit OTP
 OTP.generateOTP = function () {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return randomInt(100000, 1000000).toString();
 };
 
 module.exports = OTP;

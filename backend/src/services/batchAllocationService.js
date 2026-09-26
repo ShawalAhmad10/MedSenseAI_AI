@@ -19,7 +19,25 @@ class BatchAllocationService {
    * @returns {Promise<Array>} Array of batch allocations
    * @throws {Error} If insufficient stock or all stock_history expired
    */
-  static async allocateBatchesForSale(productId, requestedQty) {
+  static async allocateBatchesForSale(
+    productId,
+    requestedQty,
+    transaction
+  ) {
+    if (!transaction) {
+      const error =
+        new Error(
+          'Sale stock allocation requires an active transaction'
+        );
+
+      error.code =
+        'STOCK_ALLOCATION_TRANSACTION_REQUIRED';
+
+      throw error;
+    }
+
+    // Lock available batches inside the sale transaction.
+    // The locks remain held until commit/rollback.
     // Get available stock_history sorted by FEFO then FIFO
     const stock_history = await StockHistory.findAll({
       where: {
@@ -32,7 +50,9 @@ class BatchAllocationService {
         ['expiry_date', 'ASC'],   // Nearest expiry first (FEFO)
         ['created_at', 'ASC'],     // Older batch first (FIFO)
         ['batch_number', 'ASC']    // Tiebreaker
-      ]
+      ],
+      transaction,
+      lock: true
     });
 
     if (stock_history.length === 0) {
@@ -80,7 +100,14 @@ class BatchAllocationService {
   static async deductBatches(allocations, referenceData, transaction) {
     for (const alloc of allocations) {
       // Update batch quantity
-      const batch = await StockHistory.findByPk(alloc.batch_id, { transaction });
+      const batch =
+        await StockHistory.findByPk(
+          alloc.batch_id,
+          {
+            transaction,
+            lock: true
+          }
+        );
       
       if (!batch) {
         throw new Error(`StockHistory ${alloc.batch_id} not found`);

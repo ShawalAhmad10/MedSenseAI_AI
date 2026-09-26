@@ -291,6 +291,15 @@ export default function LeadScoring() {
           err,
         );
 
+        setLeads([]);
+
+        setRuntimeMeta({
+          refreshMode: null,
+          persistedScores: false,
+        });
+
+        setLastRefresh(null);
+
         setError(
           err?.response?.data?.message ||
             'Lead scoring data is currently unavailable.',

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5005/api/suppliers';
+const API_URL = '/api/suppliers';
 const AUTH_KEY = 'medsense_auth_user';
 
 // Get auth token from localStorage or sessionStorage

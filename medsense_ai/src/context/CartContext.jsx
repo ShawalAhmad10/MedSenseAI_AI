@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { checkCartDDI, extractDdiWarnings } from '../services/storefrontDdiService';
 import {
@@ -6,30 +6,21 @@ import {
   trackFunnelEvent,
 } from '../services/storefrontFunnelService';
 import { useAuth } from './AuthContext';
+import {
+  cartInstanceStorageKey,
+  cartStorageKey,
+  clearStoredCartInstanceId,
+  ensureStoredCartInstanceId,
+  mergeGuestCartIntoAccount,
+  readStoredCart,
+  readStoredCartInstanceId,
+  startFreshCartInstanceId,
+  writeStoredCart,
+} from '../services/storefrontCartStorage';
 
 const CartContext = createContext(null);
 
-const CART_KEY_PREFIX = 'medsense_storefront_cart_v3_';
 const API_URL = '/api/products';
-
-function getStoredCart(userId) {
-  try {
-    const key = userId ? `${CART_KEY_PREFIX}${userId}` : `${CART_KEY_PREFIX}guest`;
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveCart(userId, items) {
-  try {
-    const key = userId ? `${CART_KEY_PREFIX}${userId}` : `${CART_KEY_PREFIX}guest`;
-    localStorage.setItem(key, JSON.stringify(items));
-  } catch (err) {
-    console.error('Failed to save cart:', err);
-  }
-}
 
 function clearOldGuestCarts() {
   try {
@@ -55,29 +46,147 @@ function buildCartIdentity(items, userId) {
 export function CartProvider({ children }) {
   const { user, isAuthenticated } = useAuth();
   const userId = user?.id;
-  
+
+  const cartOwner =
+    userId
+      ? String(userId)
+      : 'guest';
+
+  const [loadedOwner, setLoadedOwner] =
+    useState(cartOwner);
+
   const [items, setItems] = useState(() => {
     clearOldGuestCarts();
-    return getStoredCart(userId);
+    return readStoredCart(userId);
   });
+
+  const [
+    cartInstanceId,
+    setCartInstanceId,
+  ] = useState(() =>
+    items.length > 0
+      ? ensureStoredCartInstanceId(
+          userId
+        )
+      : null
+  );
+
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [ddiResult, setDdiResult] = useState(null);
   const [ddiLoading, setDdiLoading] = useState(false);
   const [ddiError, setDdiError] = useState(null);
   const [ddiIdentity, setDdiIdentity] = useState(null);
 
-  const cartIdentity = useMemo(() => buildCartIdentity(items, userId), [items, userId]);
+  const cartIdentity = useMemo(
+    () => buildCartIdentity(items, userId),
+    [items, userId]
+  );
 
-  // Load cart when user changes (login/logout)
+  // Swap account carts before the new account is painted.
+  // Never write the previous owner's in-memory cart under the new owner.
+  useLayoutEffect(() => {
+    if (loadedOwner === cartOwner) {
+      return;
+    }
+
+    const nextItems =
+      readStoredCart(
+        userId
+      );
+
+    setItems(
+      nextItems
+    );
+
+    setCartInstanceId(
+      nextItems.length > 0
+        ? ensureStoredCartInstanceId(
+            userId
+          )
+        : null
+    );
+
+    setLoadedOwner(
+      cartOwner
+    );
+  }, [
+    cartOwner,
+    loadedOwner,
+    userId,
+  ]);
+
+  // Persist only when the rendered state belongs to the current owner.
   useEffect(() => {
-    const newCart = getStoredCart(userId);
-    setItems(newCart);
+    if (loadedOwner !== cartOwner) {
+      return;
+    }
+
+    writeStoredCart(
+      userId,
+      items
+    );
+  }, [
+    cartOwner,
+    loadedOwner,
+    userId,
+    items,
+  ]);
+
+  // localStorage is shared across tabs. Keep an already-open tab aligned
+  // with cart changes made by another tab for the same customer.
+  useEffect(() => {
+    const cartKey =
+      cartStorageKey(
+        userId
+      );
+
+    const lifecycleKey =
+      cartInstanceStorageKey(
+        userId
+      );
+
+    const handleStorage =
+      (event) => {
+        if (
+          event.storageArea !== localStorage ||
+          (
+            event.key !== cartKey &&
+            event.key !== lifecycleKey
+          )
+        ) {
+          return;
+        }
+
+        const storedItems =
+          readStoredCart(
+            userId
+          );
+
+        setItems(
+          storedItems
+        );
+
+        setCartInstanceId(
+          storedItems.length > 0
+            ? readStoredCartInstanceId(
+                userId
+              )
+            : null
+        );
+      };
+
+    window.addEventListener(
+      'storage',
+      handleStorage
+    );
+
+    return () => {
+      window.removeEventListener(
+        'storage',
+        handleStorage
+      );
+    };
   }, [userId]);
-
-  // Save cart whenever items change
-  useEffect(() => {
-    saveCart(userId, items);
-  }, [userId, items]);
 
   // Authoritative DDI review whenever cart identity changes.
   // Product salts/status are reloaded by Express from PostgreSQL.
@@ -153,13 +262,6 @@ export function CartProvider({ children }) {
 
   const addItem = async (item) => {
     try {
-      // An empty cart starts a fresh cart lifecycle.
-      // This prevents an old rejected review from binding
-      // medicines added after the cart was emptied.
-      if (items.length === 0) {
-        resetFunnelCartId();
-      }
-
       // Fetch live stock before adding
       const liveStock = await fetchLiveStock(item.id);
       const currentStock = liveStock !== null ? liveStock : (item.stockQty ?? 0);
@@ -176,6 +278,23 @@ export function CartProvider({ children }) {
       if (newCartQty > currentStock) {
         alert(`Cannot add more of ${item.name || item.title}. Only ${currentStock} units available.`);
         return;
+      }
+
+      // Only after the add has passed validation should an empty cart
+      // begin a new safety lifecycle.
+      if (items.length === 0) {
+        const freshCartInstanceId =
+          startFreshCartInstanceId(
+            userId
+          );
+
+        setCartInstanceId(
+          freshCartInstanceId
+        );
+
+        // Funnel telemetry may also begin a fresh observational cart,
+        // but it is not used as the safety lifecycle identity.
+        resetFunnelCartId();
       }
 
       // Update item with fresh stockQty so cart badge is accurate
@@ -219,6 +338,16 @@ export function CartProvider({ children }) {
           1,
           Number(currentItem.quantity) || 1
         );
+
+      if (items.length === 1) {
+        clearStoredCartInstanceId(
+          userId
+        );
+
+        setCartInstanceId(
+          null
+        );
+      }
 
       setItems(
         (current) =>
@@ -299,43 +428,80 @@ export function CartProvider({ children }) {
 
   const clearCart = () => {
     setItems([]);
-    saveCart(userId, []);
+
+    writeStoredCart(
+      userId,
+      []
+    );
+
+    clearStoredCartInstanceId(
+      userId
+    );
+
+    setCartInstanceId(
+      null
+    );
+
     resetFunnelCartId();
   };
 
-  // Merge guest cart to account cart when user logs in
-  const mergeGuestCartToAccount = () => {
+  // Merge into the identity returned by the successful auth response.
+  // Do not depend on this render's possibly-stale userId closure.
+  const mergeGuestCartToAccount = (
+    targetUserId = userId
+  ) => {
     try {
-      if (!userId) return; // Only merge if user is logged in
-      
-      const guestCart = getStoredCart(null); // Get guest cart
-      const accountCart = getStoredCart(userId); // Get account cart
-      
-      if (guestCart.length === 0) return; // Nothing to merge
-      
-      // Merge carts - combine quantities for duplicate items
-      const mergedCart = [...accountCart];
-      guestCart.forEach(guestItem => {
-        const existingIndex = mergedCart.findIndex(item => item.id === guestItem.id);
-        if (existingIndex >= 0) {
-          // Item exists, add quantities (respecting stock limits)
-          const newQty = mergedCart[existingIndex].quantity + guestItem.quantity;
-          const maxQty = guestItem.stockQty || 999;
-          mergedCart[existingIndex].quantity = Math.min(newQty, maxQty);
-        } else {
-          // New item, add to cart
-          mergedCart.push(guestItem);
-        }
-      });
-      
-      // Save merged cart and update state
-      setItems(mergedCart);
-      saveCart(userId, mergedCart);
-      
-      // Clear guest cart
-      localStorage.removeItem(`${CART_KEY_PREFIX}guest`);
+      if (!targetUserId) {
+        return null;
+      }
+
+      const mergedCart =
+        mergeGuestCartIntoAccount(
+          targetUserId
+        );
+
+      if (!mergedCart) {
+        return null;
+      }
+
+      // The merged medicine set starts a fresh safety lifecycle
+      // owned by the authenticated account.
+      clearStoredCartInstanceId(
+        null
+      );
+
+      const mergedCartInstanceId =
+        startFreshCartInstanceId(
+          targetUserId
+        );
+
+      // Funnel telemetry is observational and rotates independently.
+      resetFunnelCartId();
+
+      // Usually the owner switch effect will load the merged cart.
+      // If context is already on that owner, update immediately.
+      if (
+        userId &&
+        String(userId) ===
+          String(targetUserId)
+      ) {
+        setItems(
+          mergedCart
+        );
+
+        setCartInstanceId(
+          mergedCartInstanceId
+        );
+      }
+
+      return mergedCart;
     } catch (error) {
-      console.error('Error merging guest cart:', error);
+      console.error(
+        'Error merging guest cart:',
+        error
+      );
+
+      return null;
     }
   };
 
@@ -357,6 +523,7 @@ export function CartProvider({ children }) {
   const value = useMemo(
     () => ({
       items,
+      cartInstanceId,
       addItem,
       removeItem,
       updateQuantity,
@@ -374,7 +541,7 @@ export function CartProvider({ children }) {
       openDrawer: () => setDrawerOpen(true),
       closeDrawer: () => setDrawerOpen(false),
     }),
-    [ddiCheckoutAllowed, ddiError, ddiLoading, ddiResult, ddiWarnings, drawerOpen, items, prescriptionItems, subtotal, userId],
+    [cartInstanceId, ddiCheckoutAllowed, ddiError, ddiLoading, ddiResult, ddiWarnings, drawerOpen, items, prescriptionItems, subtotal, userId],
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

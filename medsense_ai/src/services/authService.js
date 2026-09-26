@@ -100,8 +100,17 @@ export const authService = {
   verifyOtp:      (email, otp) =>
     api.post('/auth/pharmacist/verify-otp',     { email, otp }).then(r => r.data),
 
-  selectPlan:     (plan, billing, email, pharmacyName) =>
-    api.post('/auth/pharmacist/select-plan',    { plan, billing, email, pharmacyName }).then(r => r.data),
+  selectPlan:     (plan, billing, registrationToken) =>
+    api.post(
+      '/auth/pharmacist/select-plan',
+      { plan, billing },
+      {
+        headers: {
+          Authorization:
+            'Bearer ' + registrationToken,
+        },
+      }
+    ).then(r => r.data),
 
   forgotPassword: (email) =>
     api.post('/auth/pharmacist/forgot-password',{ email }).then(r => r.data),
@@ -121,8 +130,16 @@ export const authService = {
       }
     ).then(r => r.data),
 
-  checkApprovalStatus: (email) =>
-    api.get('/auth/pharmacist/status',          { params: { email } }).then(r => r.data),
+  checkApprovalStatus: (token) =>
+    api.get(
+      '/auth/pharmacist/status',
+      {
+        headers: {
+          Authorization:
+            'Bearer ' + token,
+        },
+      }
+    ).then(r => r.data),
 
   googleLogin:    (accessToken) =>
     api.post('/auth/pharmacist/google',         { accessToken }).then(r => r.data),

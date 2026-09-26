@@ -2,14 +2,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { getCustomerOrders } from '../../services/storefrontOrderService';
+import { getCustomerOrders, getOrderById } from '../../services/storefrontOrderService';
 import axios from 'axios';
 import {
   Package, RotateCcw, CheckCircle, Clock, XCircle,
   ChevronDown, ChevronUp, AlertCircle, ArrowLeft, Loader2
 } from 'lucide-react';
 
-const API = 'http://localhost:5005/api';
+const API = '/api';
 
 function daysSince(dateStr) {
   const d = new Date(dateStr);
@@ -66,8 +66,20 @@ export default function RefundPage() {
       // Fetch items for each eligible order
       const withItems = await Promise.all(eligible.map(async o => {
         try {
-          const r = await axios.get(`${API}/orders/${o.invoice_id}`);
-          return { ...o, items: r.data?.data?.items || [] };
+          const r =
+            await getOrderById(
+              o.invoice_id,
+              user.id,
+              user.email,
+              user.phone
+            );
+
+          return {
+            ...o,
+            items:
+              r.data?.items ||
+              []
+          };
         } catch { return { ...o, items: [] }; }
       }));
       setOrders(withItems);

@@ -13,92 +13,128 @@ export const categories = [
 ];
 
 export const trustHighlights = [
-  { title: 'Genuine Medicines', detail: 'Licensed sourcing with quality checks.', icon: 'BadgeCheck' },
-  { title: 'Fast Delivery', detail: 'Same-day delivery in select zones.', icon: 'Truck' },
-  { title: 'Secure Payments', detail: 'UPI, cards and cash-on-delivery.', icon: 'ShieldCheck' },
-  { title: 'Expert Support', detail: 'Help from trained pharmacy teams.', icon: 'Stethoscope' },
+  {
+    title: 'Live Catalogue',
+    detail: 'Browse products from the current pharmacy catalogue.',
+    icon: 'BadgeCheck',
+  },
+  {
+    title: 'DDI-Aware Checkout',
+    detail: 'Cart medicines pass through the governed interaction workflow.',
+    icon: 'ShieldCheck',
+  },
+  {
+    title: 'Prescription OCR',
+    detail: 'Upload prescription images and review OCR results before confirmation.',
+    icon: 'Microscope',
+  },
+  {
+    title: 'Pharmacist Support',
+    detail: 'Cases that require review can enter the pharmacist workflow.',
+    icon: 'Stethoscope',
+  },
 ];
 
 export const services = [
-  { title: 'Doctor Consultation', blurb: 'Book online consults for quick follow-ups and prescription renewals.', icon: 'Stethoscope', href: '/account' },
-  { title: 'Lab Tests at Home', blurb: 'Schedule doorstep sample collection with verified lab partners.', icon: 'Microscope', href: '/account' },
-  { title: 'Medicine Reminder', blurb: 'Set dose reminders and refill nudges before your course runs out.', icon: 'BellRing', href: '/refills' },
-  { title: 'Full Body Checkup', blurb: 'Explore preventive health packages curated by age and lifestyle.', icon: 'HeartPulse', href: '/account' },
+  {
+    title: 'Prescription OCR',
+    blurb: 'Upload a prescription image, review extracted medicine evidence, and confirm the result.',
+    icon: 'Microscope',
+    href: '/prescription/upload',
+  },
+  {
+    title: 'Refill Reminders',
+    blurb: 'Review refill reminders associated with your recorded medicine and order history.',
+    icon: 'BellRing',
+    href: '/refills',
+  },
+  {
+    title: 'Pharmacist Review',
+    blurb: 'Request pharmacist guidance when the governed workflow requires additional review.',
+    icon: 'Stethoscope',
+    href: '/consult/pharmacist',
+  },
+  {
+    title: 'Order Tracking',
+    blurb: 'Review your recorded pharmacy orders and their current application status.',
+    icon: 'ShieldCheck',
+    href: '/orders',
+  },
 ];
 
 export const trustBadges = [
-  'Licensed Pharmacy',
-  'Pan India Delivery',
-  '100% Genuine Products',
-  'Easy & Secure Checkout',
+  'Catalogue-backed products',
+  'DDI-aware checkout',
+  'Prescription OCR review',
+  'Pharmacist review workflow',
 ];
 
 export const shoppingSteps = [
   {
-    title: 'Search with intent',
-    detail: 'Browse medicines, wellness, and everyday care without a login wall or cluttered menus.',
+    title: 'Browse the catalogue',
+    detail: 'Explore medicines and product information from the current pharmacy catalogue.',
     eyebrow: 'Step 01',
   },
   {
-    title: 'Review safely',
-    detail: 'Check product details, dosage notes, and prescription requirements before adding to cart.',
+    title: 'Review your selection',
+    detail: 'Check product details, prescription requirements, and selected cart items.',
     eyebrow: 'Step 02',
   },
   {
-    title: 'Checkout with support',
-    detail: 'Sign in only when needed, then complete payment with pharmacist-aware safety checks.',
+    title: 'Complete governed checkout',
+    detail: 'Checkout preserves drug-interaction checks and pharmacist review when required.',
     eyebrow: 'Step 03',
   },
 ];
 
 export const curatedCollections = [
   {
-    title: 'Daily wellness picks',
-    description: 'Low-maintenance essentials for immunity, energy, and routine preventive care.',
-    href: '/category/vitamins',
-    cta: 'Explore wellness',
-    stats: '18 products',
+    title: 'Browse medicines',
+    description: 'Search the current pharmacy catalogue and review available product information.',
+    href: '/search',
+    cta: 'Open catalogue',
+    stats: 'Catalogue',
   },
   {
-    title: 'Family medicine cabinet',
-    description: 'Everyday recovery basics for headaches, fever, seasonal issues, and gentle home care.',
-    href: '/category/pain-relief',
-    cta: 'Build your basics',
-    stats: '24 products',
+    title: 'Upload a prescription',
+    description: 'Run the prescription OCR workflow and review extracted evidence before confirming it.',
+    href: '/prescription/upload',
+    cta: 'Upload prescription',
+    stats: 'OCR',
   },
   {
-    title: 'Sensitive care essentials',
-    description: 'Thoughtfully selected baby, skin, and digestive support items with clearer guidance.',
-    href: '/category/baby-care',
-    cta: 'View gentle care',
-    stats: '12 products',
+    title: 'Review refill reminders',
+    description: 'Open the refill workflow and review reminders associated with your medicine history.',
+    href: '/refills',
+    cta: 'View refills',
+    stats: 'Reminders',
   },
 ];
 
 export const blogPosts = [
   {
-    slug: 'smart-medicine-storage-at-home',
-    category: 'Care Tips',
-    title: 'How to store medicines at home without reducing their effectiveness',
-    excerpt: 'A practical guide to heat, humidity, expiry labels, and safe placement in family homes.',
-    readTime: '4 min read',
-    publishedAt: 'August 6, 2026',
+    slug: 'prescription-ocr-review',
+    category: 'Prescription Workflow',
+    title: 'Review OCR evidence before confirming a prescription',
+    excerpt: 'OCR output remains subject to review before downstream use.',
+    readTime: 'Review workflow',
+    publishedAt: 'Prescription guidance',
   },
   {
-    slug: 'when-to-upload-a-prescription',
-    category: 'Prescription Help',
-    title: 'When to upload a prescription before checkout and when you can shop directly',
-    excerpt: 'A simple breakdown of OTC vs prescription-only shopping so checkout feels predictable.',
-    readTime: '5 min read',
-    publishedAt: 'August 4, 2026',
+    slug: 'ddi-checkout-review',
+    category: 'DDI Workflow',
+    title: 'What happens when a cart needs interaction review',
+    excerpt: 'The checkout workflow preserves governed drug-interaction checks and escalation when required.',
+    readTime: 'Safety workflow',
+    publishedAt: 'Checkout guidance',
   },
   {
-    slug: 'refill-routines-that-prevent-missed-doses',
-    category: 'Refill Planning',
-    title: 'Refill routines that help prevent missed doses during busy weeks',
-    excerpt: 'Set up reminders, reorder windows, and household habits that make long courses easier to follow.',
-    readTime: '3 min read',
-    publishedAt: 'August 1, 2026',
+    slug: 'refill-reminders',
+    category: 'Refill Workflow',
+    title: 'Review refill reminders from your medicine history',
+    excerpt: 'Refill reminders surface recorded medicines that may require attention without altering prescriptions.',
+    readTime: 'Reminder workflow',
+    publishedAt: 'Account guidance',
   },
 ];
 
@@ -298,9 +334,9 @@ export const mockProducts = [
 ];
 
 export const heroStats = [
-  { label: 'Orders delivered', value: '50k+' },
-  { label: 'Partner pharmacists', value: '120+' },
-  { label: 'Average fulfillment', value: '45 min' },
+  { label: 'Catalogue', value: 'Live' },
+  { label: 'Cart safety', value: 'DDI' },
+  { label: 'Prescription review', value: 'OCR' },
 ];
 
 export const refillAlerts = [

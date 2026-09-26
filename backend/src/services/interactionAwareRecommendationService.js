@@ -259,6 +259,7 @@ async function loadProductsByIds(
         LEFT JOIN stock_history sh
           ON sh.product_id =
              p.product_id
+         AND sh.status = 1
 
         WHERE
           p.product_status = 1

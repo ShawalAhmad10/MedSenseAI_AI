@@ -1,6 +1,6 @@
 // src/pages/auth/PendingApproval.jsx
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Clock, Check, FileSearch, ShieldCheck, Mail, RefreshCw, LogOut } from 'lucide-react';
 import Button from '../../components/common/Button';
@@ -10,32 +10,78 @@ import { authService } from '../../services/authService';
 
 export default function PendingApproval() {
   const { user, logout } = usePharmacistAuth();
-  const location = useLocation();
+
   const [isChecking, setIsChecking] = useState(false);
   const navigate = useNavigate();
   const { showToast } = useToast();
 
   // Support Google users who don't have a token yet — email passed via navigate state
-  const email = user?.email || location.state?.email || 'your email address';
-  const lookupEmail = user?.email || location.state?.email;
+  const email =
+    user?.email ||
+    'your email address';
+
+  const statusToken =
+    user?.token || null;
 
   useEffect(() => {
-    if (!lookupEmail) return;
-    const interval = setInterval(async () => {
-      try {
-        const result = await authService.checkApprovalStatus(lookupEmail);
-        if (result?.isApproved) navigate('/pharmacist/dashboard');
-      } catch (e) {
-        // silent fail for polling
-      }
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [navigate, lookupEmail]);
+    if (!statusToken) {
+      navigate(
+        '/pharmacist/login',
+        { replace: true }
+      );
+      return;
+    }
+
+    const interval =
+      setInterval(
+        async () => {
+          try {
+            const result =
+              await authService
+                .checkApprovalStatus(
+                  statusToken
+                );
+
+            if (
+              result?.isApproved
+            ) {
+              navigate(
+                '/pharmacist/dashboard'
+              );
+            }
+          } catch {
+            // Polling stays silent.
+          }
+        },
+        30000
+      );
+
+    return () =>
+      clearInterval(
+        interval
+      );
+  }, [
+    navigate,
+    statusToken
+  ]);
 
   async function checkStatus() {
     setIsChecking(true);
     try {
-      const result = await authService.checkApprovalStatus(lookupEmail);
+      if (!statusToken) {
+        navigate(
+          '/pharmacist/login',
+          { replace: true }
+        );
+        return;
+      }
+
+      const result =
+        await authService
+          .checkApprovalStatus(
+            statusToken
+          );
+
       if (result?.isApproved) {
         navigate('/pharmacist/dashboard');
       } else {
@@ -59,12 +105,12 @@ export default function PendingApproval() {
       minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem',
       background: 'var(--off-white)', position: 'relative', overflow: 'hidden'
     }}>
-      
+
       {/* Background pattern */}
       <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(var(--gray-200) 1px, transparent 1px)', backgroundSize: '32px 32px', opacity: 0.5, zIndex: 0 }} />
 
       <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', maxWidth: 440 }}>
-        
+
         {/* HERO ILLUSTRATION */}
         <div style={{ position: 'relative', width: 120, height: 120, marginBottom: '2rem' }}>
           <div style={{
@@ -75,7 +121,7 @@ export default function PendingApproval() {
             <motion.div animate={{ rotate: 360 }} transition={{ duration: 8, repeat: Infinity, ease: 'linear' }} style={{ position: 'absolute', width: 2, height: 45, background: 'var(--blue)', borderRadius: 1, transformOrigin: 'bottom', bottom: '50%' }} />
             <div style={{ position: 'absolute', width: 10, height: 10, background: 'var(--navy)', borderRadius: '50%' }} />
           </div>
-          
+
           {/* Orbiting dots */}
           <motion.div animate={{ rotate: [0, 360] }} transition={{ duration: 3, repeat: Infinity, ease: 'linear' }} style={{ position: 'absolute', inset: -20, pointerEvents: 'none' }}>
              <div style={{ width: 8, height: 8, background: 'var(--blue)', borderRadius: '50%', position: 'absolute', top: 0, left: '50%', transform: 'translate(-50%, -50%)' }} />
@@ -106,7 +152,7 @@ export default function PendingApproval() {
           {/* CHECKLIST */}
           <div style={{ background: 'white', border: '1px solid var(--gray-200)', borderRadius: 16, padding: '1.5rem', width: '100%', marginBottom: '2rem', boxShadow: 'var(--shadow-card)' }}>
             <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: '0.9rem', marginBottom: '1.5rem', color: 'var(--navy)' }}>What happens next</h3>
-            
+
             <div style={{ position: 'relative' }}>
               {checklistItems.map((item, i) => (
                 <motion.div
@@ -135,11 +181,11 @@ export default function PendingApproval() {
 
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center' }}>
             <Button variant="primary" icon={RefreshCw} onClick={checkStatus} loading={isChecking} style={{ width: '100%' }}>Check Approval Status</Button>
-            
+
             <a href="mailto:support@medsenseai.com" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: 'var(--gray-600)', fontSize: '0.85rem', textDecoration: 'none' }}>
               <Mail size={14} /> Need help? Contact support →
             </a>
-            
+
             <button onClick={logout} style={{ background: 'none', border: 'none', color: 'var(--gray-400)', fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '1rem' }}>
               <LogOut size={12} /> Sign out and use different account
             </button>

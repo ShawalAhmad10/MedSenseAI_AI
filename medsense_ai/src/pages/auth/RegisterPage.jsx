@@ -73,6 +73,10 @@ export default function RegisterPage() {
   const [billing, setBilling] = useState('monthly');
   const [isSelectingPlan, setIsSelectingPlan] = useState(false);
 
+  // Temporary JWT used only to authorize the post-OTP
+  // plan selection. Never persisted as a login session.
+  const [registrationToken, setRegistrationToken] = useState(null);
+
   const steps = [
     { label: 'Account' },
     { label: 'Profile' },
@@ -299,7 +303,25 @@ export default function RegisterPage() {
     if (code.length !== 6) return;
     setIsVerifying(true);
     try {
-      await authService.verifyOtp(email, code);
+      const result =
+        await authService.verifyOtp(
+          email,
+          code
+        );
+
+      const verifiedToken =
+        result?.data?.token;
+
+      if (!verifiedToken) {
+        throw new Error(
+          'Verification succeeded without a registration token.'
+        );
+      }
+
+      setRegistrationToken(
+        verifiedToken
+      );
+
       setIsVerified(true);
       showToast({ type: 'success', message: 'Email verified! Account approved.' });
       setTimeout(() => {
@@ -317,7 +339,20 @@ export default function RegisterPage() {
   async function handleSelectPlan() {
     setIsSelectingPlan(true);
     try {
-      await authService.selectPlan(selectedPlan, billing, email, pharmacyName);
+      if (!registrationToken) {
+        throw new Error(
+          'Registration authorization is missing. Please log in to continue.'
+        );
+      }
+
+      await authService.selectPlan(
+        selectedPlan,
+        billing,
+        registrationToken
+      );
+
+      setRegistrationToken(null);
+
       showToast({ type: 'success', message: 'Account ready! Please log in.' });
       navigate('/pharmacist/login');
     } catch (e) {

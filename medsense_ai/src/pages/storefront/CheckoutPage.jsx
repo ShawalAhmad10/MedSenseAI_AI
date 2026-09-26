@@ -9,7 +9,7 @@ import { createOrder } from '../../services/storefrontOrderService';
 import { getCustomerDetails } from '../../services/customerService';
 import { getFunnelContext, resetFunnelCartId, trackFunnelEventOnce } from '../../services/storefrontFunnelService';
 import { checkCartDDI, extractDdiWarnings, getDdiPresentation } from '../../services/storefrontDdiService';
-import { clearBuyNowCheckout, getBuyNowCheckoutItems } from '../../services/storefrontCheckoutSession';
+import { clearBuyNowCheckout, getBuyNowCheckoutSession } from '../../services/storefrontCheckoutSession';
 
 const steps = ['address', 'prescription', 'payment', 'review'];
 
@@ -41,6 +41,7 @@ export default function CheckoutPage() {
   const { isAuthenticated, openAuthModal, user } = useAuth();
   const {
     clearCart,
+    cartInstanceId,
     items: cartItems,
     prescriptionItems: cartPrescriptionItems,
     subtotal: cartSubtotal,
@@ -51,9 +52,41 @@ export default function CheckoutPage() {
     ddiCheckoutAllowed: cartDdiCheckoutAllowed,
   } = useCart();
 
-  const [buyNowItems] = useState(() =>
-    checkoutMode === 'BUY_NOW' ? getBuyNowCheckoutItems() : [],
+  const buyNowOwnerId =
+    isAuthenticated && user?.id
+      ? user.id
+      : null;
+
+  const buyNowOwnerScope =
+    buyNowOwnerId
+      ? String(buyNowOwnerId)
+      : 'guest';
+
+  const [
+    buyNowSession,
+    setBuyNowSession,
+  ] = useState(() =>
+    checkoutMode === 'BUY_NOW'
+      ? getBuyNowCheckoutSession(
+          buyNowOwnerId
+        )
+      : null
   );
+
+  const activeBuyNowSession =
+    checkoutMode === 'BUY_NOW' &&
+    buyNowSession?.ownerScope ===
+      buyNowOwnerScope
+      ? buyNowSession
+      : null;
+
+  const buyNowItems = useMemo(
+    () =>
+      activeBuyNowSession?.items ||
+      [],
+    [activeBuyNowSession]
+  );
+
   const [buyNowDdiResult, setBuyNowDdiResult] = useState(null);
   const [buyNowDdiLoading, setBuyNowDdiLoading] = useState(
     checkoutMode === 'BUY_NOW',
@@ -61,8 +94,21 @@ export default function CheckoutPage() {
   const [buyNowDdiError, setBuyNowDdiError] = useState(null);
   const [buyNowDdiOwnerScope, setBuyNowDdiOwnerScope] = useState(null);
 
-  const buyNowOwnerScope =
-    isAuthenticated && user?.id ? String(user.id) : 'guest';
+  useEffect(() => {
+    if (checkoutMode !== 'BUY_NOW') {
+      setBuyNowSession(null);
+      return;
+    }
+
+    setBuyNowSession(
+      getBuyNowCheckoutSession(
+        buyNowOwnerId
+      )
+    );
+  }, [
+    checkoutMode,
+    buyNowOwnerId,
+  ]);
 
   const items = checkoutMode === 'BUY_NOW' ? buyNowItems : cartItems;
 
@@ -632,6 +678,19 @@ export default function CheckoutPage() {
                     return;
                   }
 
+                  const checkoutCartInstanceId =
+                    checkoutMode === 'BUY_NOW'
+                      ? activeBuyNowSession
+                          ?.cartInstanceId
+                      : cartInstanceId;
+
+                  if (!checkoutCartInstanceId) {
+                    setError(
+                      'The active checkout lifecycle is no longer valid. Return to the cart or product page and start checkout again.'
+                    );
+                    return;
+                  }
+
                   setIsSubmitting(true);
                   setError(null);
                   
@@ -644,6 +703,7 @@ export default function CheckoutPage() {
                       customer_id: user.id,
                       funnel_session_id: funnelContext.session_id,
                       funnel_cart_id: funnelContext.cart_id,
+                      cart_instance_id: checkoutCartInstanceId,
                       customer_name: form.fullName,
                       customer_phone: form.phone,
                       customer_email: user.email || '',

@@ -15,7 +15,7 @@ import {
 
 import { fadeUp, cardReveal, staggerContainer } from '../../utils/animations';
 import { useToast } from '../../hooks/useToast';
-import { consultationService } from '../../services/consultationService';
+import { askPharmacistAssistant, assistantErrorMessage } from '../../services/pharmacistAssistantService';
 import api from '../../services/api';
 
 import MetricCard from '../../components/common/MetricCard';
@@ -238,10 +238,13 @@ export default function Dashboard() {
     setAiMessages(m => [...m, { role: 'user', content: userMsg }]);
     setIsTyping(true);
     try {
-      const reply = await consultationService.askAI(userMsg);
-      setAiMessages(m => [...m, { role: 'assistant', content: reply }]);
-    } catch {
-      setAiMessages(m => [...m, { role: 'assistant', content: 'Sorry, I had trouble with that. Try again.' }]);
+      const result = await askPharmacistAssistant(userMsg);
+      setAiMessages(m => [...m, { role: 'assistant', content: result.reply }]);
+    } catch (error) {
+      setAiMessages(m => [
+        ...m,
+        { role: 'assistant', content: assistantErrorMessage(error) },
+      ]);
     } finally {
       setIsTyping(false);
     }

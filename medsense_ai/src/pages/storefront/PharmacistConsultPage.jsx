@@ -12,6 +12,15 @@ import {
   listCustomerConsultations,
 } from '../../services/storefrontConsultationService';
 
+import {
+  getBuyNowCheckoutSession,
+} from '../../services/storefrontCheckoutSession';
+
+import {
+  readStoredCartInstanceId,
+} from '../../services/storefrontCartStorage';
+
+
 function formatDate(value) {
   if (!value) {
     return '—';
@@ -53,6 +62,7 @@ export default function PharmacistConsultPage() {
   const {
     isAuthenticated,
     openAuthModal,
+    user,
   } = useAuth();
 
   const [consultations, setConsultations] =
@@ -63,6 +73,22 @@ export default function PharmacistConsultPage() {
 
   const [error, setError] =
     useState('');
+
+
+  const activeNormalCartInstanceId =
+    isAuthenticated
+      ? readStoredCartInstanceId(
+          user?.id
+        )
+      : null;
+
+  const activeBuyNowCartInstanceId =
+    isAuthenticated
+      ? getBuyNowCheckoutSession(
+          user?.id
+        )?.cartInstanceId ||
+        null
+      : null;
 
   const loadConsultations =
     useCallback(
@@ -244,6 +270,51 @@ export default function PharmacistConsultPage() {
                   consultation
                     .checkout_consumed_at
                 );
+
+
+              const consultationCartInstanceId =
+                typeof consultation
+                  .cart_instance_id ===
+                'string'
+                  ? consultation
+                      .cart_instance_id
+                      .trim()
+                  : '';
+
+              const isBuyNowApproval =
+                consultationCartInstanceId
+                  .startsWith(
+                    'buy-now-'
+                  );
+
+              const isNormalCartApproval =
+                consultationCartInstanceId
+                  .startsWith(
+                    'cart-safe-'
+                  );
+
+              const activeLifecycleId =
+                isBuyNowApproval
+                  ? activeBuyNowCartInstanceId
+                  : isNormalCartApproval
+                    ? activeNormalCartInstanceId
+                    : null;
+
+              const approvalMatchesActiveLifecycle =
+                approved &&
+                !approvalConsumed &&
+                Boolean(
+                  activeLifecycleId
+                ) &&
+                consultationCartInstanceId ===
+                  activeLifecycleId;
+
+              const approvedCheckoutTarget =
+                approvalMatchesActiveLifecycle
+                  ? isBuyNowApproval
+                    ? `/checkout?mode=buy-now&ddi_consultation_id=${consultation.consultation_id}`
+                    : `/checkout?ddi_consultation_id=${consultation.consultation_id}`
+                  : null;
 
               return (
                 <article
@@ -491,24 +562,39 @@ export default function PharmacistConsultPage() {
                       )}
                   </div>
 
+                  {approvedCheckoutTarget && (
+                    <div
+                      style={{
+                        marginTop:
+                          '1rem',
+                      }}
+                    >
+                      <Link
+                        className="sf-button"
+                        style={{
+                          textDecoration:
+                            'none',
+                        }}
+                        to={
+                          approvedCheckoutTarget
+                        }
+                      >
+                        Continue Approved Checkout
+                      </Link>
+                    </div>
+                  )}
+
                   {approved &&
-                    !approvalConsumed && (
+                    !approvalConsumed &&
+                    !approvedCheckoutTarget && (
                       <div
+                        className="sf-badge-warning"
                         style={{
                           marginTop:
                             '1rem',
                         }}
                       >
-                        <Link
-                          className="sf-button"
-                          style={{
-                            textDecoration:
-                              'none',
-                          }}
-                          to={`/checkout?ddi_consultation_id=${consultation.consultation_id}`}
-                        >
-                          Continue Approved Checkout
-                        </Link>
+                        This approval is not linked to the currently active checkout lifecycle. Rebuild or review the current cart before continuing.
                       </div>
                     )}
 

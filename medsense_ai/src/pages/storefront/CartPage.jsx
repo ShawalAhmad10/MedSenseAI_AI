@@ -9,7 +9,6 @@ import EscalateToPharmacistModal from '../../components/storefront/EscalateToPha
 import { getDdiPresentation } from '../../services/storefrontDdiService';
 import { getInteractionAwareRecommendations } from '../../services/storefrontInteractionAwareRecommendationService';
 import { listCustomerConsultations } from '../../services/storefrontConsultationService';
-import { getFunnelCartId } from '../../services/storefrontFunnelService';
 
 function cartProductId(
   item
@@ -193,6 +192,7 @@ function consultationMatchesCurrentCart(
 export default function CartPage() {
   const {
     items,
+    cartInstanceId,
     prescriptionItems,
     removeItem,
     subtotal,
@@ -234,8 +234,17 @@ export default function CartPage() {
           return;
         }
 
-        const cartInstanceId =
-          getFunnelCartId();
+        if (!cartInstanceId) {
+          setCartConsultation(
+            null
+          );
+
+          setCartConsultationLoading(
+            false
+          );
+
+          return;
+        }
 
         setCartConsultationLoading(
           true
@@ -285,6 +294,7 @@ export default function CartPage() {
       },
       [
         items,
+        cartInstanceId,
         ddiCheckoutAllowed,
       ]
     );

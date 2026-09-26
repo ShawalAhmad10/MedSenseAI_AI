@@ -43,7 +43,7 @@ test('cart clearance is bound to current identity', () => {
 test('BUY_NOW and CART use explicit isolated item sets', () => {
   assert.match(checkout, /checkoutMode === 'BUY_NOW' \? buyNowItems : cartItems/);
   assert.match(checkout, /checkoutMode === 'BUY_NOW'/);
-  assert.match(checkout, /getBuyNowCheckoutItems\(\)/);
+  assert.match(checkout, /getBuyNowCheckoutSession\(/);
 });
 
 test('BUY_NOW DDI clearance is account-scoped', () => {
@@ -60,7 +60,7 @@ test('successful checkout cleanup differs by explicit mode', () => {
 });
 
 test('ProductPage Buy Now explicitly starts isolated session', () => {
-  const start = productPage.indexOf('startBuyNowCheckout(product)');
+  const start = productPage.indexOf('startBuyNowCheckout(');
   const navigate = productPage.indexOf("navigate('/checkout?mode=buy-now')");
 
   assert.ok(start >= 0);

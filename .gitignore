@@ -6,3 +6,7 @@ medsense_ai/debug.log
 .env
 .env.*
 !.env.example
+
+ai_service/.env
+
+ai_service/.venv-lead-3139/

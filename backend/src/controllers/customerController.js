@@ -103,7 +103,7 @@ exports.listCustomers = async (req, res) => {
     });
   } catch (error) {
     console.error('List customer error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch customer', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to fetch customer' });
   }
 };
 
@@ -193,7 +193,7 @@ exports.getCustomerDetails = async (req, res) => {
     });
   } catch (error) {
     console.error('Get customer details error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch customer details', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to fetch customer details' });
   }
 };
 
@@ -286,7 +286,7 @@ exports.createCustomer = async (req, res) => {
   } catch (error) {
     await transaction.rollback();
     console.error('Create customer error:', error);
-    res.status(500).json({ success: false, message: 'Failed to create customer', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to create customer' });
   }
 };
 
@@ -331,7 +331,7 @@ exports.updateCustomer = async (req, res) => {
     });
   } catch (error) {
     console.error('Update customer error:', error);
-    res.status(500).json({ success: false, message: 'Failed to update customer', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to update customer' });
   }
 };
 
@@ -409,7 +409,7 @@ exports.getCustomerLedger = async (req, res) => {
     });
   } catch (error) {
     console.error('Get customer ledger error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch ledger', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to fetch ledger' });
   }
 };
 
@@ -581,7 +581,7 @@ exports.markPaymentReceived = async (req, res) => {
   } catch (error) {
     await transaction.rollback();
     console.error('Mark payment received error:', error);
-    res.status(500).json({ success: false, message: 'Failed to record payment', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to record payment' });
   }
 };
 
@@ -604,7 +604,7 @@ exports.deactivateCustomer = async (req, res) => {
     res.json({ success: true, message: 'Customer deactivated successfully' });
   } catch (error) {
     console.error('Deactivate customer error:', error);
-    res.status(500).json({ success: false, message: 'Failed to deactivate customer', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to deactivate customer' });
   }
 };
 

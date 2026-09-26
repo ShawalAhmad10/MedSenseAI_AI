@@ -6,7 +6,21 @@ const {
   authenticateToken,
   verifyPharmacistOnboardingToken,
 } = require('../middleware/auth');
+
+const {
+  verifyPharmacistStatusToken
+} = require('../middleware/pharmacistStatusAuth');
 const { body } = require('express-validator');
+
+const {
+  pharmacistLoginLimiter,
+  pharmacistOtpVerifyLimiter,
+  pharmacistResetLimiter,
+  pharmacistOtpSendLimiter,
+  pharmacistRegistrationLimiter,
+  pharmacistGoogleLimiter,
+  pharmacistStatusLimiter,
+} = require('../middleware/authRateLimiters');
 
 // Validation middleware
 const validateRegistration = [
@@ -26,20 +40,57 @@ const validateLogin = [
 ];
 
 // Public routes
-router.post('/pharmacist/register', authController.register);
-router.post('/pharmacist/login', authController.login);
-router.post('/pharmacist/verify-otp', authController.verifyOtp);
-router.post('/pharmacist/resend-otp', authController.resendOtp);
-router.post('/pharmacist/forgot-password', authController.forgotPassword);
-router.post('/pharmacist/reset-password', authController.resetPassword);
-router.post('/pharmacist/google', authController.googleLogin);
+router.post(
+  '/pharmacist/register',
+  pharmacistRegistrationLimiter,
+  authController.register
+);
+router.post(
+  '/pharmacist/login',
+  pharmacistLoginLimiter,
+  authController.login
+);
+router.post(
+  '/pharmacist/verify-otp',
+  pharmacistOtpVerifyLimiter,
+  authController.verifyOtp
+);
+router.post(
+  '/pharmacist/resend-otp',
+  pharmacistOtpSendLimiter,
+  authController.resendOtp
+);
+router.post(
+  '/pharmacist/forgot-password',
+  pharmacistOtpSendLimiter,
+  authController.forgotPassword
+);
+router.post(
+  '/pharmacist/reset-password',
+  pharmacistResetLimiter,
+  authController.resetPassword
+);
+router.post(
+  '/pharmacist/google',
+  pharmacistGoogleLimiter,
+  authController.googleLogin
+);
 router.post(
   '/pharmacist/complete-profile',
   verifyPharmacistOnboardingToken,
   authController.completeProfile
 );
-router.get('/pharmacist/status', authController.checkStatus);
-router.post('/pharmacist/select-plan', authController.selectPlan);
+router.get(
+  '/pharmacist/status',
+  pharmacistStatusLimiter,
+  verifyPharmacistStatusToken,
+  authController.checkStatus
+);
+router.post(
+  '/pharmacist/select-plan',
+  authenticateToken,
+  authController.selectPlan
+);
 
 // Protected routes
 router.get('/pharmacist/me', authenticateToken, authController.getMe);

@@ -39,6 +39,11 @@ test(
 
     assert.match(
       cart,
+      /cartInstanceId/
+    );
+
+    assert.doesNotMatch(
+      cart,
       /getFunnelCartId/
     );
   }

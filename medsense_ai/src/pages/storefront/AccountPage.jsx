@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { User, MapPin, Lock, Bell, Package, FileText, DollarSign, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getCustomerDetails, updateCustomer, getCustomerLedger } from '../../services/customerService';
-import { getCustomerOrders } from '../../services/storefrontOrderService';
+import { getCustomerOrders, getOrderById } from '../../services/storefrontOrderService';
 import api from '../../services/api';
 
 export default function AccountPage() {
@@ -70,10 +70,16 @@ export default function AccountPage() {
       const ordersWithItems = await Promise.all(
         customerOrders.map(async (order) => {
           try {
-            const itemsRes = await api.get(`/orders/${order.invoice_id}`);
+            const itemsRes =
+              await getOrderById(
+                order.invoice_id,
+                user.id,
+                user.email,
+                user.phone
+              );
             return {
               ...order,
-              items: itemsRes.data?.data?.items || []
+              items: itemsRes.data?.items || []
             };
           } catch {
             return { ...order, items: [] };

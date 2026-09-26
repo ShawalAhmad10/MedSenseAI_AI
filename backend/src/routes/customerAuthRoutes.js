@@ -12,6 +12,11 @@ const {
   authenticateToken
 } = require('../middleware/auth');
 
+const {
+  customerLoginLimiter,
+  customerRegistrationLimiter
+} = require('../middleware/authRateLimiters');
+
 
 // ============================================================
 // Public customer authentication
@@ -19,11 +24,13 @@ const {
 
 router.post(
   '/register',
+  customerRegistrationLimiter,
   customerAuthController.register
 );
 
 router.post(
   '/login',
+  customerLoginLimiter,
   customerAuthController.login
 );
 

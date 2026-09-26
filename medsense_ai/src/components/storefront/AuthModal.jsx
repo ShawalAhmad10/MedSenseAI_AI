@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, Eye, EyeOff, Loader2, ShieldCheck, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
+import { adoptGuestBuyNowCheckout } from '../../services/storefrontCheckoutSession';
 
 const intentCopy = {
   checkout: 'Sign in to save your order, merge your guest cart, and finish checkout securely.',
@@ -85,18 +86,43 @@ export default function AuthModal({ isOpen, onClose, intent = 'checkout' }) {
 
     try {
       if (mode === 'signin') {
-        await login({ email: form.email, password: form.password });
-        mergeGuestCartToAccount();
+        const response =
+          await login({
+            email: form.email,
+            password: form.password,
+          });
+
+        const authenticatedCustomerId =
+          response?.data?.customer?.id;
+
+        mergeGuestCartToAccount(
+          authenticatedCustomerId
+        );
+
+        adoptGuestBuyNowCheckout(
+          authenticatedCustomerId
+        );
       } else {
-        await register({
-          name: form.name,
-          email: form.email,
-          password: form.password,
-          phone: form.phone || undefined,
-          city: form.city || undefined,
-          address: form.address || undefined,
-        });
-        mergeGuestCartToAccount();
+        const response =
+          await register({
+            name: form.name,
+            email: form.email,
+            password: form.password,
+            phone: form.phone || undefined,
+            city: form.city || undefined,
+            address: form.address || undefined,
+          });
+
+        const authenticatedCustomerId =
+          response?.data?.customer?.id;
+
+        mergeGuestCartToAccount(
+          authenticatedCustomerId
+        );
+
+        adoptGuestBuyNowCheckout(
+          authenticatedCustomerId
+        );
       }
     } catch (error) {
       setLocalError(error.message);

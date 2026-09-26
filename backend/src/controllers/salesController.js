@@ -338,6 +338,9 @@ exports.getSlowMovers = async (req, res) => {
           )::int AS stock_qty
         FROM stock_history
         WHERE status = 1
+          AND batch_status = 'ACTIVE'
+          AND remaining_quantity > 0
+          AND expiry_date >= CURRENT_DATE
         GROUP BY product_id
       ),
 
@@ -492,6 +495,9 @@ exports.getRecommendations = async (req, res) => {
             )::int AS stock_qty
           FROM stock_history
           WHERE status = 1
+            AND batch_status = 'ACTIVE'
+            AND remaining_quantity > 0
+            AND expiry_date >= CURRENT_DATE
           GROUP BY product_id
         ),
 
@@ -598,6 +604,9 @@ exports.getRecommendations = async (req, res) => {
             )::int AS stock_qty
           FROM stock_history
           WHERE status = 1
+            AND batch_status = 'ACTIVE'
+            AND remaining_quantity > 0
+            AND expiry_date >= CURRENT_DATE
           GROUP BY product_id
         )
 

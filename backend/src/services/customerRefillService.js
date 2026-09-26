@@ -929,37 +929,46 @@ async function updateReminderDate(
       payload.reminder_date
     );
 
-  await sequelize.query(
-    `
-    UPDATE customer_refill_reminders
-    SET
-      reminder_date =
-        :reminder_date,
-      updated_at =
-        NOW()
-    WHERE reminder_id =
-          :reminder_id
-      AND customer_id =
-          :customer_id
-      AND lifecycle_status =
-          'active'
-    `,
-    {
-      replacements: {
-        reminder_date:
-          reminderDate,
+  const updatedRows =
+    await sequelize.query(
+      `
+      UPDATE customer_refill_reminders
+      SET
+        reminder_date =
+          :reminder_date,
+        updated_at =
+          NOW()
+      WHERE reminder_id =
+            :reminder_id
+        AND customer_id =
+            :customer_id
+        AND lifecycle_status =
+            'active'
+      RETURNING reminder_id
+      `,
+      {
+        replacements: {
+          reminder_date:
+            reminderDate,
 
-        reminder_id:
-          owned.reminder,
+          reminder_id:
+            owned.reminder,
 
-        customer_id:
-          owned.customer,
-      },
+          customer_id:
+            owned.customer,
+        },
 
-      type:
-        QueryTypes.UPDATE,
-    }
-  );
+        type:
+          QueryTypes.SELECT,
+      }
+    );
+
+  if (updatedRows.length !== 1) {
+    throw refillError(
+      'REFILL_NOT_ACTIVE',
+      'Only an active refill reminder can be changed'
+    );
+  }
 
   const reminders =
     await listReminders(
@@ -998,37 +1007,46 @@ async function setLifecycle(
       reminderId
     );
 
-  await sequelize.query(
-    `
-    UPDATE customer_refill_reminders
-    SET
-      lifecycle_status =
-        :lifecycle_status,
-      updated_at =
-        NOW()
-    WHERE reminder_id =
-          :reminder_id
-      AND customer_id =
-          :customer_id
-      AND lifecycle_status =
-          'active'
-    `,
-    {
-      replacements: {
-        lifecycle_status:
-          lifecycleStatus,
+  const updatedRows =
+    await sequelize.query(
+      `
+      UPDATE customer_refill_reminders
+      SET
+        lifecycle_status =
+          :lifecycle_status,
+        updated_at =
+          NOW()
+      WHERE reminder_id =
+            :reminder_id
+        AND customer_id =
+            :customer_id
+        AND lifecycle_status =
+            'active'
+      RETURNING reminder_id
+      `,
+      {
+        replacements: {
+          lifecycle_status:
+            lifecycleStatus,
 
-        reminder_id:
-          owned.reminder,
+          reminder_id:
+            owned.reminder,
 
-        customer_id:
-          owned.customer,
-      },
+          customer_id:
+            owned.customer,
+        },
 
-      type:
-        QueryTypes.UPDATE,
-    }
-  );
+        type:
+          QueryTypes.SELECT,
+      }
+    );
+
+  if (updatedRows.length !== 1) {
+    throw refillError(
+      'REFILL_NOT_ACTIVE',
+      'Only an active refill reminder can be changed'
+    );
+  }
 
   const reminders =
     await listReminders(

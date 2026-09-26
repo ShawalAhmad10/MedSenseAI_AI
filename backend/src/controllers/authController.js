@@ -1,4 +1,5 @@
 // src/controllers/authController.js
+const { randomInt } = require('crypto');
 const { Pharmacist } = require('../models');
 const {
   generateToken,
@@ -43,7 +44,7 @@ exports.register = async (req, res) => {
     }
 
     // Generate OTP
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpCode = randomInt(100000, 1000000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     // Create user
@@ -89,7 +90,7 @@ exports.register = async (req, res) => {
     console.error('Registration error:', error);
     return res.status(500).json({
       success: false,
-      message: error.message || 'Registration failed',
+      message: 'Registration failed',
     });
   }
 };
@@ -228,7 +229,7 @@ exports.resendOtp = async (req, res) => {
     }
 
     // Generate new OTP
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpCode = randomInt(100000, 1000000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     pharmacist.otpCode = otpCode;
@@ -651,7 +652,7 @@ exports.forgotPassword = async (req, res) => {
     }
 
     // Generate OTP
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpCode = randomInt(100000, 1000000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     pharmacist.resetOtpCode = otpCode;
@@ -857,55 +858,89 @@ exports.updateProfile = async (req, res) => {
  */
 exports.checkStatus = async (req, res) => {
   try {
-    const { email } = req.query;
+    const pharmacist =
+      req.statusPharmacist;
 
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email is required',
-      });
-    }
-
-    const pharmacist = await Pharmacist.findOne({ where: { email } });
     if (!pharmacist) {
-      return res.status(404).json({
+      return res.status(401).json({
         success: false,
-        message: 'User not found',
+        code: 'STATUS_AUTH_REQUIRED',
+        message:
+          'Sign in is required to check pharmacist status.',
       });
     }
 
     return res.status(200).json({
       success: true,
       data: {
-        status: pharmacist.getStatus(),
-        isEmailVerified: pharmacist.isEmailVerified,
-        isApproved: pharmacist.isApproved,
+        status:
+          pharmacist.getStatus(),
+
+        isEmailVerified:
+          pharmacist.isEmailVerified,
+
+        isApproved:
+          pharmacist.isApproved,
       },
     });
   } catch (error) {
-    console.error('Check status error:', error);
+    console.error(
+      'Check status error:',
+      error
+    );
+
     return res.status(500).json({
       success: false,
-      message: 'Failed to check status',
+      message:
+        'Failed to check status',
     });
   }
 };
+
 
 /**
  * Select plan (optional feature)
  */
 exports.selectPlan = async (req, res) => {
   try {
-    const { plan, billing, email } = req.body;
+    const { plan, billing } = req.body;
+    const userId = req.user.id;
 
-    if (!plan || !billing || !email) {
+    if (!plan || !billing) {
       return res.status(400).json({
         success: false,
-        message: 'Plan, billing, and email are required',
+        message: 'Plan and billing type are required',
       });
     }
 
-    const pharmacist = await Pharmacist.findOne({ where: { email } });
+    const validPlans = [
+      'free',
+      'pro',
+      'basic',
+    ];
+
+    if (!validPlans.includes(plan)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid plan selected',
+      });
+    }
+
+    const validBilling = [
+      'monthly',
+      'annual',
+    ];
+
+    if (!validBilling.includes(billing)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid billing type',
+      });
+    }
+
+    const pharmacist =
+      await Pharmacist.findByPk(userId);
+
     if (!pharmacist) {
       return res.status(404).json({
         success: false,
@@ -915,6 +950,7 @@ exports.selectPlan = async (req, res) => {
 
     pharmacist.plan = plan;
     pharmacist.billing = billing;
+
     await pharmacist.save();
 
     return res.status(200).json({
@@ -926,13 +962,18 @@ exports.selectPlan = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Select plan error:', error);
+    console.error(
+      'Select plan error:',
+      error
+    );
+
     return res.status(500).json({
       success: false,
       message: 'Failed to select plan',
     });
   }
 };
+
 
 /**
  * Upgrade plan (for authenticated users)

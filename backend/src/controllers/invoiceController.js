@@ -5,21 +5,17 @@ const CustomerAccount = require('../models/CustomerAccount');
 const CustomerLedger = require('../models/CustomerLedger');
 const BatchAllocationService = require('../services/batchAllocationService');
 const { sequelize } = require('../config/database');
+const invoiceNumberService =
+  require('../services/invoiceNumberService');
 
 // Generate sequential invoice number: INV-000001, INV-000002...
-async function generateInvoiceNumber() {
-  const [last] = await sequelize.query(
-    `SELECT invoice_number FROM invoice
-     WHERE invoice_number ~ '^INV-[0-9]+$'
-     ORDER BY invoice_id DESC LIMIT 1`,
-    { type: sequelize.QueryTypes.SELECT }
-  );
-  let next = 1;
-  if (last?.invoice_number) {
-    const m = last.invoice_number.match(/INV-(\d+)/);
-    if (m) next = parseInt(m[1]) + 1;
-  }
-  return `INV-${String(next).padStart(6, '0')}`;
+async function generateInvoiceNumber(
+  transaction
+) {
+  return invoiceNumberService
+    .generateNextInvoiceNumber(
+      transaction
+    );
 }
 
 // Create new invoice
@@ -47,11 +43,20 @@ exports.createInvoice = async (req, res) => {
 
     // Validate required fields
     if (!customerName || !items || items.length === 0) {
+      await transaction.rollback();
+
       return res.status(400).json({ 
         success: false, 
         message: 'Customer name and at least one item are required' 
       });
     }
+
+    // Keep cross-flow lock ordering consistent:
+    // invoice-number advisory lock first, stock row locks second.
+    const invoiceNumber =
+      await generateInvoiceNumber(
+        transaction
+      );
 
     // Calculate totals and allocate stock_history using FIFO
     let subtotal = 0;
@@ -79,7 +84,13 @@ exports.createInvoice = async (req, res) => {
 
       // Allocate stock_history using FIFO/FEFO
       try {
-        const allocations = await BatchAllocationService.allocateBatchesForSale(productId, qty);
+        const allocations =
+          await BatchAllocationService
+            .allocateBatchesForSale(
+              productId,
+              qty,
+              transaction
+            );
         
         // Store allocations for ledger entry
         batchAllocations.push({
@@ -125,7 +136,7 @@ exports.createInvoice = async (req, res) => {
 
     // Create invoice
     const invoice = await Invoice.create({
-      invoice_number: await generateInvoiceNumber(),
+      invoice_number: invoiceNumber,
       customer_id: customerId || null,
       customer_name: customerName,
       customer_phone: customerPhone || '',

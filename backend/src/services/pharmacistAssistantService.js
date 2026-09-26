@@ -202,6 +202,9 @@ async function loadInventoryRows() {
       ON sh.product_id =
          p.product_id
      AND sh.status = 1
+     AND sh.batch_status = 'ACTIVE'
+     AND sh.remaining_quantity > 0
+     AND sh.expiry_date >= CURRENT_DATE
 
     WHERE p.product_status = 1
 
@@ -698,6 +701,8 @@ async function alertsEvidence() {
 
         AND batch_status =
             'ACTIVE'
+        AND status = 1
+        AND remaining_quantity > 0
 
         AND expiry_date <=
             CURRENT_DATE + 30

@@ -89,12 +89,12 @@ test('cart lifecycle binds rejection and approval to cart instance', () => {
 
   assert.match(
     order,
-    /cartInstanceIdValue:\s*req\.body\?\.funnel_cart_id/
+    /cartInstanceIdValue:\s*req\.body\?\.cart_instance_id/
   );
 
   assert.match(
     order,
-    /cart_instance_id:\s*req\.body\?\.funnel_cart_id/
+    /cart_instance_id:\s*req\.body\?\.cart_instance_id/
   );
 
   assert.match(
