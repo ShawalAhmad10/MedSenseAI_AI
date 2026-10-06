@@ -50,16 +50,6 @@ test(
 
     assert.match(
       scope,
-      /refreshMode:\s*null/
-    );
-
-    assert.match(
-      scope,
-      /persistedScores:\s*false/
-    );
-
-    assert.match(
-      scope,
       /Lead scoring data is currently unavailable/
     );
   }

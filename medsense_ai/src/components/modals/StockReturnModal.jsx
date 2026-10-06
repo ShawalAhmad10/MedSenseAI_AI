@@ -16,6 +16,8 @@ const fieldStyle = {
 export default function StockReturnModal({ isOpen, batches, currentUserName, onClose, onSubmit }) {
   const [stockId, setStockId] = useState('');
   const [returnType, setReturnType] = useState('normal');
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
+  const [returnDate, setReturnDate] = useState(today);
   const [description, setDescription] = useState('');
   const [lines, setLines] = useState([]);
   const [error, setError] = useState('');
@@ -32,6 +34,7 @@ export default function StockReturnModal({ isOpen, batches, currentUserName, onC
     const initialBatch = batches[0] ?? null;
     setStockId(initialBatch?.id ?? '');
     setReturnType('normal');
+    setReturnDate(today);
     setDescription('');
     setError('');
     setFieldErrors({});
@@ -41,7 +44,7 @@ export default function StockReturnModal({ isOpen, batches, currentUserName, onC
         batchLineId: item.id,
         productId: item.productId,
         name: item.name,
-        maxQuantity: item.qty,
+        maxQuantity: item.remainingQty ?? item.totalQty ?? item.qty,
         quantity: 0,
         price: item.purchasePrice,
         expiry: item.productExpiry,
@@ -56,12 +59,20 @@ export default function StockReturnModal({ isOpen, batches, currentUserName, onC
         batchLineId: item.id,
         productId: item.productId,
         name: item.name,
-        maxQuantity: item.qty,
+        maxQuantity: item.remainingQty ?? item.totalQty ?? item.qty,
         quantity: 0,
         price: item.purchasePrice,
         expiry: item.productExpiry,
       })),
     );
+  }, [selectedBatch]);
+
+  const minimumReturnDate = useMemo(() => {
+    const arrival = selectedBatch?.creationDate;
+    if (!arrival) return '';
+    const next = new Date(`${String(arrival).slice(0, 10)}T00:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    return next.toISOString().slice(0, 10);
   }, [selectedBatch]);
 
   const returnTotal = useMemo(
@@ -74,6 +85,9 @@ export default function StockReturnModal({ isOpen, batches, currentUserName, onC
     const validLines = lines.filter((line) => Number(line.quantity) > 0);
     
     const errors = {};
+    if (!returnDate || returnDate > today || (minimumReturnDate && returnDate < minimumReturnDate)) {
+      errors.returnDate = 'Return date must be after the stock entry date and cannot be in the future.';
+    }
     if (!selectedBatch) {
       errors.stockId = 'Please select a stock batch';
     }
@@ -107,6 +121,7 @@ export default function StockReturnModal({ isOpen, batches, currentUserName, onC
         supplierId: selectedBatch.supplierId,
         supplierName: selectedBatch.supplierName,
         returnType,
+        returnDate,
         description,
         createdBy: currentUserName,
         items: validLines,
@@ -206,6 +221,14 @@ export default function StockReturnModal({ isOpen, batches, currentUserName, onC
                     <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--gray-400)', fontWeight: 700 }}>Return Total</div>
                     <div style={{ fontSize: '0.92rem', color: 'var(--navy)', fontWeight: 700, marginTop: 4 }}>PKR {returnTotal.toLocaleString()}</div>
                   </div>
+                </div>
+
+                <div>
+                  <label htmlFor="stock-return-date" style={{ display: 'block', fontSize: '0.76rem', fontWeight: 700, marginBottom: '0.35rem' }}>Return Date *</label>
+                  <input id="stock-return-date" type="date" required value={returnDate} min={minimumReturnDate || undefined} max={today}
+                    onChange={event => { setReturnDate(event.target.value); setFieldErrors(current => ({ ...current, returnDate: '' })); }} style={fieldStyle} />
+                  {selectedBatch?.creationDate && <small>Stock entry date: {String(selectedBatch.creationDate).slice(0, 10)}. Return must be after this date.</small>}
+                  {fieldErrors.returnDate && <p role="alert" style={{ color: '#dc2626' }}>{fieldErrors.returnDate}</p>}
                 </div>
 
                 <div>

@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Calculator, Plus, ReceiptText, Trash2, X } from 'lucide-react';
+import { fifoTotal, fifoBreakdown, fifoQuote } from '../../services/storefrontFifoPricing';
 
 const baseFieldStyle = {
   width: '100%',
@@ -16,6 +17,8 @@ const baseFieldStyle = {
 function emptyLine() {
   return {
     productId: '',
+    batchId: null,
+    availableQty: 0,
     name: '',
     qty: 1,
     unitPrice: 0,
@@ -39,7 +42,12 @@ export default function InvoiceComposerModal({ isOpen, onClose, catalog, current
     deliveryFee: 0,
     deliveryStatus: 'pending',
   });
-  const [lines, setLines] = useState([emptyLine()]);
+  const [lines, setLines] = useState([]);
+  const [medicineSearch, setMedicineSearch] = useState('');
+  const [selectedMedicine, setSelectedMedicine] = useState(null);
+  const [selectedQuantity, setSelectedQuantity] = useState('1');
+  const searchInputRef = useRef(null);
+  const quantityInputRef = useRef(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
@@ -58,11 +66,73 @@ export default function InvoiceComposerModal({ isOpen, onClose, catalog, current
       deliveryFee: 0,
       deliveryStatus: 'pending',
     });
-    setLines([emptyLine()]);
+    setLines([]);
+    setMedicineSearch('');
+    setSelectedMedicine(null);
+    setSelectedQuantity('1');
     setError('');
     setFieldErrors({});
     setIsSaving(false);
   }, [currentUserName, isOpen]);
+
+  useEffect(() => {
+    if (selectedMedicine) {
+      quantityInputRef.current?.focus();
+      quantityInputRef.current?.select();
+    }
+  }, [selectedMedicine]);
+
+  const matchingMedicines = useMemo(() => {
+    const query = medicineSearch.trim().toLowerCase();
+    return (catalog?.products || []).filter(product =>
+      product.status !== 'inactive' &&
+      [product.title, product.genericName, product.salt, product.brandName]
+        .some(value => String(value || '').toLowerCase().includes(query)));
+  }, [catalog?.products, medicineSearch]);
+
+  const selectedStock = Number(selectedMedicine?.stockQty || 0);
+  const alreadySelectedQuantity = selectedMedicine ? lines.reduce((sum, line) =>
+    line.productId === selectedMedicine.id && String(line.batchId) === String(selectedMedicine.activeBatchId)
+      ? sum + Number(line.qty || 0) : sum, 0) : 0;
+  const selectableQuantity = Math.max(selectedStock - alreadySelectedQuantity, 0);
+
+  const chooseMedicine = product => {
+    if (Number(product.activeBatchQty || 0) <= 0 || !product.activeBatchId) {
+      setError('This medicine is out of stock. Receive a batch in Inventory first.');
+      return;
+    }
+    setSelectedMedicine(product);
+    setSelectedQuantity('1');
+    setError('');
+  };
+
+  const addSelectedMedicine = () => {
+    const quantity = Number(selectedQuantity);
+    if (!selectedMedicine || !Number.isSafeInteger(quantity) || quantity <= 0 || quantity > selectableQuantity) {
+      setError(`Enter a whole quantity between 1 and ${selectableQuantity} for this batch.`);
+      return;
+    }
+    const product = selectedMedicine;
+    setLines(current => {
+      const existingIndex = current.findIndex(line =>
+        line.productId === product.id && String(line.batchId) === String(product.activeBatchId));
+      if (existingIndex >= 0) return current.map((line, index) => {
+        if (index !== existingIndex) return line;
+        const qty = Number(line.qty) + quantity;
+        return { ...line, qty, discount: fifoTotal({ ...line, qty }) * Number(line.discountPercent || 0) / 100,
+          tax: fifoTotal({ ...line, qty }) * Number(line.taxPercent || 0) / 100 };
+      });
+      const next = { ...emptyLine(), productId: product.id, batchId: product.activeBatchId,
+        availableQty: Number(product.stockQty), name: product.title, fifoBatches: product.fifoBatches,
+        unitPrice: Number(product.activeBatchPrice), qty: quantity };
+      const emptyIndex = current.findIndex(line => !line.productId);
+      return emptyIndex >= 0 ? current.map((line, index) => index === emptyIndex ? next : line) : [...current, next];
+    });
+    setSelectedMedicine(null);
+    setMedicineSearch('');
+    setError('');
+    searchInputRef.current?.focus();
+  };
 
   const totals = useMemo(() => {
     const subtotal = lines.reduce((sum, line) => {
@@ -70,7 +140,7 @@ export default function InvoiceComposerModal({ isOpen, onClose, catalog, current
       const unitPrice = Number(line.unitPrice  || 0);
       const discount  = Number(line.discount   || 0);
       const tax       = Number(line.tax        || 0);
-      return sum + Math.max((qty * unitPrice) - discount + tax, 0);
+      return sum + Math.max(fifoTotal(line) - discount + tax, 0);
     }, 0);
 
     const discountPercent  = Number(form.discountPercent || 0);
@@ -91,9 +161,12 @@ export default function InvoiceComposerModal({ isOpen, onClose, catalog, current
           const product = catalog.products.find((e) => e.id === patch.productId);
           if (product) {
             next.name      = product.title;
-            next.unitPrice = product.price || 0;
+            next.unitPrice = product.activeBatchPrice || 0;
+            next.batchId = product.activeBatchId;
+            next.availableQty = product.stockQty || 0;
+            next.fifoBatches = product.fifoBatches;
 
-            const availableStock = product.stockQty || 0;
+            const availableStock = next.availableQty;
             if (availableStock === 0) {
               setError(`⚠️ "${product.title}" has no stock. Add stock from Inventory first.`);
               return { ...line, productId: '', name: '', unitPrice: 0 };
@@ -106,16 +179,24 @@ export default function InvoiceComposerModal({ isOpen, onClose, catalog, current
           }
         }
 
+        if (patch.batchId !== undefined) {
+          const product = catalog?.products?.find(p => p.id === next.productId);
+          const batch = product?.batches?.find(b => String(b.batchId) === String(patch.batchId) && b.available);
+          if (!batch) return line;
+          next.batchId = batch.batchId;
+          next.unitPrice = batch.salePrice;
+          next.availableQty = batch.stockQty;
+        }
         const qty             = Number((patch.qty             !== undefined ? patch.qty             : next.qty)             || 0);
         const unitPrice       = Number((patch.unitPrice       !== undefined ? patch.unitPrice       : next.unitPrice)       || 0);
         const discountPercent = Number((patch.discountPercent !== undefined ? patch.discountPercent : next.discountPercent) || 0);
         const taxPercent      = Number((patch.taxPercent      !== undefined ? patch.taxPercent      : next.taxPercent)      || 0);
 
-        if (patch.qty !== undefined || patch.unitPrice !== undefined || patch.discountPercent !== undefined) {
-          next.discount = (qty * unitPrice * discountPercent) / 100;
+        if (patch.qty !== undefined || patch.productId !== undefined || patch.batchId !== undefined || patch.unitPrice !== undefined || patch.discountPercent !== undefined) {
+          next.discount = (fifoTotal(next) * discountPercent) / 100;
         }
-        if (patch.qty !== undefined || patch.unitPrice !== undefined || patch.taxPercent !== undefined) {
-          next.tax = (qty * unitPrice * taxPercent) / 100;
+        if (patch.qty !== undefined || patch.productId !== undefined || patch.batchId !== undefined || patch.unitPrice !== undefined || patch.taxPercent !== undefined) {
+          next.tax = (fifoTotal(next) * taxPercent) / 100;
         }
 
         return next;
@@ -156,6 +237,10 @@ export default function InvoiceComposerModal({ isOpen, onClose, catalog, current
     let hasLineErrors = false;
     lines.forEach((line, i) => {
       if (line.productId) {
+        if (!Number.isSafeInteger(Number(line.qty)) || Number(line.qty) > Number(line.availableQty)) {
+          errors[`line_${i}_qty`] = `Row ${i+1}: Enter a whole quantity within the selected batch's stock (${line.availableQty}).`;
+          hasLineErrors = true;
+        }
         if (Number(line.qty || 0) <= 0)       { errors[`line_${i}_qty`]   = `Row ${i+1}: Qty must be > 0`; hasLineErrors = true; }
         if (Number(line.unitPrice || 0) <= 0) { errors[`line_${i}_price`] = `Row ${i+1}: Price must be > 0`; hasLineErrors = true; }
       }
@@ -188,6 +273,8 @@ export default function InvoiceComposerModal({ isOpen, onClose, catalog, current
         createdBy:       form.createdBy || 'Pharmacist',
         items: validLines.map((line) => ({
           productId:  line.productId.toString().replace('prod-', ''),
+          batchId:    line.batchId,
+          fifo_quote: line.fifoBatches?.length ? fifoQuote(line) : undefined,
           name:       line.name,
           quantity:   Number(line.qty),
           unitPrice:  Number(line.unitPrice || 0),
@@ -342,6 +429,62 @@ export default function InvoiceComposerModal({ isOpen, onClose, catalog, current
                     </button>
                   </div>
 
+                  <div style={{ padding: '1rem', borderBottom: '1px solid var(--dash-border)' }}>
+                    <label htmlFor="invoice-medicine-search" style={{ display: 'block', fontWeight: 700, marginBottom: 8 }}>Search Items</label>
+                    <input id="invoice-medicine-search" ref={searchInputRef} type="search"
+                      value={medicineSearch} onChange={event => setMedicineSearch(event.target.value)}
+                      placeholder="Search medicines by name, salt or brand" style={baseFieldStyle}
+                      onKeyDown={event => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          const available = matchingMedicines.filter(product => Number(product.activeBatchQty) > 0);
+                          if (available.length === 1) chooseMedicine(available[0]);
+                        }
+                      }} />
+                    <div style={{ overflow: 'auto', maxHeight: 220, marginTop: 10 }}>
+                      <table aria-label="Medicine search results" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 530 }}>
+                        <thead><tr style={{ background: '#f8fafc' }}>
+                          {['Name of Product', 'Sale Price', 'Quantity in Stock', 'Pack Size'].map(heading =>
+                            <th key={heading} style={{ textAlign: 'left', padding: 10, fontSize: '0.78rem', color: 'var(--gray-600)' }}>{heading}</th>)}
+                        </tr></thead>
+                        <tbody>
+                          {matchingMedicines.map(product => {
+                            const hasStock = Number(product.activeBatchQty || 0) > 0 && product.activeBatchId;
+                            return <tr key={product.id} style={{ borderTop: '1px solid var(--dash-border)',
+                              background: selectedMedicine?.id === product.id ? '#eff6ff' : 'white' }}>
+                              <td style={{ padding: 10 }}><button type="button" disabled={!hasStock}
+                                onClick={() => chooseMedicine(product)} style={{ border: 0, background: 'transparent',
+                                  color: hasStock ? '#2563eb' : 'var(--gray-400)', cursor: hasStock ? 'pointer' : 'not-allowed',
+                                  textAlign: 'left', fontWeight: 600, padding: 0 }}>{product.title}</button></td>
+                              <td style={{ padding: 10 }}>PKR {Number(product.activeBatchPrice || 0).toLocaleString()}</td>
+                              <td style={{ padding: 10 }}>{hasStock ? product.stockQty : 'Out of stock'}</td>
+                              <td style={{ padding: 10 }}>{product.packSize || 1}</td>
+                            </tr>;
+                          })}
+                          {matchingMedicines.length === 0 && <tr><td colSpan={4} style={{ padding: 16, color: 'var(--gray-400)' }}>No medicines match your search.</td></tr>}
+                        </tbody>
+                      </table>
+                    </div>
+                    {selectedMedicine && <div style={{ marginTop: 12, padding: 12, borderRadius: 10, background: '#eff6ff' }}>
+                      <strong>{selectedMedicine.title}</strong>
+                      <p style={{ margin: '6px 0', fontSize: '0.82rem' }}>
+                        Sale Price: PKR {selectedMedicine.activeBatchPrice} per unit · Available to add: {selectableQuantity}
+                      </p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <label htmlFor="invoice-selected-quantity">Quantity</label>
+                        <input id="invoice-selected-quantity" ref={quantityInputRef} type="number" min="1"
+                          max={selectableQuantity} step="1" value={selectedQuantity}
+                          onChange={event => setSelectedQuantity(event.target.value)}
+                          onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); addSelectedMedicine(); } }}
+                          style={{ ...baseFieldStyle, width: 100 }} />
+                        <button type="button" onClick={addSelectedMedicine} disabled={selectableQuantity <= 0}
+                          style={{ padding: '0.7rem 1rem', background: 'var(--navy)', color: 'white', border: 0,
+                            borderRadius: 10, cursor: selectableQuantity > 0 ? 'pointer' : 'not-allowed' }}>Add to Invoice</button>
+                        <button type="button" onClick={() => setSelectedMedicine(null)}
+                          style={{ padding: '0.7rem', border: 0, background: 'transparent', cursor: 'pointer' }}>Cancel selection</button>
+                      </div>
+                    </div>}
+                  </div>
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
                       <thead>
@@ -352,32 +495,40 @@ export default function InvoiceComposerModal({ isOpen, onClose, catalog, current
                         </tr>
                       </thead>
                       <tbody>
+                        {lines.length === 0 && <tr><td colSpan={7} style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--gray-400)' }}>Search and select a medicine above to enter its quantity.</td></tr>}
                         {lines.map((line, index) => {
                           const qty       = Number(line.qty       || 0);
                           const unitPrice = Number(line.unitPrice  || 0);
                           const discount  = Number(line.discount   || 0);
                           const tax       = Number(line.tax        || 0);
-                          const lineTotal = Math.max((qty * unitPrice) - discount + tax, 0);
+                          const lineTotal = Math.max(fifoTotal(line) - discount + tax, 0);
                           return (
                             <tr key={`line-${index}`} style={{ borderTop: '1px solid var(--dash-border)' }}>
                               <td style={{ padding: '0.75rem' }}>
                                 <select value={line.productId} onChange={(e) => updateLine(index, { productId: e.target.value })} style={{ ...baseFieldStyle, minWidth: 200 }}>
                                   <option value="">Select product</option>
                                   {catalog?.products?.map((p) => {
-                                    const hasStock = (p.stockQty || 0) > 0;
+                                    const hasStock = (p.activeBatchQty || 0) > 0;
                                     return (
                                       <option key={p.id} value={p.id} disabled={!hasStock} style={{ color: !hasStock ? '#dc2626' : 'inherit' }}>
-                                        {p.title} {!hasStock ? '(No Stock)' : `(${p.stockQty})`}
+                                        {p.title} — PKR {p.activeBatchPrice || 0}/unit {!hasStock ? '(No Stock)' : `(${p.activeBatchQty})`}
                                       </option>
                                     );
                                   })}
                                 </select>
+                                {line.productId && <select aria-label="Sale batch" disabled value={line.batchId || ''}
+                                  onChange={event => updateLine(index, { batchId: event.target.value })}
+                                  style={{ ...baseFieldStyle, marginTop: 6 }}>
+                                  {catalog?.products?.find(p => p.id === line.productId)?.batches?.filter(b => b.available && String(b.batchId) === String(line.batchId)).map(b => (
+                                    <option key={b.batchId} value={b.batchId}>{b.batchNumber} — PKR {b.salePrice} — Stock {b.stockQty}</option>
+                                  ))}
+                                </select>}
                               </td>
                               <td style={{ padding: '0.75rem' }}>
-                                <input type="number" min="1" value={line.qty} onChange={(e) => updateLine(index, { qty: e.target.value })} style={{ ...baseFieldStyle, width: 80 }} />
+                                <input type="number" min="1" max={line.availableQty || undefined} step="1" value={line.qty} onChange={(e) => updateLine(index, { qty: e.target.value })} style={{ ...baseFieldStyle, width: 80 }} />
                               </td>
                               <td style={{ padding: '0.75rem' }}>
-                                <input type="number" min="0" value={line.unitPrice} onChange={(e) => updateLine(index, { unitPrice: e.target.value })} style={{ ...baseFieldStyle, width: 110 }} />
+                                <input type="number" min="0" value={line.unitPrice} readOnly title="Sale price of the selected batch" style={{ ...baseFieldStyle, width: 110, background: '#f8fafc' }} />
                               </td>
                               <td style={{ padding: '0.75rem' }}>
                                 <input type="number" min="0" max="100" step="0.1" value={line.discountPercent || ''} onChange={(e) => updateLine(index, { discountPercent: e.target.value })} placeholder="%" style={{ ...baseFieldStyle, width: 70 }} />
@@ -385,10 +536,12 @@ export default function InvoiceComposerModal({ isOpen, onClose, catalog, current
                               <td style={{ padding: '0.75rem' }}>
                                 <input type="number" min="0" max="100" step="0.1" value={line.taxPercent || ''} onChange={(e) => updateLine(index, { taxPercent: e.target.value })} placeholder="%" style={{ ...baseFieldStyle, width: 70 }} />
                               </td>
-                              <td style={{ padding: '0.75rem', fontWeight: 700, color: 'var(--navy)', fontSize: '0.82rem' }}>PKR {lineTotal.toLocaleString()}</td>
+                              <td style={{ padding: '0.75rem', fontWeight: 700, color: 'var(--navy)', fontSize: '0.82rem' }}>PKR {lineTotal.toLocaleString()}
+                                {fifoQuote(line).length > 1 && <small style={{ display: 'block' }}>{fifoBreakdown(line)}</small>}
+                              </td>
                               <td style={{ padding: '0.75rem' }}>
-                                <button type="button" onClick={() => setLines((c) => c.filter((_, i) => i !== index))} disabled={lines.length === 1}
-                                  style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid var(--dash-border)', background: 'white', color: '#ef4444', cursor: lines.length === 1 ? 'not-allowed' : 'pointer', opacity: lines.length === 1 ? 0.5 : 1 }}>
+                                <button type="button" aria-label={`Remove ${line.name || 'invoice line'}`} onClick={() => setLines((c) => c.filter((_, i) => i !== index))}
+                                  style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid var(--dash-border)', background: 'white', color: '#ef4444', cursor: 'pointer' }}>
                                   <Trash2 size={15} />
                                 </button>
                               </td>

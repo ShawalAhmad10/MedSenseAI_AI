@@ -1952,7 +1952,25 @@ async function consumeApprovedCheckout({
 }
 
 
+async function createCompletedOrderReview({customerId,orderId,orderNumber,ddiResult,items}) {
+  if(!customerId || ddiResult?.status!=='WARNING_CHECKOUT_ALLOWED' || !ddiResult.pharmacist_flag_required) return null;
+  await ensureConsultationSchema();
+  const details=extractReviewItems(ddiResult);
+  if(!details.length) return null;
+  const fingerprint=crypto.createHash('sha256').update(`completed-order:${orderId}`).digest('hex');
+  const [existing]=await sequelize.query('SELECT consultation_id FROM pharmacist_consultations WHERE review_fingerprint=:fingerprint',
+    {replacements:{fingerprint},type:QueryTypes.SELECT});
+  if(existing) return existing;
+  const [rows]=await sequelize.query(`INSERT INTO pharmacist_consultations(customer_id,source,status,ddi_status,review_fingerprint,
+    interaction_details,cart_snapshot,customer_message) VALUES(:customerId,'cart','pending',:status,:fingerprint,
+    CAST(:details AS jsonb),CAST(:snapshot AS jsonb),:message) RETURNING *`,
+    {replacements:{customerId,status:ddiResult.status,fingerprint,details:JSON.stringify(details),snapshot:JSON.stringify(items),
+      message:`Order ${orderNumber}: accepted with a DDI warning; pharmacist follow-up required.`}});
+  return mapConsultation(rows[0]);
+}
+
 module.exports = {
+  createCompletedOrderReview,
   ensureConsultationSchema,
   createConsultation,
   listCustomerConsultations,

@@ -30,6 +30,11 @@ const InvoiceReport = sequelize.define('InvoiceReport', {
     allowNull: true,
     field: 'batch_number'
   },
+  batch_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    field: 'batch_id'
+  },
   expiry_date: {
     type: DataTypes.DATEONLY,
     allowNull: true,

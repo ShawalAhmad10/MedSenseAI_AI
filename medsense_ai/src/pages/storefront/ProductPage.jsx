@@ -1,7 +1,10 @@
 // SRS EUC-03 / EUC-05: Product detail page with usage info and suggested alternatives.
 import React, { useEffect, useState } from 'react';
+import { useLiveDataRefresh } from '../../hooks/useLiveDataRefresh';
 import { ChevronRight, ShieldCheck } from 'lucide-react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import BackLink from '../../components/storefront/BackLink';
+import { isListingPath, lastStorefrontListing, previousStorefrontLocation } from '../../services/storefrontNavigation';
 import InteractionBadge from '../../components/storefront/InteractionBadge';
 import ProductCard from '../../components/storefront/ProductCard';
 import QuickViewModal from '../../components/storefront/QuickViewModal';
@@ -17,6 +20,9 @@ const tabs = ['Description', 'Usage', 'Side Effects', 'Interaction Info'];
 export default function ProductPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const previousPath = previousStorefrontLocation(location.pathname + location.search + location.hash);
+  const backToListing = isListingPath(previousPath) ? previousPath : lastStorefrontListing();
   const { addItem } = useCart();
   const { isAuthenticated, user } = useAuth();
   const [product, setProduct] = useState(null);
@@ -28,6 +34,11 @@ export default function ProductPage() {
   const [activeTab, setActiveTab] = useState('Description');
   const [activeImage, setActiveImage] = useState(0);
   const [quickViewProduct, setQuickViewProduct] = useState(null);
+  useLiveDataRefresh(async () => {
+    const item = await getProductBySlug(slug);
+    setProduct(item || null);
+    setError(item ? '' : 'Product not found.');
+  }, !loading);
 
   useEffect(() => {
     let active = true;
@@ -99,11 +110,11 @@ export default function ProductPage() {
   }, [slug]);
 
   if (loading) {
-    return <div className="storefront-shell"><div className="sf-loading">Loading product detail…</div></div>;
+    return <div className="storefront-shell"><BackLink to={backToListing}>Back to Products</BackLink><div className="sf-loading">Loading product detail…</div></div>;
   }
 
   if (error || !product) {
-    return <div className="storefront-shell"><div className="sf-error">{error || 'Unable to load product.'}</div></div>;
+    return <div className="storefront-shell"><BackLink to={backToListing}>Back to Products</BackLink><div className="sf-error">{error || 'Unable to load product.'}</div></div>;
   }
 
   const gallery = [product.imageLabel, `${product.imageLabel} ALT`, `${product.imageLabel} INFO`];
@@ -116,6 +127,7 @@ export default function ProductPage() {
 
   return (
     <div className="storefront-shell">
+      <BackLink to={backToListing} style={{ marginBottom: '1rem' }}>Back to Products</BackLink>
       <section className="sf-card sf-section-card">
         <div className="sf-detail-layout">
           <div className="sf-gallery-grid">
@@ -206,7 +218,7 @@ export default function ProductPage() {
                       ? user.id
                       : null
                   );
-                  navigate('/checkout?mode=buy-now');
+                  navigate('/checkout?mode=buy-now', { state: { returnTo: location.pathname + location.search + location.hash } });
                 }}
                 style={{
                   opacity: (!product.stockQty || product.stockQty <= 0) ? 0.5 : 1,

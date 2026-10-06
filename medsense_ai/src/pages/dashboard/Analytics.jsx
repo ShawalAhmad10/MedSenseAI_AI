@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Download, Calendar, Loader2, TrendingUp, ShoppingCart, Users, DollarSign } from 'lucide-react';
 import api from '../../services/api';
+import { startLiveDataRefresh } from '../../services/liveDataRefresh';
 
 import KPIRow from '../../components/analytics/KPIRow';
 import RevenueLineChart from '../../components/analytics/RevenueLineChart';
@@ -68,9 +69,9 @@ export default function Analytics() {
         ? 90
         : 30;
 
-    async function load() {
+    async function load(quiet = false) {
       if (!cancelled) {
-        setIsLoading(true);
+        if (!quiet) setIsLoading(true);
         setLoadError('');
       }
 
@@ -138,9 +139,11 @@ export default function Analytics() {
     }
 
     load();
+    const stopRefresh = startLiveDataRefresh(() => load(true));
 
     return () => {
       cancelled = true;
+      stopRefresh();
     };
   }, [selectedPeriod]);
 
@@ -322,78 +325,373 @@ export default function Analytics() {
     topMedicines,
     funnelMetrics
   ]);
+  const csvCell = (value) => {
+    if (value === null || value === undefined) {
+      return '""';
+    }
+
+    let text = String(value);
+
+    if (/^[=+\-@]/.test(text)) {
+      text = `'${text}`;
+    }
+
+    return `"${text.replace(/"/g, '""')}"`;
+  };
+
+
+  const getExportDatasets = () => {
+    const recordedSales =
+      currentData?.revenueTrend?.weekly ||
+      currentData?.recordedSalesTrend ||
+      currentData?.salesTrend ||
+      [];
+
+    const medicineDemand =
+      currentData?.topMedicines ||
+      currentData?.medicineDemand ||
+      [];
+
+    const funnel =
+      currentData?.funnelStages ||
+      [];
+
+    return [
+      {
+        section: 'recorded_sales',
+        rows: Array.isArray(recordedSales)
+          ? recordedSales
+          : [],
+      },
+      {
+        section: 'medicine_demand',
+        rows: Array.isArray(medicineDemand)
+          ? medicineDemand
+          : [],
+      },
+      {
+        section: 'observed_funnel',
+        rows: Array.isArray(funnel)
+          ? funnel
+          : [],
+      },
+    ];
+  };
+
+
   const handleExportCSV = () => {
-    const convertToCSV = (data) => {
-      if (!Array.isArray(data) || data.length === 0) {
-        return '';
+    const datasets =
+      getExportDatasets();
+
+    const rows =
+      datasets.flatMap(
+        ({ section, rows }) =>
+          rows.map((row) => ({
+            section,
+            ...(row || {}),
+          }))
+      );
+
+    if (rows.length === 0) {
+      return;
+    }
+
+    const headers =
+      Array.from(
+        new Set(
+          rows.flatMap((row) =>
+            Object.keys(row)
+          )
+        )
+      );
+
+    const lines = [
+      headers.map(csvCell).join(','),
+
+      ...rows.map((row) =>
+        headers
+          .map((header) =>
+            csvCell(row[header])
+          )
+          .join(',')
+      ),
+    ];
+
+    const csv =
+      '\uFEFF' +
+      lines.join('\r\n');
+
+    const blob =
+      new Blob(
+        [csv],
+        {
+          type: 'text/csv;charset=utf-8',
+        }
+      );
+
+    const url =
+      URL.createObjectURL(blob);
+
+    const anchor =
+      document.createElement('a');
+
+    anchor.href = url;
+    anchor.download =
+      `medsenseai_analytics_${selectedPeriod}.csv`;
+
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+
+    setTimeout(
+      () => URL.revokeObjectURL(url),
+      0
+    );
+  };
+
+
+  const handleExportPDF = () => {
+    setIsGeneratingPDF(true);
+
+    const escapeHtml = (value) =>
+      String(
+        value === null ||
+        value === undefined
+          ? ''
+          : value
+      )
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+
+
+    const renderTable = (
+      title,
+      rows
+    ) => {
+      if (
+        !Array.isArray(rows) ||
+        rows.length === 0
+      ) {
+        return `
+          <section>
+            <h2>${escapeHtml(title)}</h2>
+            <p>No recorded data available.</p>
+          </section>
+        `;
       }
 
       const headers =
-        Object.keys(data[0]).join(',');
-
-      const rows =
-        data
-          .map((obj) =>
-            Object.values(obj)
-              .map((value) =>
-                `"${String(value ?? '').replace(/"/g, '""')}"`
-              )
-              .join(',')
+        Array.from(
+          new Set(
+            rows.flatMap(
+              (row) =>
+                Object.keys(row || {})
+            )
           )
-          .join('\n');
+        );
 
-      return `${headers}\n${rows}`;
+      const headerHtml =
+        headers
+          .map(
+            (header) =>
+              `<th>${escapeHtml(header)}</th>`
+          )
+          .join('');
+
+      const bodyHtml =
+        rows
+          .map(
+            (row) =>
+              `<tr>${
+                headers
+                  .map(
+                    (header) =>
+                      `<td>${escapeHtml(
+                        row?.[header]
+                      )}</td>`
+                  )
+                  .join('')
+              }</tr>`
+          )
+          .join('');
+
+      return `
+        <section>
+          <h2>${escapeHtml(title)}</h2>
+
+          <table>
+            <thead>
+              <tr>${headerHtml}</tr>
+            </thead>
+
+            <tbody>
+              ${bodyHtml}
+            </tbody>
+          </table>
+        </section>
+      `;
     };
 
-    const files = [
-      {
-        name: `recorded_sales_${selectedPeriod}.csv`,
-        data: convertToCSV(
-          currentData.revenueTrend.daily
-        )
+
+    const kpiRows =
+      Object.entries(
+        currentData?.kpis || {}
+      ).map(
+        ([name, metric]) => ({
+          metric: name,
+          value:
+            metric &&
+            typeof metric === 'object'
+              ? metric.value
+              : metric,
+          delta:
+            metric &&
+            typeof metric === 'object'
+              ? metric.delta ?? ''
+              : '',
+        })
+      );
+
+
+    const datasets =
+      getExportDatasets();
+
+
+    const reportWindow =
+      window.open('', '_blank');
+
+    if (!reportWindow) {
+      setIsGeneratingPDF(false);
+      return;
+    }
+
+
+    reportWindow.opener = null;
+
+
+    const html = `
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+
+<title>MedSenseAI Analytics Report</title>
+
+<style>
+@page {
+  size: A4 landscape;
+  margin: 12mm;
+}
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  color: #111827;
+  background: white;
+  font-size: 11px;
+}
+
+h1 {
+  margin-bottom: 5px;
+}
+
+h2 {
+  margin-top: 22px;
+  font-size: 16px;
+}
+
+.meta {
+  color: #6b7280;
+  margin-bottom: 18px;
+  line-height: 1.6;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 18px;
+}
+
+th,
+td {
+  border: 1px solid #d1d5db;
+  padding: 6px;
+  text-align: left;
+}
+
+th {
+  background: #f3f4f6;
+}
+
+section {
+  break-inside: avoid;
+}
+
+.footer {
+  border-top: 1px solid #d1d5db;
+  padding-top: 10px;
+  margin-top: 20px;
+  color: #6b7280;
+}
+</style>
+</head>
+
+<body>
+
+<h1>MedSenseAI Analytics Report</h1>
+
+<div class="meta">
+Reporting period: ${escapeHtml(selectedPeriod)}
+<br>
+Generated: ${escapeHtml(new Date().toLocaleString())}
+<br>
+Source: Recorded pharmacy operational data
+</div>
+
+${renderTable(
+  'Key Performance Indicators',
+  kpiRows
+)}
+
+${renderTable(
+  'Recorded Sales Trend',
+  datasets[0]?.rows || []
+)}
+
+${renderTable(
+  'Medicine Demand',
+  datasets[1]?.rows || []
+)}
+
+${renderTable(
+  'Observed Storefront Funnel',
+  datasets[2]?.rows || []
+)}
+
+<div class="footer">
+MedSenseAI Analytics Report
+</div>
+
+</body>
+</html>
+`;
+
+
+    reportWindow.document.open();
+    reportWindow.document.write(html);
+    reportWindow.document.close();
+
+
+    setTimeout(
+      () => {
+        setIsGeneratingPDF(false);
+        reportWindow.focus();
+        reportWindow.print();
       },
-      {
-        name: `medicine_demand_${selectedPeriod}.csv`,
-        data: convertToCSV(
-          currentData.topMedicines
-        )
-      },
-      {
-        name: `observed_funnel_${selectedPeriod}.csv`,
-        data: convertToCSV(
-          currentData.funnelStages
-        )
-      }
-    ];
-
-    files.forEach((file, index) => {
-      setTimeout(() => {
-        const blob =
-          new Blob(
-            [file.data],
-            { type: 'text/csv' }
-          );
-
-        const url =
-          URL.createObjectURL(blob);
-
-        const anchor =
-          document.createElement('a');
-
-        anchor.href = url;
-        anchor.download = file.name;
-
-        document.body.appendChild(anchor);
-        anchor.click();
-        document.body.removeChild(anchor);
-
-        URL.revokeObjectURL(url);
-      }, index * 250);
-    });
-  };
-  const handleExportPDF = () => {
-    setIsGeneratingPDF(true);
-    setTimeout(() => { setIsGeneratingPDF(false); window.print(); }, 1500);
+      400
+    );
   };
 
   return (

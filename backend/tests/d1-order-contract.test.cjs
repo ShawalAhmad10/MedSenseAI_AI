@@ -1,4 +1,4 @@
-const test = require('node:test');
+﻿const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -102,7 +102,7 @@ test('post-order DDI flag is emitted once after commit and failure is contained'
 
 test('client selling price is not authoritative', () => {
   assert.match(source, /Client selling price is ignored/);
-  assert.match(source, /Number\(product\.product_price \|\| 0\)/);
+  assert.match(source, /Number\(allocation\.sale_price\)/);
 });
 
 test('duplicate product lines are collapsed for DDI identity evaluation', () => {
@@ -200,7 +200,7 @@ test('authenticated storefront order rejects forged customer identity', () => {
   assert.equal(res.payload.code, 'CUSTOMER_IDENTITY_MISMATCH');
 });
 
-test('anonymous storefront order compatibility remains unchanged', () => {
+test('anonymous storefront cannot claim an existing customer identity', () => {
   const { enforceAuthenticatedCustomerOrderIdentity } =
     require('../src/middleware/customerAuth');
 
@@ -218,7 +218,7 @@ test('anonymous storefront order compatibility remains unchanged', () => {
   );
 
   assert.equal(nextCalled, true);
-  assert.equal(req.body.customer_id, 99);
+  assert.equal(req.body.customer_id, null);
 });
 
 test('order POST applies optional JWT then identity guard before existing controller', () => {
@@ -512,3 +512,4 @@ test('raw request sort values are never interpolated into order SQL', () => {
     /ORDER BY i\.\$\{sortColumn\} \$\{sortDirection\}/
   );
 });
+

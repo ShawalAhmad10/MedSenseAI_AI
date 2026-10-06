@@ -1,6 +1,23 @@
 import axios from 'axios';
+import { getCategorySlug } from '../constants/categories.js';
 
 const API_URL = '/api/products';
+
+// Collapse only simultaneous requests; no persistent/stale cache.
+let productsRequestInFlight = null;
+let categoriesRequestInFlight = null;
+
+async function fetchCategoriesDirectory() {
+  if (!categoriesRequestInFlight) {
+    categoriesRequestInFlight = axios
+      .get(`${API_URL}/categories`)
+      .finally(() => {
+        categoriesRequestInFlight = null;
+      });
+  }
+
+  return categoriesRequestInFlight;
+}
 
 // Delay helper for smooth transitions
 const delay = (payload, timeout = 150) =>
@@ -11,8 +28,16 @@ const delay = (payload, timeout = 150) =>
 // Get all products from database
 async function fetchAllProducts() {
   try {
-    const response = await axios.get(API_URL);
-    return response.data;
+    if (!productsRequestInFlight) {
+      productsRequestInFlight = axios
+        .get(API_URL, { params: { view: 'storefront' } })
+        .then((response) => response.data)
+        .finally(() => {
+          productsRequestInFlight = null;
+        });
+    }
+
+    return await productsRequestInFlight;
   } catch (error) {
     console.error('Error fetching products:', error);
     return [];
@@ -28,11 +53,14 @@ function transformProduct(product) {
   
   return {
     id: product.id, // Keep "prod-X" format
-    slug: product.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+    batchId: product.activeBatchId,
+    batchNumber: product.activeBatchNumber,
+    fifoBatches: product.fifoBatches,
+    slug: (product.canonicalTitle || product.title).toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
     name: product.title,
     subtitle: product.packDescription || `Pack of ${product.packSize || 1}`,
     category: product.category,
-    categorySlug: product.category.toLowerCase().replace(/\s+/g, '-'),
+    categorySlug: getCategorySlug(product.category),
     price: product.price,
     oldPrice: product.discount > 0 ? Math.round(product.price / (1 - product.discount / 100)) : null,
     discountPercent: product.discount || 0,
@@ -61,31 +89,27 @@ function transformProduct(product) {
   };
 }
 
-// Get dynamic categories from products
+// Category masters remain visible even before stock or products are added.
 export async function getCategories() {
-  const products = await fetchAllProducts();
-  
-  // Extract unique categories
-  const categorySet = new Set();
-  const categoryMap = {};
-  
+  const [response, products] = await Promise.all([
+    fetchCategoriesDirectory(),
+    fetchAllProducts(),
+  ]);
+  const names = response.data?.data?.categories;
+  if (!Array.isArray(names)) throw new Error('Unable to load pharmacy categories.');
+  const counts = new Map();
   products.forEach(product => {
-    if (product.category && product.status === 'active') {
-      categorySet.add(product.category);
-      if (!categoryMap[product.category]) {
-        categoryMap[product.category] = {
-          slug: product.category.toLowerCase().replace(/\s+/g, '-'),
-          name: product.category,
-          icon: 'Pill', // Default icon
-          description: `Browse ${product.category.toLowerCase()} products`,
-          count: 0
-        };
-      }
-      categoryMap[product.category].count++;
+    if (product.category && (product.status === 'active' || product.stockQty === 0)) {
+      counts.set(product.category, (counts.get(product.category) || 0) + 1);
     }
   });
-  
-  return delay(Object.values(categoryMap));
+  return delay(names.map(name => ({
+    slug: getCategorySlug(name),
+    name,
+    icon: 'Pill',
+    description: '',
+    count: counts.get(name) || 0,
+  })));
 }
 
 // Get featured/top deals products
@@ -105,13 +129,12 @@ export async function getTopDeals() {
 export async function searchProducts(query = '', categorySlug = '') {
   const products = await fetchAllProducts();
   
-  let filtered = products.filter(p => p.status === 'active');
+  let filtered = products.filter(p => p.status === 'active' || p.stockQty === 0);
   
   // Filter by category
   if (categorySlug) {
-    const category = categorySlug.replace(/-/g, ' ');
     filtered = filtered.filter(p => 
-      p.category?.toLowerCase() === category.toLowerCase()
+      getCategorySlug(p.category) === categorySlug
     );
   }
   
@@ -135,8 +158,8 @@ export async function getProductBySlug(slug) {
   const products = await fetchAllProducts();
   
   const product = products.find(p => {
-    const productSlug = p.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    return productSlug === slug && p.status === 'active';
+    const names = [p.title, p.canonicalTitle, ...(p.batches || []).map(batch => batch.name)].filter(Boolean);
+    return names.some(name => name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') === slug);
   });
   
   if (!product) {
@@ -151,7 +174,7 @@ export async function getProductBySlug(slug) {
 // Get product by ID
 export async function getProductById(productId) {
   const products = await fetchAllProducts();
-  const product = products.find(p => p.id === productId && p.status === 'active');
+  const product = products.find(p => p.id === productId || p.versionIds?.includes(productId));
   
   if (!product) return null;
   return transformProduct(product);

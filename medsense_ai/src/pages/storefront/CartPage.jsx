@@ -2,6 +2,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ArrowRight, ShieldAlert } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import BackLink from '../../components/storefront/BackLink';
+import FifoPriceBreakdown from '../../components/storefront/FifoPriceBreakdown';
+import { fifoTotal } from '../../services/storefrontFifoPricing';
+import { lastStorefrontListing } from '../../services/storefrontNavigation';
 import { useCart } from '../../context/CartContext';
 import InteractionBadge from '../../components/storefront/InteractionBadge';
 import InteractionWarningModal from '../../components/storefront/InteractionWarningModal';
@@ -197,12 +201,14 @@ export default function CartPage() {
     removeItem,
     subtotal,
     updateQuantity,
+    refreshCartInventory,
     ddiLoading,
     ddiError,
     ddiWarnings,
     ddiCheckoutAllowed,
     ddiResult,
   } = useCart();
+  useEffect(() => { void refreshCartInventory(); }, [cartInstanceId, refreshCartInventory]);
   const [showWarnings, setShowWarnings] = useState(false);
   const [showEscalation, setShowEscalation] = useState(false);
 
@@ -532,6 +538,7 @@ export default function CartPage() {
                 Review your items and proceed to checkout
               </p>
             </div>
+            <BackLink to={lastStorefrontListing()}>Continue Shopping</BackLink>
             <InteractionBadge
               level={ddiLoading ? 'checking' : ddiPresentation.level}
               text={
@@ -591,7 +598,7 @@ export default function CartPage() {
                         +
                       </button>
                     </div>
-                    <strong>PKR {(item.price * item.quantity).toFixed(2)}</strong>
+                    <div><strong>PKR {fifoTotal(item).toFixed(2)}</strong><FifoPriceBreakdown item={item} /></div>
                   </div>
                 </article>
               ))}

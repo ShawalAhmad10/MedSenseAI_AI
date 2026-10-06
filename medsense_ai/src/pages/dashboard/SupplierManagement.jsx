@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLiveDataRefresh } from '../../hooks/useLiveDataRefresh';
 import {
   AlertCircle, CheckCircle, DollarSign, Edit3, Loader2,
   Plus, Power, RefreshCw, Search, Trash2, Truck, X
@@ -110,25 +111,28 @@ export default function SupplierManagement() {
   const showToast = (msg, type='success') => { setToast({ msg, type }); setTimeout(()=>setToast(null),4000); };
 
   // ── Data fetching ──────────────────────────────────────────────
-  const refreshMaster = useCallback(async () => {
-    setIsLoading(true);
+  const refreshMaster = useCallback(async (quiet = false) => {
+    if (!quiet) setIsLoading(true);
     try {
       const [list, prodList] = await Promise.all([listSuppliers(), listProducts()]);
       setSuppliers(Array.isArray(list) ? list : (list?.data || []));
       setProducts(prodList);
     } catch(e) { showToast(e.message,'error'); }
-    finally { setIsLoading(false); }
+    finally { if (!quiet) setIsLoading(false); }
   },[]);
 
-  const refreshAccounts = useCallback(async () => {
-    setIsLoading(true);
+  const refreshAccounts = useCallback(async (quiet = false) => {
+    if (!quiet) setIsLoading(true);
     try {
       const r = await api.get('/suppliers/with-accounts');
       const d = r.data?.data || {};
       setSupWithAcc(d.suppliers || []);
       setStats(d.stats || {});
+      setSelectedSupplier(previous => previous
+        ? (d.suppliers || []).find(row => row.supplierId === previous.supplierId) || null
+        : null);
     } catch(e) { showToast(e.message,'error'); }
-    finally { setIsLoading(false); }
+    finally { if (!quiet) setIsLoading(false); }
   },[]);
 
   const refreshLedger = useCallback(async (supplierId) => {
@@ -147,6 +151,11 @@ export default function SupplierManagement() {
       refreshAccounts();
     }
   },[surface, refreshMaster, refreshAccounts]);
+  useLiveDataRefresh(async () => {
+    if (surface === 'master') await refreshMaster(true);
+    else await refreshAccounts(true);
+    if (surface === 'ledger' && selectedSupplier) await refreshLedger(selectedSupplier.supplierId);
+  });
 
   // ── Filtered supplier list ─────────────────────────────────────
   const filtered = useMemo(() => {

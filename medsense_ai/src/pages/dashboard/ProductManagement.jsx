@@ -1,49 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLiveDataRefresh } from '../../hooks/useLiveDataRefresh';
 import { Edit3, Package, Plus, Power, Search, Trash2 } from 'lucide-react';
 import { listProducts, createProduct, updateProduct, deleteProduct, toggleProductStatus } from '../../services/productService';
 import { listBrands } from '../../services/brandService';
 import { listSuppliers } from '../../services/supplierService';
+import { MEDICINE_CATEGORIES } from '../../constants/categories';
 
-const emptyProduct = { title: '',  salt: '', category: '', brandId: '', supplierId: '', price: '', packPrice: '', packSize: '1', packDescription: '', minThreshold: '', discount: 0, requiresRx: false, description: '', status: 'active' };
+const emptyProduct = { title: '',  salt: '', category: '', brandId: '', supplierId: '', price: '', purchasePrice: '', packPrice: '', packSize: '1', packDescription: '', minThreshold: '', discount: 0, requiresRx: false, description: '', status: 'active' };
 // Note: Stock quantity and expiry date are NOT managed here - they're managed in Inventory > Stock Receive (batch level)
-const categories = [
-  'Analgesics',
-  'Antibiotics',
-  'Antidiabetics',
-  'Cardiovascular',
-  'Antihistamines',
-  'Vitamins and Supplements',
-  'Topical',
-  'Gastrointestinal',
-  'Respiratory',
-  'Dermatological',
-  'Antifungals',
-  'Antivirals',
-  'Ophthalmic',
-  'Neurological',
-  'Hormonal',
-  'Antacids',
-  'Antiemetics',
-  'Antiseptics',
-  'Antiparasitics',
-  'Antimalarials',
-  'Anticonvulsants',
-  'Antidepressants',
-  'Antipsychotics',
-  'Anxiolytics',
-  'Sedatives',
-  'Diuretics',
-  'Laxatives',
-  'Immunosuppressants',
-  'Vaccines',
-  'Hormonal Contraceptives',
-  'Musculoskeletal',
-  'Urological',
-  'Dental',
-  'Ear, Nose and Throat (ENT)',
-  'Eye Care',
-  'Other'
-];
+const categories = MEDICINE_CATEGORIES;
 
 export default function ProductManagement() {
   const [products, setProducts] = useState([]); 
@@ -94,8 +59,8 @@ export default function ProductManagement() {
     setTimeout(() => setMessage(null), 5000);
   };
 
-  const refresh = async () => { 
-    setIsLoading(true);
+  const refresh = async (quiet = false) => { 
+    if (!quiet) setIsLoading(true);
     try {
       const [productList, brandList, supplierList] = await Promise.all([
         listProducts(), 
@@ -108,11 +73,12 @@ export default function ProductManagement() {
     } catch (error) {
       showMessage('error', 'Failed to load data: ' + (error.response?.data?.message || error.message));
     } finally {
-      setIsLoading(false);
+      if (!quiet) setIsLoading(false);
     }
   };
 
   useEffect(() => { refresh(); }, []);
+  useLiveDataRefresh(() => refresh(true));
   const filtered = useMemo(() => products.filter((product) => 
     [product.title, product.salt, product.category, product.brandName, product.supplierName].join(' ').toLowerCase().includes(search.toLowerCase()) && 
     (status === 'all' || product.status === status)
@@ -137,6 +103,7 @@ export default function ProductManagement() {
         brandId: product.brandId,
         supplierId: product.supplierId,
         price: product.price,
+        purchasePrice: product.purchasePrice ?? '',
         packPrice: packPrice,
         packSize: product.packSize || '1',
         packDescription: product.packDescription || '',
@@ -258,8 +225,15 @@ export default function ProductManagement() {
     }
     // Expiry date removed - it's managed at batch level in Stock Receive
 
+    if (!editing && (!Number.isFinite(Number(form.purchasePrice)) || Number(form.purchasePrice) <= 0 ||
+        Number(form.purchasePrice) > Number(form.price))) {
+      showMessage('error', 'Enter a valid purchase cost per unit, at or below the sale price.');
+      return;
+    }
+
     try {
       const payload = { 
+        sourceProductId: form.sourceProductId,
         title: form.title.trim(),
         genericName: form.salt?.trim() || form.title.trim(), // Use salt as genericName (they're same)
         salt: form.salt?.trim() || '',
@@ -267,6 +241,7 @@ export default function ProductManagement() {
         brandId: parseInt(form.brandId),
         supplierId: parseInt(form.supplierId),
         price: Number(form.price),
+        ...(!editing && form.purchasePrice !== '' ? { purchasePrice: Number(form.purchasePrice) } : {}),
         packPrice: Number(form.packPrice || 0),
         packSize: Number(form.packSize || 0),
         packDescription: form.packDescription?.trim() || '',
@@ -371,16 +346,26 @@ export default function ProductManagement() {
             </div>
             <span>{product.brandName || '-'}</span>
             <span>{product.supplierName || '-'}</span>
-            <span>PKR {Number(product.price || 0).toLocaleString()}</span>
+            <span>Sale: PKR {Number(product.price || 0).toLocaleString()}
+              <small style={{ display: 'block' }}>Cost: {product.purchasePrice == null ? 'Set on first receipt' : `PKR ${product.purchasePrice}`}</small>
+            </span>
             <span style={badgeStyle(product.status === 'active')}>{product.status}</span>
             <div style={{ display: 'flex', gap: 8 }}>
+              <button title="Add product with new prices" onClick={() => {
+                openEditor(product);
+                setEditing(null);
+                setForm(current => ({ ...current, price: '', packPrice: '', purchasePrice: '', sourceProductId: product.id }));
+              }} style={iconButtonStyle}>
+                <Plus size={15} />
+              </button>
               <button title="Edit product" onClick={() => openEditor(product)} style={iconButtonStyle}>
                 <Edit3 size={15} />
               </button>
-              <button title="Toggle status" onClick={() => toggle(product)} style={iconButtonStyle}>
+              <button title={product.status === 'active' ? 'Deactivate product' : 'Activate product'} onClick={() => toggle(product)} style={iconButtonStyle}>
                 <Power size={15} />
               </button>
-              <button title="Delete product" onClick={() => remove(product)} style={{ ...iconButtonStyle, color: '#dc2626' }}>
+              <button title="Delete product" onClick={() => remove(product)}
+                style={{ ...iconButtonStyle, color: '#dc2626', opacity: 1 }}>
                 <Trash2 size={15} />
               </button>
             </div>
@@ -407,7 +392,7 @@ export default function ProductManagement() {
           </div>
 
           <div style={formGrid}>
-            <Field label="Product title" value={form.title} onChange={set('title')} required />
+            <Field label="Product title" value={form.title} onChange={set('title')} readOnly={Boolean(editing)} required />
             <Field label="Salt / composition" value={form.salt} onChange={set('salt')} />
             <AutocompleteField 
               label="Category" 
@@ -426,7 +411,11 @@ export default function ProductManagement() {
             <AutocompleteField 
               label="Brand" 
               value={brandSearch} 
-              onChange={(e) => { setBrandSearch(e.target.value); setShowBrandDropdown(true); }} 
+              onChange={(e) => {
+                setBrandSearch(e.target.value);
+                setForm(prev => ({ ...prev, brandId: '' }));
+                setShowBrandDropdown(true);
+              }}
               options={filteredBrands} 
               onSelect={selectBrand} 
               show={showBrandDropdown} 
@@ -436,7 +425,11 @@ export default function ProductManagement() {
             <AutocompleteField 
               label="Supplier" 
               value={supplierSearch} 
-              onChange={(e) => { setSupplierSearch(e.target.value); setShowSupplierDropdown(true); }} 
+              onChange={(e) => {
+                setSupplierSearch(e.target.value);
+                setForm(prev => ({ ...prev, supplierId: '' }));
+                setShowSupplierDropdown(true);
+              }}
               options={filteredSuppliers} 
               onSelect={selectSupplier} 
               show={showSupplierDropdown} 
@@ -444,11 +437,12 @@ export default function ProductManagement() {
               required 
             />
             <Field 
-              label="Product Pack Price (PKR)" 
+              label="Sale Pack Price (PKR)"
               type="number" 
               step="0.01" 
               value={form.packPrice} 
               onChange={set('packPrice')} 
+              readOnly={Boolean(editing)}
               placeholder="e.g., 4000"
               required 
             />
@@ -458,11 +452,12 @@ export default function ProductManagement() {
               min="1"
               value={form.packSize} 
               onChange={set('packSize')} 
+              readOnly={Boolean(editing)}
               placeholder="e.g., 10"
               required 
             />
             <Field 
-              label="Product Price (Per Unit)" 
+              label="Sale Price (Per Unit)"
               type="number" 
               step="0.01" 
               value={form.price} 
@@ -471,9 +466,15 @@ export default function ProductManagement() {
               style={{ ...inputStyle, background: '#f8fafc', cursor: 'not-allowed' }}
             />
             <Field label="Min threshold" type="number" value={form.minThreshold} onChange={set('minThreshold')} required />
+            <Field label="Purchase Price (Per Unit)" type="number" min="0.01" step="0.01"
+              value={form.purchasePrice} onChange={set('purchasePrice')} readOnly={Boolean(editing)}
+              required={!editing} placeholder="e.g., 5" />
+            <p style={{ gridColumn: '1 / -1', margin: 0, fontSize: '0.84rem', color: 'var(--gray-600)' }}>
+              Receive each arrival in Inventory with its own name, purchase cost and sale price. Previous arrivals stay unchanged. Customers buy the oldest available stock first; mixed batches use their own prices. Status updates automatically from available stock.
+            </p>
             <Field label="Pack description" value={form.packDescription} onChange={set('packDescription')} />
             <Field label="Discount (%)" type="number" value={form.discount} onChange={set('discount')} />
-            <SelectField label="Status" value={form.status} onChange={set('status')} options={['active', 'inactive']} />
+            <SelectField label="Status (automatic from stock)" value={form.status} disabled options={['active', 'inactive']} />
             <label style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', background: 'var(--dash-bg)', borderRadius: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--navy)' }}>Requires Prescription</span>

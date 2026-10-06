@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
+import { fifoTotal } from '../services/storefrontFifoPricing';
 import { checkCartDDI, extractDdiWarnings } from '../services/storefrontDdiService';
 import {
   resetFunnelCartId,
@@ -72,6 +73,26 @@ export function CartProvider({ children }) {
   );
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const inventorySnapshot = useRef({ items, owner: userId });
+  inventorySnapshot.current = { items, owner: userId };
+  const refreshCartInventory = useCallback(async () => {
+    const snapshot = inventorySnapshot.current;
+    const refreshed = await Promise.all(snapshot.items.map(async item => {
+      try {
+        const id = String(item.id).replace(/^prod-/, '');
+        const { data } = await axios.get(`${API_URL}/stock-check/${id}`);
+        if (data.price == null) return { ...item, stockQty: 0 };
+        return { ...item, id: data.activeProductId ? `prod-${data.activeProductId}` : item.id,
+          batchId: data.batchId, price: Number(data.price), stockQty: Number(data.stockQty),
+          name: data.name || item.name, fifoBatches: data.fifoBatches || item.fifoBatches };
+      } catch { return item; }
+    }));
+    if (inventorySnapshot.current.owner !== snapshot.owner) return;
+    setItems(current => current.map(item => {
+      const index = snapshot.items.findIndex(original => original.id === item.id && original.quantity === item.quantity);
+      return index >= 0 ? refreshed[index] : item;
+    }));
+  }, [userId]);
   const [ddiResult, setDdiResult] = useState(null);
   const [ddiLoading, setDdiLoading] = useState(false);
   const [ddiError, setDdiError] = useState(null);
@@ -254,7 +275,7 @@ export function CartProvider({ children }) {
       // Use public stock-check endpoint — no auth needed
       const id = typeof productId === 'string' ? productId.replace(/^prod-/, '') : productId;
       const res = await axios.get(`${API_URL}/stock-check/${id}`);
-      return Number(res.data?.stockQty ?? 0);
+      return { ...res.data, stockQty: Number(res.data?.stockQty ?? 0) };
     } catch {
       return null; // null = could not fetch, use cached value
     }
@@ -264,7 +285,10 @@ export function CartProvider({ children }) {
     try {
       // Fetch live stock before adding
       const liveStock = await fetchLiveStock(item.id);
-      const currentStock = liveStock !== null ? liveStock : (item.stockQty ?? 0);
+      const currentStock = liveStock !== null ? liveStock.stockQty : (item.stockQty ?? 0);
+      const refreshedItem = liveStock?.price != null ? { ...item, price: Number(liveStock.price),
+        name: liveStock.name || item.name, batchId: liveStock.batchId,
+        fifoBatches: liveStock.fifoBatches || item.fifoBatches } : item;
 
       if (currentStock <= 0) {
         alert(`${item.name || item.title} is out of stock.`);
@@ -303,11 +327,11 @@ export function CartProvider({ children }) {
         if (existingItem) {
           return current.map((entry) =>
             entry.id === item.id
-              ? { ...entry, quantity: entry.quantity + 1, stockQty: currentStock }
+              ? { ...entry, ...refreshedItem, quantity: entry.quantity + 1, stockQty: currentStock }
               : entry,
           );
         }
-        return [...current, { ...item, quantity: 1, stockQty: currentStock }];
+        return [...current, { ...refreshedItem, quantity: 1, stockQty: currentStock }];
       });
 
       setDrawerOpen(true);
@@ -379,7 +403,7 @@ export function CartProvider({ children }) {
       // If increasing, fetch live stock to validate
       if (newQuantity > currentItem.quantity) {
         const liveStock = await fetchLiveStock(id);
-        const currentStock = liveStock !== null ? liveStock : (currentItem.stockQty ?? 0);
+        const currentStock = liveStock !== null ? liveStock.stockQty : (currentItem.stockQty ?? 0);
 
         if (newQuantity > currentStock) {
           alert(`Cannot increase quantity. Only ${currentStock} units available.`);
@@ -388,7 +412,9 @@ export function CartProvider({ children }) {
         // Update stockQty in cart item with fresh value
         setItems((current) =>
           current.map((item) =>
-            item.id === id ? { ...item, quantity: newQuantity, stockQty: currentStock } : item,
+            item.id === id ? { ...item, quantity: newQuantity, stockQty: currentStock,
+              ...(liveStock?.price != null ? { price: Number(liveStock.price), batchId: liveStock.batchId,
+                name: liveStock.name || item.name, fifoBatches: liveStock.fifoBatches || item.fifoBatches } : {}) } : item,
           ),
         );
 
@@ -505,7 +531,7 @@ export function CartProvider({ children }) {
     }
   };
 
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const subtotal = items.reduce((sum, item) => sum + fifoTotal(item), 0);
   const prescriptionItems = items.filter((item) => item.requiresPrescription);
 
   const ddiWarnings = useMemo(
@@ -527,6 +553,7 @@ export function CartProvider({ children }) {
       addItem,
       removeItem,
       updateQuantity,
+      refreshCartInventory,
       clearCart,
       mergeGuestCartToAccount,
       subtotal,
@@ -541,7 +568,7 @@ export function CartProvider({ children }) {
       openDrawer: () => setDrawerOpen(true),
       closeDrawer: () => setDrawerOpen(false),
     }),
-    [cartInstanceId, ddiCheckoutAllowed, ddiError, ddiLoading, ddiResult, ddiWarnings, drawerOpen, items, prescriptionItems, subtotal, userId],
+    [cartInstanceId, ddiCheckoutAllowed, ddiError, ddiLoading, ddiResult, ddiWarnings, drawerOpen, items, prescriptionItems, subtotal, userId, refreshCartInventory],
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

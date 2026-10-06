@@ -21,15 +21,20 @@ const page =
     'utf8'
   );
 
-test('active Lead page uses real authenticated API', () => {
+test('active Lead page uses real authenticated API with Axios params', () => {
   assert.match(
     page,
-    /api\.get\('\/leads\?limit=100'\)/
+    /params:\s*\{\s*limit:\s*100,\s*\}/s
   );
 
   assert.match(
     page,
-    /api\.post\('\/leads\/recalculate\?limit=100'\)/
+    /api\.get\(\s*'\/leads',\s*options\s*\)/s
+  );
+
+  assert.match(
+    page,
+    /api\.post\(\s*'\/leads\/recalculate',\s*null,\s*options\s*\)/s
   );
 });
 
@@ -50,13 +55,13 @@ test('active Lead page has explicit insufficient and model unavailable states', 
   );
 });
 
-test('active Lead page preserves synthetic-development disclosure', () => {
-  assert.match(
+test('active Lead page does not invent evaluation-only provenance metadata', () => {
+  assert.doesNotMatch(
     page,
     /synthetic_development_notice/
   );
 
-  assert.match(
+  assert.doesNotMatch(
     page,
     /firstNotice/
   );

@@ -38,7 +38,7 @@ export default function Navbar() {
       setCategories(cats);
       setAllProducts(prods);
     }
-    loadData();
+    loadData().catch(() => setCategories([]));
   }, []);
 
   const suggestions = useMemo(() => {
@@ -198,7 +198,7 @@ export default function Navbar() {
 
           <div className="sf-navbar-subnav">
             <nav aria-label="Store categories" className="sf-category-row">
-              {categories.map((category) => (
+              {categories.slice(0, 6).map((category) => (
                 <NavLink
                   key={category.slug}
                   className={({ isActive }) => `sf-category-pill${isActive ? ' active' : ''}`}
@@ -207,6 +207,9 @@ export default function Navbar() {
                   {category.name}
                 </NavLink>
               ))}
+                            <NavLink className="sf-category-pill" to="/search">
+                All Categories
+              </NavLink>
               <NavLink className="sf-category-pill" to="/search?sort=discount">
                 Top Deals
               </NavLink>

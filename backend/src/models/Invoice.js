@@ -2,6 +2,9 @@ const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
 
 const Invoice = sequelize.define('Invoice', {
+  legacy_source_schema: { type: DataTypes.TEXT, allowNull: true },
+  legacy_source_invoice_id: { type: DataTypes.INTEGER, allowNull: true },
+  legacy_source_invoice_number: { type: DataTypes.TEXT, allowNull: true },
   invoice_id: {
     type: DataTypes.INTEGER,
     primaryKey: true,

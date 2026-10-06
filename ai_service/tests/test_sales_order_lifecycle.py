@@ -78,20 +78,60 @@ def test_empty_order_cohort_and_invalid_input_are_distinct():
     assert rejected.observed_created_orders is None
 
 
-def test_core_imports_only_canonical_records_stdlib_and_existing_typed_validation():
-    import sys
 
-    root = Path(__file__).resolve().parents[1] / "src" / "medsense_ai" / "sales_analytics"
+def test_core_imports_only_canonical_records_stdlib_and_existing_typed_validation():
+    import ast
+    import sys
+    from pathlib import Path
+
+    root = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "medsense_ai"
+        / "sales_analytics"
+    )
+
     for path in root.glob("*.py"):
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        for node in ast.walk(
+            ast.parse(path.read_text(encoding="utf-8"))
+        ):
             if isinstance(node, ast.Import):
                 imports = [alias.name for alias in node.names]
+
             elif isinstance(node, ast.ImportFrom):
                 if node.level:
                     continue
+
                 imports = [node.module]
+
             else:
                 continue
+
             for name in imports:
-                allowed = ("medsense_ai.sales_data", "medsense_ai.lead_scoring.model.contracts")
-                assert name.split(".")[0] in sys.stdlib_module_names | {"pydantic"} or name.startswith(allowed), (path, name)
+                allowed_prefixes = (
+                    "medsense_ai.sales_data",
+                    "medsense_ai.lead_scoring.model.contracts",
+                )
+
+                allowed_roots = (
+                    sys.stdlib_module_names
+                    | {"pydantic"}
+                )
+
+                # live.py is the explicit DB persistence adapter.
+                # Keep SQLAlchemy/database dependencies isolated here.
+                if path.name == "live.py":
+                    allowed_prefixes = (
+                        *allowed_prefixes,
+                        "medsense_ai.database",
+                    )
+
+                    allowed_roots = (
+                        allowed_roots
+                        | {"sqlalchemy"}
+                    )
+
+                assert (
+                    name.split(".")[0] in allowed_roots
+                    or name.startswith(allowed_prefixes)
+                ), (path, name)

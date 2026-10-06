@@ -58,8 +58,8 @@ export default function OrdersPage() {
     
     loadOrders();
     
-    // Auto-refresh every 30 seconds for real-time updates
-    const interval = setInterval(loadOrders, 30000);
+    // Refresh committed updates from the shared PostgreSQL backend.
+    const interval = setInterval(loadOrders, 5000);
     return () => clearInterval(interval);
   }, [user]);
 

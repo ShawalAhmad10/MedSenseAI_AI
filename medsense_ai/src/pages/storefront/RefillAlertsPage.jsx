@@ -3,7 +3,6 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-
 import {
   Link,
 } from 'react-router-dom';
@@ -562,7 +561,7 @@ export default function RefillAlertsPage() {
           </div>
         )}
 
-        <div
+<div
           className="sf-summary-block"
           style={{
             marginBottom:

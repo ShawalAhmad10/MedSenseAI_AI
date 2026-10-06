@@ -113,7 +113,7 @@ test('unresolved ingredient produces factual unresolved review item', () => {
   assert.equal(warnings.length, 1);
   assert.equal(warnings[0].label, 'Submitted for pharmacist verification');
   assert.match(warnings[0].detail, /MODEL_UNSUPPORTED/);
-  assert.match(warnings[0].detail, /does not confirm an interaction/);
+  assert.match(warnings[0].detail, /not a confirmed interaction/);
 });
 
 test('generic governed block never invents clinical severity', () => {
@@ -175,7 +175,17 @@ test('Major and Unknown exact warnings present as blocking approval', () => {
 
     assert.equal(presentation.blocking, true);
     assert.match(presentation.detail, /pharmacist approval/i);
-    assert.match(`${presentation.text} ${presentation.detail}`, new RegExp(severity, 'i'));
+    if (severity === 'Unknown') {
+      assert.match(
+        `${presentation.text} ${presentation.detail}`,
+        /severity not available/i,
+      );
+    } else {
+      assert.match(
+        `${presentation.text} ${presentation.detail}`,
+        new RegExp(severity, 'i'),
+      );
+    }
   }
 });
 

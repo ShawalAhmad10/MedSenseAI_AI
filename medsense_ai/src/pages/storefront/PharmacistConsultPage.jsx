@@ -5,6 +5,7 @@ import React, {
 } from 'react';
 
 import { Link } from 'react-router-dom';
+import BackLink from '../../components/storefront/BackLink';
 
 import { useAuth } from '../../context/AuthContext';
 
@@ -127,6 +128,7 @@ export default function PharmacistConsultPage() {
   if (!isAuthenticated) {
     return (
       <div className="storefront-shell">
+        <BackLink to="/cart" style={{ marginBottom: '1rem' }}>Back to Cart</BackLink>
         <div className="sf-card sf-section-card">
           <h1
             style={{
@@ -177,6 +179,8 @@ export default function PharmacistConsultPage() {
             </p>
           </div>
 
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <BackLink to="/cart">Back to Cart</BackLink>
           <button
             className="sf-button-secondary"
             disabled={loading}
@@ -189,6 +193,7 @@ export default function PharmacistConsultPage() {
               ? 'Refreshing...'
               : 'Refresh'}
           </button>
+          </div>
         </div>
 
         {error && (
@@ -228,16 +233,6 @@ export default function PharmacistConsultPage() {
                 A consultation will appear here after a governed DDI review requires pharmacist guidance and you request assistance from the cart.
               </p>
 
-              <Link
-                className="sf-button-secondary"
-                style={{
-                  textDecoration:
-                    'none',
-                }}
-                to="/cart"
-              >
-                Back to Cart
-              </Link>
             </div>
           )}
 

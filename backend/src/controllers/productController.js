@@ -1,19 +1,33 @@
 const Product = require('../models/Product');
+const StockHistory = require('../models/StockHistory');
 const Brand = require('../models/Brand');
 const Supplier = require('../models/Supplier');
 const BatchAllocationService = require('../services/batchAllocationService');
 const { sequelize } = require('../config/database');
+const { money } = require('../services/productPricingService');
+const { setSalePrice } = require('../services/salePricingService');
+const { selectMarketProducts, listProductBatches, synchronizeProductStatus } = require('../services/marketProductService');
+
+exports.setSalePrice = async (req, res) => {
+  try {
+    res.json(await setSalePrice(req.params.id, req.body.price));
+  } catch (error) {
+    res.status(error.status || 500).json({ message: error.status ? error.message : 'Failed to update sale price' });
+  }
+};
 
 // Get all products with brand and supplier names
 exports.getAllProducts = async (req, res) => {
   try {
-    const products = await Product.findAll({
-      order: [['product_id', 'DESC']]
-    });
-
-    // Get all brand and suppliers for mapping
-    const brand = await Brand.findAll();
-    const suppliers = await Supplier.findAll();
+    // Independent reads: execute concurrently to reduce DB round trips.
+    const [products, brand, suppliers] = await Promise.all([
+      Product.findAll({
+        where: { archived: false },
+        order: [['product_id', 'DESC']]
+      }),
+      Brand.findAll(),
+      Supplier.findAll()
+    ]);
 
     const brandMap = {};
     brand.forEach(b => brandMap[b.brand_id] = b.brand_name);
@@ -25,12 +39,14 @@ exports.getAllProducts = async (req, res) => {
     const [stockInfo] = await sequelize.query(`
       SELECT 
         product_id,
-        SUM(CASE WHEN expiry_date >= CURRENT_DATE AND remaining_quantity > 0 THEN remaining_quantity ELSE 0 END) as available_stock,
-        MIN(CASE WHEN expiry_date >= CURRENT_DATE AND remaining_quantity > 0 THEN expiry_date ELSE NULL END) as nearest_expiry,
-        COUNT(CASE WHEN expiry_date >= CURRENT_DATE AND remaining_quantity > 0 THEN 1 END) as active_batch_count,
+        SUM(CASE WHEN (expiry_date IS NULL OR expiry_date >= CURRENT_DATE) AND COALESCE(batch_status, 'ACTIVE') = 'ACTIVE' AND remaining_quantity > 0 THEN remaining_quantity ELSE 0 END) as available_stock,
+        MIN(CASE WHEN (expiry_date IS NULL OR expiry_date >= CURRENT_DATE) AND COALESCE(batch_status, 'ACTIVE') = 'ACTIVE' AND remaining_quantity > 0 THEN expiry_date ELSE NULL END) as nearest_expiry,
+        COUNT(CASE WHEN (expiry_date IS NULL OR expiry_date >= CURRENT_DATE) AND COALESCE(batch_status, 'ACTIVE') = 'ACTIVE' AND remaining_quantity > 0 THEN 1 END) as active_batch_count,
         SUM(CASE WHEN expiry_date < CURRENT_DATE THEN remaining_quantity ELSE 0 END) as expired_stock,
         COUNT(CASE WHEN expiry_date < CURRENT_DATE THEN 1 END) as expired_batch_count
+        , MAX(CASE WHEN (expiry_date IS NULL OR expiry_date >= CURRENT_DATE) AND COALESCE(batch_status, 'ACTIVE') = 'ACTIVE' AND remaining_quantity > 0 THEN batch_id END) as latest_receipt_id
       FROM stock_history
+      WHERE status = 1
       GROUP BY product_id
     `);
     const stockMap = {};
@@ -41,12 +57,21 @@ exports.getAllProducts = async (req, res) => {
         active_batch_count: Number(s.active_batch_count || 0),
         expired_stock: Number(s.expired_stock || 0),
         expired_batch_count: Number(s.expired_batch_count || 0)
+        , latest_receipt_id: Number(s.latest_receipt_id || 0)
       };
     });
+
+    const batchesByProduct = new Map();
+    for (const batch of await listProductBatches()) {
+      if (!batchesByProduct.has(batch.product_id)) batchesByProduct.set(batch.product_id, []);
+      batchesByProduct.get(batch.product_id).push(batch);
+    }
 
     // Transform to match frontend format
     const formattedProducts = products.map(product => {
       const unitPrice = Number(product.product_price || 0);
+      const batches = batchesByProduct.get(product.product_id) || [];
+      const activeBatch = batches.find(batch => batch.available);
       const packSize = Number(product.product_pack_size || 1);
       const storedPackPrice = Number(product.product_pack_price || 0);
       
@@ -67,6 +92,9 @@ exports.getAllProducts = async (req, res) => {
       
       return {
         id: `prod-${product.product_id}`,
+        familyId: product.fifo_family_id,
+        manuallyInactive: product.manually_inactive,
+        archived: product.archived,
         title: product.product_title || '',
         genericName: product.product_generic_name || '',
         salt: product.product_salt || '',
@@ -76,6 +104,8 @@ exports.getAllProducts = async (req, res) => {
         supplierId: product.product_supplier,
         supplierName: supplierMap[product.product_supplier] || '',
         price: unitPrice,
+        purchasePrice: product.product_purchase_price == null ? null : Number(product.product_purchase_price),
+        priceLabel: `${product.product_title || ''} - PKR ${unitPrice}/unit`,
         packPrice: calculatedPackPrice,
         packSize: packSize,
         packDescription: product.product_pack_description || '',
@@ -83,17 +113,28 @@ exports.getAllProducts = async (req, res) => {
         minThreshold: product.product_min_threshold || 0,
         expiryDate: stock.nearest_expiry || '', // Nearest expiry from active stock_history
         batchCount: stock.active_batch_count,
+        latestReceiptId: activeBatch?.batch_id || 0,
+        latestArrival: activeBatch?.creation_day || activeBatch?.created_at?.toISOString?.().slice(0, 10) || '',
+        latestCreatedAt: activeBatch?.created_at?.toISOString?.() || '',
+        activeBatchId: activeBatch?.batch_id || null,
+        activeBatchNumber: activeBatch?.batch_number || '',
+        activeBatchPrice: activeBatch ? Number(activeBatch.sale_price) : null,
+        activeBatchQty: activeBatch ? Number(activeBatch.remaining_quantity) : 0,
+        batches: batches.map(batch => ({ batchId: batch.batch_id, batchNumber: batch.batch_number, name: batch.product_title,
+          purchasePrice: Number(batch.product_price), salePrice: Number(batch.sale_price),
+          stockQty: Number(batch.remaining_quantity), arrivalDate: batch.creation_day,
+          createdAt: batch.created_at, available: batch.available })),
         expiredStock: stock.expired_stock, // NEW: Expired stock count
         expiredBatchCount: stock.expired_batch_count, // NEW: Expired batch count
         requiresRx: product.product_requires_rx || false,
         description: product.product_description || '',
         discount: product.product_discount || 0,
-        status: product.product_status === 1 ? 'active' : 'inactive',
+        status: stock.available_stock > 0 && !product.manually_inactive ? 'active' : 'inactive',
         createdBy: product.created_by || ''
       };
     });
 
-    res.json(formattedProducts);
+    res.json(req.query?.view === 'storefront' ? selectMarketProducts(formattedProducts) : formattedProducts);
   } catch (error) {
     console.error('Error fetching products:', error);
     res.status(500).json({ message: 'Error fetching products', error: error.message });
@@ -105,7 +146,7 @@ exports.createProduct = async (req, res) => {
     const { 
       title, genericName, salt, category, brandId, supplierId, price, packPrice, 
       packSize, packDescription, minThreshold,
-      requiresRx, description, discount, status, createdBy 
+      requiresRx, description, discount, status, createdBy, purchasePrice
     } = req.body;
 
     // Validations
@@ -129,6 +170,11 @@ exports.createProduct = async (req, res) => {
       return res.status(400).json({ message: 'Valid price is required' });
     }
 
+    if (!Number.isFinite(Number(price)) || (purchasePrice != null &&
+        (!Number.isFinite(Number(purchasePrice)) || Number(purchasePrice) <= 0 || Number(purchasePrice) > Number(price)))) {
+      return res.status(400).json({ message: 'Enter valid unit prices; purchase price cannot exceed sale price.' });
+    }
+
     // Stock quantity is managed in Stock Batches section (stock_history table), not here
     // Expiry date is managed per batch, not per product
 
@@ -150,27 +196,39 @@ exports.createProduct = async (req, res) => {
 
     // ✅ Check if this exact medicine (title + genericName/salt) already exists from ANY supplier
     // Rule: Same medicine can only come from ONE supplier
-    const existingProduct = await Product.findOne({
+    const existingProducts = await Product.findAll({
       where: {
         product_title: title.trim(),
         product_generic_name: genericName?.trim() || salt?.trim() || title.trim()
       }
     });
 
-    if (existingProduct) {
-      if (existingProduct.product_supplier !== supplierId) {
+    for (const existingProduct of existingProducts) {
+      if (Number(existingProduct.product_supplier) !== Number(supplierId)) {
         const existingSupplier = await Supplier.findByPk(existingProduct.product_supplier);
         return res.status(400).json({ 
           message: `Medicine "${title}" (${genericName || salt || title}) already exists from supplier "${existingSupplier?.supplier_name}". Same medicine cannot be supplied by multiple suppliers.` 
         });
-      } else {
+      } else if (purchasePrice == null ||
+          (existingProduct.product_purchase_price != null && money(existingProduct.product_purchase_price) === money(purchasePrice))) {
         return res.status(400).json({ 
-          message: `This product already exists with the same supplier.` 
+          message: 'Medicine already exists. Use Add New Batch against the existing product to receive stock with its own purchase cost and sale price.'
         });
       }
     }
 
+    let familyId = null;
+    if (req.body.sourceProductId) {
+      const source = await Product.findByPk(String(req.body.sourceProductId).replace('prod-', ''));
+      if (!source || source.archived) return res.status(400).json({ message: 'Original medicine not found.' });
+      if (Number(source.product_supplier) !== Number(supplierId)) return res.status(400).json({ message: 'A medicine and all its price versions must keep the same supplier.' });
+      if (Number(source.product_brand) !== Number(brandId) || Number(source.product_pack_size || 1) !== Number(packSize || 1) || String(source.product_salt || '').trim().toLowerCase() !== String(salt || '').trim().toLowerCase())
+        return res.status(400).json({ message: 'A price version must keep the same brand, strength and pack size.' });
+      familyId = source.fifo_family_id || source.product_id;
+      if (!source.fifo_family_id) await source.update({ fifo_family_id: familyId });
+    }
     const product = await Product.create({
+      fifo_family_id: familyId,
       product_title: title.trim(),
       product_generic_name: genericName?.trim() || salt?.trim() || title.trim(), // Use salt or title if genericName not provided
       product_salt: salt?.trim() || null,
@@ -178,6 +236,7 @@ exports.createProduct = async (req, res) => {
       product_brand: brandId,
       product_supplier: supplierId,
       product_price: price,
+      product_purchase_price: purchasePrice == null ? null : money(purchasePrice),
       product_pack_price: packPrice || null,
       product_pack_size: packSize || null,
       product_pack_description: packDescription?.trim() || null,
@@ -185,7 +244,7 @@ exports.createProduct = async (req, res) => {
       product_requires_rx: requiresRx || false,
       product_description: description?.trim() || null,
       product_discount: discount || 0,
-      product_status: status === 'active' ? 1 : 0,
+      product_status: 0,
       created_by: createdBy?.trim() || null
     });
 
@@ -211,6 +270,7 @@ exports.createProduct = async (req, res) => {
       supplierId: product.product_supplier,
       supplierName: supplier.supplier_name,
       price: product.product_price,
+      purchasePrice: product.product_purchase_price == null ? null : Number(product.product_purchase_price),
       packPrice: product.product_pack_price || 0,
       packSize: product.product_pack_size || 0,
       packDescription: product.product_pack_description || '',
@@ -227,6 +287,7 @@ exports.createProduct = async (req, res) => {
     res.status(201).json(formattedProduct);
   } catch (error) {
     console.error('Error creating product:', error);
+    if (error.parent?.code === '23514') return res.status(400).json({ message: error.parent.message });
     res.status(500).json({ message: 'Error creating product', error: error.message });
   }
 };
@@ -238,7 +299,7 @@ exports.updateProduct = async (req, res) => {
     const { 
       title, genericName, salt, category, brandId, supplierId, price, packPrice, 
       packSize, packDescription, minThreshold,
-      requiresRx, description, discount, status 
+      requiresRx, description, discount, status, purchasePrice
     } = req.body;
 
     const productId = id.replace('prod-', '');
@@ -246,6 +307,19 @@ exports.updateProduct = async (req, res) => {
     
     if (!product) {
       return res.status(404).json({ message: 'Product not found' });
+    }
+
+    if (title !== undefined && title.trim() !== product.product_title) {
+      return res.status(400).json({ message: 'Existing medicine names are preserved. Receive a new arrival name using Add New Batch.' });
+    }
+
+    if ((price !== undefined && Number(price) !== Number(product.product_price)) ||
+        (purchasePrice !== undefined && Number(purchasePrice) !== Number(product.product_purchase_price))) {
+      return res.status(400).json({ message: 'Product edits cannot change batch prices. Receive changed prices using Add New Batch in Inventory.' });
+    }
+    if (packPrice !== undefined && packSize !== undefined && Number(packSize) > 0 &&
+        Math.abs(Number(packPrice) / Number(packSize) - Number(product.product_price)) > 0.011) {
+      return res.status(400).json({ message: 'Pack defaults must match the product unit default. Use Inventory to manage batch sale prices.' });
     }
 
     // Validations
@@ -305,8 +379,10 @@ exports.updateProduct = async (req, res) => {
       product_requires_rx: requiresRx !== undefined ? requiresRx : product.product_requires_rx,
       product_description: description !== undefined ? (description?.trim() || null) : product.product_description,
       product_discount: discount !== undefined ? discount : product.product_discount,
-      product_status: status === 'active' ? 1 : status === 'inactive' ? 0 : product.product_status
+      product_status: product.product_status
     });
+    await synchronizeProductStatus([product.product_id]);
+    await product.reload();
 
     // Get brand and supplier names
     const brand = await Brand.findByPk(product.product_brand);
@@ -334,6 +410,7 @@ exports.updateProduct = async (req, res) => {
       supplierId: product.product_supplier,
       supplierName: supplier?.supplier_name || '',
       price: product.product_price,
+      purchasePrice: product.product_purchase_price == null ? null : Number(product.product_purchase_price),
       packPrice: product.product_pack_price || 0,
       packSize: product.product_pack_size || 0,
       packDescription: product.product_pack_description || '',
@@ -350,6 +427,7 @@ exports.updateProduct = async (req, res) => {
     res.json(formattedProduct);
   } catch (error) {
     console.error('Error updating product:', error);
+    if (error.parent?.code === '23514') return res.status(400).json({ message: error.parent.message });
     res.status(500).json({ message: 'Error updating product', error: error.message });
   }
 };
@@ -365,7 +443,10 @@ exports.deleteProduct = async (req, res) => {
       return res.status(404).json({ message: 'Product not found' });
     }
 
-    await product.destroy();
+    await sequelize.transaction(async transaction => {
+      await sequelize.query('SELECT pg_advisory_xact_lock(44201, 17001)', { transaction });
+      await product.update({ archived: true, product_status: 0 }, { transaction });
+    });
     res.json({ message: 'Product deleted successfully' });
   } catch (error) {
     console.error('Error deleting product:', error);
@@ -384,9 +465,13 @@ exports.toggleProductStatus = async (req, res) => {
       return res.status(404).json({ message: 'Product not found' });
     }
 
-    await product.update({
-      product_status: product.product_status === 1 ? 0 : 1
+    await sequelize.transaction(async transaction => {
+      await sequelize.query('SELECT pg_advisory_xact_lock(44201, 17001)', { transaction });
+      await product.reload({ transaction, lock: transaction.LOCK.UPDATE });
+      await product.update({ manually_inactive: product.product_status === 1 }, { transaction });
+      await synchronizeProductStatus([product.product_id], transaction);
     });
+    await product.reload();
 
     // Get brand and supplier names
     const brand = await Brand.findByPk(product.product_brand);
@@ -552,6 +637,9 @@ exports.bulkUpdateStock = async (req, res) => {
 exports.getCategories = async (req, res) => {
   try {
     const { MEDICINE_CATEGORIES, CATEGORY_DESCRIPTIONS } = require('../constants/categories');
+    const [directory] = await sequelize.query(`SELECT category_name FROM medicine_categories
+      WHERE status=1 ORDER BY display_order,category_name`);
+    const allCategories = directory.map(row=>row.category_name);
 
     // Also get categories currently in use from database
     const [usedCategories] = await sequelize.query(`
@@ -559,13 +647,14 @@ exports.getCategories = async (req, res) => {
       FROM product 
       WHERE product_category IS NOT NULL 
         AND product_category != ''
+        AND archived = false
+        AND product_category IN (SELECT category_name FROM medicine_categories WHERE status=1)
       ORDER BY product_category
     `);
 
     const usedCategoryNames = usedCategories.map(c => c.product_category);
 
     // Combine standard categories with used ones, remove duplicates
-    const allCategories = [...new Set([...MEDICINE_CATEGORIES, ...usedCategoryNames])].sort();
 
     res.json({
       success: true,

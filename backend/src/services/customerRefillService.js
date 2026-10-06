@@ -500,6 +500,9 @@ function mapReminder(
         row.reminder_id
       ),
 
+    subscription_id: row.subscription_id == null ? null : Number(row.subscription_id),
+    recurrence_days: row.recurrence_days == null ? null : Number(row.recurrence_days),
+
     customer_id:
       Number(
         row.customer_id
@@ -594,6 +597,8 @@ async function listReminders(
       `
       SELECT
         r.reminder_id,
+        r.subscription_id,
+        r.recurrence_days,
         r.customer_id,
         r.source_invoice_id,
         r.product_id,
@@ -1064,6 +1069,11 @@ async function completeReminder(
   customerId,
   reminderId
 ) {
+  const recurring = await require('./customerSubscriptionService').subscriptionService.completeRecurringReminder(customerId, reminderId);
+  if (recurring !== null) {
+    const reminders = await listReminders(customerId);
+    return reminders.find(item => item.reminder_id === recurring);
+  }
   return setLifecycle(
     customerId,
     reminderId,

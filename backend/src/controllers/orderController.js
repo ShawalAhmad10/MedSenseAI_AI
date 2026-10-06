@@ -4,6 +4,8 @@ const { sequelize } = require('../config/database');
 const { createNotification } = require('./notificationController');
 const ddiPharmacistFlagService = require('../services/ddiPharmacistFlagService');
 const User = require('../models/User');
+const { findCurrentMarketProduct, synchronizeProductStatus } = require('../services/marketProductService');
+const BatchAllocationService = require('../services/batchAllocationService');
 const ddiService = require('../services/ddiService');
 const consultationService =
   require('../services/pharmacistConsultationService');
@@ -69,7 +71,7 @@ exports.getAllOrders = async (req, res) => {
 
     const offset = (page - 1) * limit;
     
-    let whereConditions = ['i.status = 1'];
+    let whereConditions = ['(i.status = 1 OR i.legacy_source_schema IS NOT NULL)'];
     let replacements = { limit: parseInt(limit), offset: parseInt(offset) };
 
     // Filter by specific customer (for storefront My Orders page)
@@ -121,6 +123,7 @@ exports.getAllOrders = async (req, res) => {
       SELECT 
         i.invoice_id,
         i.invoice_number,
+        i.legacy_source_schema, i.legacy_source_invoice_id, i.legacy_source_invoice_number,
         i.customer_id,
         i.customer_name,
         i.customer_phone,
@@ -264,7 +267,7 @@ exports.getOrderStats = async (req, res) => {
   try {
     const statsQuery = `
       SELECT 
-        COUNT(*) as total,
+        (SELECT COUNT(*) FROM invoice WHERE status = 1 OR legacy_source_schema IS NOT NULL) as total,
         COUNT(CASE WHEN delivery_status = 'pending' THEN 1 END) as pending,
         COUNT(CASE WHEN delivery_status = 'processing' THEN 1 END) as processing,
         COUNT(CASE WHEN delivery_status = 'delivered' THEN 1 END) as delivered,
@@ -311,6 +314,7 @@ exports.getOrderStats = async (req, res) => {
 exports.updateOrderStatus = async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
+    await sequelize.query('SELECT pg_advisory_xact_lock(44201,17001)', {transaction});
     const { id } = req.params;
     const { delivery_status, payment_status, notes } = req.body;
 
@@ -318,8 +322,8 @@ exports.updateOrderStatus = async (req, res) => {
     const [current] = await sequelize.query(
       `SELECT invoice_id, customer_id, customer_name, invoice_number,
               total_amount, paid_amount, due_amount, payment_status AS cur_pay_status,
-              delivery_status AS cur_del_status
-       FROM invoice WHERE invoice_id = :id`,
+              delivery_status AS cur_del_status, legacy_source_schema, notes
+       FROM invoice WHERE invoice_id = :id FOR UPDATE`,
       { replacements: { id }, type: sequelize.QueryTypes.SELECT, transaction }
     );
 
@@ -331,11 +335,79 @@ exports.updateOrderStatus = async (req, res) => {
     let updateFields = [];
     let replacements = { id };
 
+    if (current.legacy_source_schema) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: 'Imported cloud history is read-only; original item and stock records were not supplied.' });
+    }
+
+    if (delivery_status) {
+      const allowedDeliveryStatuses =
+        new Set(['pending', 'confirmed', 'processing', 'ready', 'shipped', 'delivered', 'cancelled']);
+
+      if (!allowedDeliveryStatuses.has(delivery_status)) {
+        await transaction.rollback();
+
+        return res.status(400).json({
+          success: false,
+          code: 'INVALID_DELIVERY_STATUS',
+          message: 'Invalid delivery status'
+        });
+      }
+
+
+      const deliveryTransitions = {
+        pending: new Set(['pending', 'confirmed', 'processing', 'cancelled']),
+        confirmed: new Set(['confirmed', 'processing', 'cancelled']),
+        processing: new Set(['processing', 'ready', 'delivered', 'cancelled']),
+        ready: new Set(['ready', 'shipped', 'delivered', 'cancelled']),
+        shipped: new Set(['shipped', 'delivered', 'cancelled']),
+        delivered: new Set(['delivered']),
+        cancelled: new Set(['cancelled'])
+      };
+
+      const allowedNext =
+        deliveryTransitions[current.cur_del_status];
+
+      if (!allowedNext || !allowedNext.has(delivery_status)) {
+        await transaction.rollback();
+
+        return res.status(409).json({
+          success: false,
+          code: 'INVALID_DELIVERY_TRANSITION',
+          message:
+            'The requested delivery status transition is not allowed'
+        });
+      }
+    }
     if (delivery_status) {
       updateFields.push('delivery_status = :delivery_status');
       replacements.delivery_status = delivery_status;
     }
     if (payment_status) {
+      if (!['paid', 'unpaid', 'partial', 'pending'].includes(payment_status)) {
+        await transaction.rollback();
+        return res.status(400).json({success:false,message:'Invalid payment status'});
+      }
+      if (current.cur_pay_status === 'paid' && payment_status !== 'paid') {
+        await transaction.rollback();
+        return res.status(409).json({success:false,message:'A received payment cannot be reversed by changing its label. Use a refund.'});
+      }
+      if (payment_status === 'paid') {
+        const outstanding = Math.max(0, Number(current.total_amount) - Number(current.paid_amount));
+        updateFields.push('paid_amount = total_amount', 'due_amount = 0');
+        if (outstanding > 0 && current.customer_id) {
+          const CustomerAccount = require('../models/CustomerAccount');
+          const CustomerLedger = require('../models/CustomerLedger');
+          const account = await CustomerAccount.findOne({where:{customer_id:current.customer_id,status:1},transaction,lock:transaction.LOCK.UPDATE});
+          if (!account) throw new Error('Customer payment account is missing');
+          const balance = Number(account.current_balance) - outstanding;
+          await account.update({current_balance:balance,total_credit:Number(account.total_credit)+outstanding,updated_at:new Date()},{transaction});
+          await CustomerLedger.create({customer_id:current.customer_id,account_id:account.account_id,transaction_date:new Date(),
+            transaction_type:'payment',reference_type:'PAYMENT',reference_id:Number(id),reference_number:current.invoice_number,
+            debit_amount:0,credit_amount:outstanding,balance,payment_method:'cash',description:`Payment received for ${current.invoice_number}`,
+            performed_by:req.user?.email || 'pharmacist',status:1,created_at:new Date(),updated_at:new Date()},{transaction});
+        }
+      }
       updateFields.push('payment_status = :payment_status');
       replacements.payment_status = payment_status;
     }
@@ -465,7 +537,7 @@ exports.updateOrderStatus = async (req, res) => {
           session_id: `lifecycle-order-${id}`,
           cart_id: `lifecycle-cart-${id}`,
           occurred_at: transitionTimestamp.toISOString(),
-          data_origin: 'partner_real',
+          data_origin: current.notes?.startsWith('Evaluation history (generated):') ? 'synthetic_development' : 'partner_real',
           ...(
             Number.isSafeInteger(
               Number(current.customer_id)
@@ -646,8 +718,6 @@ exports.createOrder = async (req, res) => {
   
   try {
     console.log('=== CREATE ORDER START ===');
-    console.log('Request body:', JSON.stringify(req.body, null, 2));
-    
     const {
       customer_id,
       customer_name,
@@ -661,6 +731,42 @@ exports.createOrder = async (req, res) => {
       notes
     } = req.body;
 
+    // SECURITY: storefront monetary values must not be caller-controlled.
+    // Until authoritative promotion/tax/delivery pricing rules are implemented,
+    // reject non-zero client monetary overrides instead of trusting them.
+    const requestedOrderDiscount = Number(discount);
+    const requestedDeliveryFee = Number(delivery_fee);
+
+    const invalidItemMoney =
+      Array.isArray(items) &&
+      items.some((item) => {
+        const itemDiscount = Number(item?.discount ?? 0);
+        const itemTax = Number(item?.tax ?? 0);
+
+        return (
+          !Number.isFinite(itemDiscount) ||
+          !Number.isFinite(itemTax) ||
+          itemDiscount !== 0 ||
+          itemTax !== 0
+        );
+      });
+
+    if (
+      !Number.isFinite(requestedOrderDiscount) ||
+      !Number.isFinite(requestedDeliveryFee) ||
+      requestedOrderDiscount !== 0 ||
+      requestedDeliveryFee !== 0 ||
+      invalidItemMoney
+    ) {
+      await transaction.rollback();
+
+      return res.status(400).json({
+        success: false,
+        code: 'CHECKOUT_MONETARY_OVERRIDE_REJECTED',
+        message:
+          'Checkout discounts, taxes, and delivery charges cannot be supplied by the client.'
+      });
+    }
     // CHECKOUT_IDEMPOTENCY_V1
     //
     // Modern authenticated storefront checkouts must carry the
@@ -787,8 +893,22 @@ exports.createOrder = async (req, res) => {
     // Product identity, title, selling price and stock come from PostgreSQL.
     // ================================================================
     const normalizedItems = [];
+    // POS takes this invoice lock before stock locks. Use the same order here
+    // to prevent a checkout and a POS sale from deadlocking on one batch.
+    await sequelize.query('SELECT pg_advisory_xact_lock(44201, 17001)', { transaction });
 
-    for (const requestedItem of items) {
+    const requestedItems = new Map();
+    for (const item of items) {
+      const key = Number(item.product_id);
+      const existing = requestedItems.get(key);
+      if (existing) {
+        await transaction.rollback();
+        return res.status(400).json({ success: false, code: 'DUPLICATE_ORDER_ITEM',
+          message: 'Combine quantities for the same medicine in one cart line.' });
+      }
+      requestedItems.set(key, item);
+    }
+    for (const requestedItem of requestedItems.values()) {
       const productId = Number(requestedItem.product_id);
       const requestedQty = Number(requestedItem.quantity);
 
@@ -841,8 +961,20 @@ exports.createOrder = async (req, res) => {
         }
       );
 
-      const availableStock =
-        Number(stockRows[0]?.available || 0);
+      const currentMarketProduct = await findCurrentMarketProduct(productId, transaction, true);
+      const availableStock = Number(currentMarketProduct?.available || 0);
+      if (currentMarketProduct && Number(currentMarketProduct.product_id) !== productId) {
+        await transaction.rollback();
+        return res.status(409).json({ success: false, code: 'MARKET_VERSION_CHANGED',
+          message: 'The available market version has changed. Refresh this medicine and add it to your cart again.',
+          data: { product_id: currentMarketProduct.product_id, price: Number(currentMarketProduct.product_price) } });
+      }
+      if (requestedItem.batch_id != null && Number(requestedItem.batch_id) !== Number(currentMarketProduct?.batch_id)) {
+        await transaction.rollback();
+        return res.status(409).json({ success: false, code: 'MARKET_BATCH_CHANGED',
+          message: 'The active batch has changed. Refresh this medicine before checkout.' });
+      }
+      if (currentMarketProduct) product.product_price = Number(currentMarketProduct.product_price);
 
       if (availableStock < requestedQty) {
         await transaction.rollback();
@@ -866,21 +998,37 @@ exports.createOrder = async (req, res) => {
         });
       }
 
-      normalizedItems.push({
-        product_id: product.product_id,
-        product_title: product.product_title,
-        quantity: requestedQty,
+      const allocations = await BatchAllocationService.allocateBatchesForSale(productId, requestedQty, transaction, currentMarketProduct.batch_id);
+      const quote = requestedItem.fifo_quote;
+      if (Array.isArray(quote) && (quote.length !== allocations.length || allocations.some((allocation, index) =>
+        Number(quote[index]?.batch_id) !== Number(allocation.batch_id) ||
+        Number(quote[index]?.quantity) !== Number(allocation.quantity) ||
+        Number(quote[index]?.unit_price) !== Number(allocation.sale_price)))) {
+        await transaction.rollback();
+        return res.status(409).json({ success: false, code: 'FIFO_QUOTE_CHANGED',
+          message: 'FIFO stock or prices changed. Refresh your cart and review the updated total before checkout.' });
+      }
+      if (!Array.isArray(quote) && allocations.some(allocation => Number(allocation.sale_price) !== Number(product.product_price))) {
+        await transaction.rollback();
+        return res.status(409).json({ success: false, code: 'FIFO_QUOTE_REQUIRED',
+          message: 'This quantity uses multiple batch prices. Refresh your cart to review the FIFO price breakdown.' });
+      }
+      for (const allocation of allocations) normalizedItems.push({
+        product_id: allocation.product_id,
+        batch_id: allocation.batch_id,
+        product_title: allocation.product_title || product.product_title,
+        quantity: allocation.quantity,
 
         // Client selling price is ignored.
         unit_price:
-          Number(product.product_price || 0),
+          Number(allocation.sale_price),
 
         // Keep latest-partner discount/tax contract unchanged.
         discount:
-          Number(requestedItem.discount || 0),
+          Number(requestedItem.discount || 0) * allocation.quantity / requestedQty,
 
         tax:
-          Number(requestedItem.tax || 0),
+          Number(requestedItem.tax || 0) * allocation.quantity / requestedQty,
 
         product_salt:
           product.product_salt || null,
@@ -1215,18 +1363,20 @@ exports.createOrder = async (req, res) => {
       const itemDiscount = item.discount || 0;
       const itemTax      = item.tax      || 0;
 
-      // FIFO: get available batches oldest-first (FEFO)
+      // The FIFO plan was locked and priced before DDI validation and invoice totals.
       const stock_history = await sequelize.query(
         `SELECT batch_id, batch_number, remaining_quantity, expiry_date,
-                product_price AS purchase_price
+                product_price AS purchase_price, sale_price
          FROM stock_history
          WHERE product_id = :product_id
+           AND batch_id = :batch_id
            AND remaining_quantity > 0
            AND status = 1
             AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)
-         ORDER BY expiry_date ASC, batch_id ASC
+           AND batch_status = 'ACTIVE'
+         ORDER BY creation_day DESC, created_at DESC, batch_id DESC
           FOR UPDATE`,
-        { replacements: { product_id: item.product_id },
+        { replacements: { product_id: item.product_id, batch_id: item.batch_id },
           type: sequelize.QueryTypes.SELECT, transaction }
       );
 
@@ -1270,11 +1420,11 @@ exports.createOrder = async (req, res) => {
           `INSERT INTO invoice_report (
              invoice_id, product_id, product_title, quantity, unit_price,
              discount, tax, total_price, batch_number, expiry_date,
-             purchase_price, status, created_at, updated_at
+             purchase_price, batch_id, status, created_at, updated_at
            ) VALUES (
              :invoice_id, :product_id, :product_title, :quantity, :unit_price,
              :discount, :tax, :total_price, :batch_number, :expiry_date,
-             :purchase_price, 1, NOW(), NOW()
+             :purchase_price, :batch_id, 1, NOW(), NOW()
            )`,
           {
             replacements: {
@@ -1289,6 +1439,7 @@ exports.createOrder = async (req, res) => {
               batch_number:   batch.batch_number,
               expiry_date:    batch.expiry_date || null,
               purchase_price: Number(batch.purchase_price || 0)
+              , batch_id: batch.batch_id
             },
             type: sequelize.QueryTypes.INSERT,
             transaction
@@ -1298,8 +1449,10 @@ exports.createOrder = async (req, res) => {
         // Deduct from stock_history batch
         await sequelize.query(
           `UPDATE stock_history
-           SET remaining_quantity = remaining_quantity - :qty, updated_at = NOW()
-           WHERE batch_id = :batch_id`,
+           SET remaining_quantity = remaining_quantity - :qty,
+             batch_status = CASE WHEN remaining_quantity - :qty = 0 THEN 'FINISHED' ELSE batch_status END,
+             updated_at = NOW()
+           WHERE batch_id = :batch_id AND remaining_quantity >= :qty`,
           { replacements: { qty: allocateQty, batch_id: batch.batch_id },
             type: sequelize.QueryTypes.UPDATE, transaction }
         );
@@ -1316,10 +1469,10 @@ exports.createOrder = async (req, res) => {
         // Stock ledger entry
         await sequelize.query(
           `INSERT INTO stock_report (
-             product_id, batch_id, transaction_type, reference_type, reference_number,
+             product_id, batch_id, transaction_type, reference_type, reference_id, reference_number,
              quantity_change, balance_after, unit_price, notes, transaction_date, created_at
            ) VALUES (
-             :product_id, :batch_id, 'SALE', 'INVOICE', :ref,
+             :product_id, :batch_id, 'SALE', 'INVOICE', :invoice_id, :ref,
              :qty_change, :balance, :unit_price, :notes, NOW(), NOW()
            )`,
           {
@@ -1327,9 +1480,10 @@ exports.createOrder = async (req, res) => {
               product_id:  item.product_id,
               batch_id:    batch.batch_id,
               ref:         invoice_number,
+              invoice_id,
               qty_change:  -allocateQty,
               balance:     parseFloat(stockTotals.total_qty),
-              unit_price:  batch.purchase_price,
+              unit_price:  unitPrice,
               notes:       `Sale - ${invoice_number} - Batch ${batch.batch_number}`
             },
             type: sequelize.QueryTypes.INSERT,
@@ -1338,6 +1492,8 @@ exports.createOrder = async (req, res) => {
         );
       }
     }
+
+    await synchronizeProductStatus([...new Set(items.map(item => item.product_id))], transaction);
 
     // Create customer ledger entry for this purchase
     if (customer_id) {
@@ -1461,6 +1617,8 @@ exports.createOrder = async (req, res) => {
         orderNumber: invoice_number,
         customerName: customer_name
       });
+      await consultationService.createCompletedOrderReview({customerId:customer_id,orderId:invoice_id,orderNumber:invoice_number,
+        ddiResult:ddi.result,items:normalizedItems});
     } catch (ddiFlagError) {
       console.error(
         'Failed to create post-order DDI pharmacist flag:',

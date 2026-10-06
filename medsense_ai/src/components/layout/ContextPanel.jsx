@@ -1,4 +1,4 @@
-// src/components/layout/ContextPanel.jsx â€” Real backend data
+// src/components/layout/ContextPanel.jsx — Real backend data
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -40,7 +40,7 @@ export default function ContextPanel() {
         .slice(0, 5)
         .map((item, idx) => {
           const qty  = item.stockQty ?? item.quantity ?? 0;
-          const name = item.title ?? item.product_title ?? item.name ?? 'â€”';
+          const name = item.title ?? item.product_title ?? item.name ?? '—';
           return {
             id: idx + 1, name,
             detail: qty === 0 ? 'Out of stock' : `${qty} units (${qty < 5 ? 'critical' : 'low'})`,

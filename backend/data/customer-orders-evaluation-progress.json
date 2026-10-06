@@ -1,0 +1,1141 @@
+{
+  "version": 1,
+  "origin": "synthetic_evaluation",
+  "backup": "C:\\Users\\Amna Rana\\Downloads\\MedSenseAI_FINAL_RUN\\MedSenseAI_FINAL_RUNNABLE_20260926-172957\\database\\cloud-migration-customer-orders-2026-10-03T00-17-36-341Z",
+  "profiles": [
+    {
+      "customer_name": "Shawal Ahmad",
+      "email": "shawal20260905071019@example.com",
+      "phone": "03001234567",
+      "customer_city": "Faisalabad",
+      "address": "Test Address"
+    },
+    {
+      "customer_name": "amna",
+      "email": "amnarana6c@gmail.com",
+      "phone": "03061835525",
+      "customer_city": "multan",
+      "address": "housed46 hehe"
+    },
+    {
+      "customer_name": "F223665 Amna Rana",
+      "email": "f223665@cfd.nu.edu.pk",
+      "phone": "03001234567",
+      "customer_city": "Lahore",
+      "address": "123 Street, Lahore"
+    },
+    {
+      "customer_name": "Iman Fatima",
+      "email": "imanfatima0810@gmail.com",
+      "phone": "03111234567",
+      "customer_city": "lahore",
+      "address": "123 Street, lahore"
+    }
+  ],
+  "customers": [
+    {
+      "id": 8,
+      "name": "Iman Fatima",
+      "email": "imanfatima0810@gmail.com",
+      "phone": "03111234567",
+      "city": "lahore",
+      "address": "123 Street, lahore",
+      "emailVerified": false
+    },
+    {
+      "id": 9,
+      "name": "Amna Rana",
+      "email": "f223665@cfd.nu.edu.pk",
+      "phone": "03001234567",
+      "city": "Lahore",
+      "address": "123 Street, Lahore",
+      "emailVerified": false
+    },
+    {
+      "id": 10,
+      "name": "Shawal Ahmad",
+      "email": "shawalahmad3303@gmail.com",
+      "phone": "03001234567",
+      "city": "Faisalabad",
+      "address": "Test Address",
+      "emailVerified": false
+    }
+  ],
+  "orders": [
+    {
+      "id": 1,
+      "number": "INV-001",
+      "date": "2026-07-01",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900135,
+          "product_title": "Augmentin 625mg",
+          "quantity": 2,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 30
+    },
+    {
+      "id": 2,
+      "number": "INV-002",
+      "date": "2026-07-02",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900147,
+          "product_title": "Piriton",
+          "quantity": 3,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 31
+    },
+    {
+      "id": 3,
+      "number": "INV-003",
+      "date": "2026-07-04",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900159,
+          "product_title": "Fexet 120mg",
+          "quantity": 4,
+          "discount": 0,
+          "tax": 0
+        },
+        {
+          "product_id": 900304,
+          "product_title": "Barresten 500mg",
+          "quantity": 4,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 32
+    },
+    {
+      "id": 4,
+      "number": "INV-004",
+      "date": "2026-07-06",
+      "customerId": 9,
+      "items": [
+        {
+          "product_id": 900171,
+          "product_title": "Claritek XL 500mg",
+          "quantity": 5,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 33
+    },
+    {
+      "id": 5,
+      "number": "INV-005",
+      "date": "2026-07-08",
+      "customerId": 10,
+      "items": [
+        {
+          "product_id": 900183,
+          "product_title": "Osam-D",
+          "quantity": 2,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 34
+    },
+    {
+      "id": 6,
+      "number": "INV-006",
+      "date": "2026-07-10",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900256,
+          "product_title": "Amlo-Q 10mg",
+          "quantity": 3,
+          "discount": 0,
+          "tax": 0
+        },
+        {
+          "product_id": 900158,
+          "product_title": "Duphalac Syrup",
+          "quantity": 3,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 35
+    },
+    {
+      "id": 7,
+      "number": "INV-007",
+      "date": "2026-07-12",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900268,
+          "product_title": "TruGlif",
+          "quantity": 4,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": null
+    },
+    {
+      "id": 8,
+      "number": "INV-008",
+      "date": "2026-07-14",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900280,
+          "product_title": "Amkay",
+          "quantity": 5,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 36
+    },
+    {
+      "id": 9,
+      "number": "INV-009",
+      "date": "2026-07-16",
+      "customerId": 9,
+      "items": [
+        {
+          "product_id": 900292,
+          "product_title": "Barimox 400mg",
+          "quantity": 2,
+          "discount": 0,
+          "tax": 0
+        },
+        {
+          "product_id": 900255,
+          "product_title": "Amlo-Q 5mg",
+          "quantity": 2,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 37
+    },
+    {
+      "id": 10,
+      "number": "INV-010",
+      "date": "2026-07-18",
+      "customerId": 10,
+      "items": [
+        {
+          "product_id": 900304,
+          "product_title": "Barresten 500mg",
+          "quantity": 3,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": null
+    },
+    {
+      "id": 11,
+      "number": "INV-011",
+      "date": "2026-07-20",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900134,
+          "product_title": "Arinac Forte",
+          "quantity": 4,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 38
+    },
+    {
+      "id": 12,
+      "number": "INV-012",
+      "date": "2026-07-22",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900146,
+          "product_title": "Lorin 10mg",
+          "quantity": 5,
+          "discount": 0,
+          "tax": 0
+        },
+        {
+          "product_id": 900291,
+          "product_title": "Barilol 5mg",
+          "quantity": 5,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 39
+    },
+    {
+      "id": 13,
+      "number": "INV-013",
+      "date": "2026-07-24",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900158,
+          "product_title": "Duphalac Syrup",
+          "quantity": 2,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": null
+    },
+    {
+      "id": 14,
+      "number": "INV-014",
+      "date": "2026-07-25",
+      "customerId": 9,
+      "items": [
+        {
+          "product_id": 900170,
+          "product_title": "Claritek 250mg",
+          "quantity": 3,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 40
+    },
+    {
+      "id": 15,
+      "number": "INV-015",
+      "date": "2026-07-27",
+      "customerId": 10,
+      "items": [
+        {
+          "product_id": 900182,
+          "product_title": "Ferfix Syrup",
+          "quantity": 4,
+          "discount": 0,
+          "tax": 0
+        },
+        {
+          "product_id": 900145,
+          "product_title": "Rigix 10mg",
+          "quantity": 4,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 41
+    },
+    {
+      "id": 16,
+      "number": "INV-016",
+      "date": "2026-07-29",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900255,
+          "product_title": "Amlo-Q 5mg",
+          "quantity": 5,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 42
+    },
+    {
+      "id": 17,
+      "number": "INV-017",
+      "date": "2026-07-31",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900267,
+          "product_title": "Exotan",
+          "quantity": 2,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 43
+    },
+    {
+      "id": 18,
+      "number": "INV-018",
+      "date": "2026-08-02",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900279,
+          "product_title": "Ambac",
+          "quantity": 3,
+          "discount": 0,
+          "tax": 0
+        },
+        {
+          "product_id": 900193,
+          "product_title": "Preneu",
+          "quantity": 3,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 44
+    },
+    {
+      "id": 19,
+      "number": "INV-019",
+      "date": "2026-08-04",
+      "customerId": 9,
+      "items": [
+        {
+          "product_id": 900291,
+          "product_title": "Barilol 5mg",
+          "quantity": 4,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 45
+    },
+    {
+      "id": 20,
+      "number": "INV-020",
+      "date": "2026-08-06",
+      "customerId": 10,
+      "items": [
+        {
+          "product_id": 900171,
+          "product_title": "Claritek XL 500mg",
+          "quantity": 5,
+          "discount": 0,
+          "tax": 0
+        },
+        {
+          "product_id": 900154,
+          "product_title": "Lipiget 20mg",
+          "quantity": 5,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 46
+    },
+    {
+      "id": 21,
+      "number": "INV-021",
+      "date": "2026-08-08",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900133,
+          "product_title": "Arinac",
+          "quantity": 2,
+          "discount": 0,
+          "tax": 0
+        },
+        {
+          "product_id": 900290,
+          "product_title": "AV-Sartan 5/80mg",
+          "quantity": 2,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 47
+    },
+    {
+      "id": 22,
+      "number": "INV-022",
+      "date": "2026-08-10",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900145,
+          "product_title": "Rigix 10mg",
+          "quantity": 3,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 48
+    },
+    {
+      "id": 23,
+      "number": "INV-023",
+      "date": "2026-08-12",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900169,
+          "product_title": "Co-Tasmi 40mg/12.5mg",
+          "quantity": 4,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 49
+    },
+    {
+      "id": 24,
+      "number": "INV-024",
+      "date": "2026-08-14",
+      "customerId": 9,
+      "items": [
+        {
+          "product_id": 900181,
+          "product_title": "Emrix SR 15mg",
+          "quantity": 5,
+          "discount": 0,
+          "tax": 0
+        },
+        {
+          "product_id": 900144,
+          "product_title": "Gravinate 50mg",
+          "quantity": 5,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 50
+    },
+    {
+      "id": 25,
+      "number": "INV-025",
+      "date": "2026-08-16",
+      "customerId": 10,
+      "items": [
+        {
+          "product_id": 900193,
+          "product_title": "Preneu",
+          "quantity": 2,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": null
+    },
+    {
+      "id": 26,
+      "number": "INV-026",
+      "date": "2026-08-17",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900266,
+          "product_title": "Nebcin",
+          "quantity": 3,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": null
+    },
+    {
+      "id": 27,
+      "number": "INV-027",
+      "date": "2026-08-19",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900278,
+          "product_title": "Aloc-D",
+          "quantity": 4,
+          "discount": 0,
+          "tax": 0
+        },
+        {
+          "product_id": 900180,
+          "product_title": "Celbexx 200mg",
+          "quantity": 4,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 51
+    },
+    {
+      "id": 28,
+      "number": "INV-028",
+      "date": "2026-08-21",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900290,
+          "product_title": "AV-Sartan 5/80mg",
+          "quantity": 5,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 52
+    },
+    {
+      "id": 29,
+      "number": "INV-029",
+      "date": "2026-08-23",
+      "customerId": 9,
+      "items": [
+        {
+          "product_id": 900302,
+          "product_title": "Barlev 500mg",
+          "quantity": 2,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 53
+    },
+    {
+      "id": 30,
+      "number": "INV-030",
+      "date": "2026-08-25",
+      "customerId": 10,
+      "items": [
+        {
+          "product_id": 900171,
+          "product_title": "Claritek XL 500mg",
+          "quantity": 3,
+          "discount": 0,
+          "tax": 0
+        },
+        {
+          "product_id": 900154,
+          "product_title": "Lipiget 20mg",
+          "quantity": 3,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 54
+    },
+    {
+      "id": 31,
+      "number": "INV-031",
+      "date": "2026-08-27",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900144,
+          "product_title": "Gravinate 50mg",
+          "quantity": 4,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 55
+    },
+    {
+      "id": 32,
+      "number": "INV-032",
+      "date": "2026-08-29",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900156,
+          "product_title": "Panadol 30ml Drops",
+          "quantity": 5,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 56
+    },
+    {
+      "id": 33,
+      "number": "INV-033",
+      "date": "2026-08-31",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900168,
+          "product_title": "Amtas 5mg/40mg",
+          "quantity": 2,
+          "discount": 0,
+          "tax": 0
+        },
+        {
+          "product_id": 900131,
+          "product_title": "Brufen 200mg",
+          "quantity": 2,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 57
+    },
+    {
+      "id": 34,
+      "number": "INV-034",
+      "date": "2026-09-02",
+      "customerId": 9,
+      "items": [
+        {
+          "product_id": 900180,
+          "product_title": "Celbexx 200mg",
+          "quantity": 3,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 58
+    },
+    {
+      "id": 35,
+      "number": "INV-035",
+      "date": "2026-09-04",
+      "customerId": 10,
+      "items": [
+        {
+          "product_id": 900192,
+          "product_title": "Bekson Forte HFA",
+          "quantity": 4,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 59
+    },
+    {
+      "id": 36,
+      "number": "INV-036",
+      "date": "2026-09-06",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900265,
+          "product_title": "Afdol",
+          "quantity": 5,
+          "discount": 0,
+          "tax": 0
+        },
+        {
+          "product_id": 900167,
+          "product_title": "Fenoget 200mg",
+          "quantity": 5,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 60
+    },
+    {
+      "id": 37,
+      "number": "INV-037",
+      "date": "2026-09-08",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900277,
+          "product_title": "Aloc",
+          "quantity": 2,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": null
+    },
+    {
+      "id": 38,
+      "number": "INV-038",
+      "date": "2026-09-09",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900289,
+          "product_title": "Artimov-K 50mg",
+          "quantity": 3,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 61
+    },
+    {
+      "id": 39,
+      "number": "INV-039",
+      "date": "2026-09-11",
+      "customerId": 9,
+      "items": [
+        {
+          "product_id": 900301,
+          "product_title": "Barinep",
+          "quantity": 4,
+          "discount": 0,
+          "tax": 0
+        },
+        {
+          "product_id": 900264,
+          "product_title": "Sunvit",
+          "quantity": 4,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 62
+    },
+    {
+      "id": 40,
+      "number": "INV-040",
+      "date": "2026-09-13",
+      "customerId": 10,
+      "items": [
+        {
+          "product_id": 900171,
+          "product_title": "Claritek XL 500mg",
+          "quantity": 5,
+          "discount": 0,
+          "tax": 0
+        },
+        {
+          "product_id": 900154,
+          "product_title": "Lipiget 20mg",
+          "quantity": 5,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 63
+    },
+    {
+      "id": 41,
+      "number": "INV-041",
+      "date": "2026-09-15",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900143,
+          "product_title": "Nexum 40mg",
+          "quantity": 2,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 64
+    },
+    {
+      "id": 42,
+      "number": "INV-042",
+      "date": "2026-09-17",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900155,
+          "product_title": "Polybion Forte",
+          "quantity": 3,
+          "discount": 0,
+          "tax": 0
+        },
+        {
+          "product_id": 900300,
+          "product_title": "Barforte",
+          "quantity": 3,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 65
+    },
+    {
+      "id": 43,
+      "number": "INV-043",
+      "date": "2026-09-19",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900167,
+          "product_title": "Fenoget 200mg",
+          "quantity": 4,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 66
+    },
+    {
+      "id": 44,
+      "number": "INV-044",
+      "date": "2026-09-21",
+      "customerId": 9,
+      "items": [
+        {
+          "product_id": 900179,
+          "product_title": "Dravix 500mg",
+          "quantity": 5,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 67
+    },
+    {
+      "id": 45,
+      "number": "INV-045",
+      "date": "2026-09-23",
+      "customerId": 10,
+      "items": [
+        {
+          "product_id": 900191,
+          "product_title": "Bekson Inhaler",
+          "quantity": 2,
+          "discount": 0,
+          "tax": 0
+        },
+        {
+          "product_id": 900154,
+          "product_title": "Lipiget 20mg",
+          "quantity": 2,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 68
+    },
+    {
+      "id": 46,
+      "number": "INV-046",
+      "date": "2026-09-25",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900264,
+          "product_title": "Sunvit",
+          "quantity": 3,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": null
+    },
+    {
+      "id": 47,
+      "number": "INV-047",
+      "date": "2026-09-27",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900276,
+          "product_title": "Aaram-Plus",
+          "quantity": 4,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 69
+    },
+    {
+      "id": 48,
+      "number": "INV-048",
+      "date": "2026-09-29",
+      "customerId": 8,
+      "items": [
+        {
+          "product_id": 900288,
+          "product_title": "Ampress 5mg",
+          "quantity": 5,
+          "discount": 0,
+          "tax": 0
+        },
+        {
+          "product_id": 900190,
+          "product_title": "PK-Merz",
+          "quantity": 5,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 70
+    },
+    {
+      "id": 49,
+      "number": "INV-049",
+      "date": "2026-10-01",
+      "customerId": 9,
+      "items": [
+        {
+          "product_id": 900300,
+          "product_title": "Barforte",
+          "quantity": 2,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 71
+    },
+    {
+      "id": 50,
+      "number": "INV-050",
+      "date": "2026-10-03",
+      "customerId": 10,
+      "items": [
+        {
+          "product_id": 900171,
+          "product_title": "Claritek XL 500mg",
+          "quantity": 3,
+          "discount": 0,
+          "tax": 0
+        },
+        {
+          "product_id": 900154,
+          "product_title": "Lipiget 20mg",
+          "quantity": 3,
+          "discount": 0,
+          "tax": 0
+        }
+      ],
+      "consultationId": 72
+    }
+  ],
+  "returns": [
+    {
+      "returnId": 3,
+      "returnNumber": "RET-001",
+      "totalRefund": 15,
+      "daysRemaining": 8,
+      "orderId": 47,
+      "customerId": 8,
+      "batchId": 161
+    },
+    {
+      "returnId": 4,
+      "returnNumber": "RET-002",
+      "totalRefund": 7.5,
+      "daysRemaining": 10,
+      "orderId": 48,
+      "customerId": 8,
+      "batchId": 160
+    },
+    {
+      "returnId": 5,
+      "returnNumber": "RET-003",
+      "totalRefund": 15,
+      "daysRemaining": 2,
+      "orderId": 44,
+      "customerId": 9,
+      "batchId": 164
+    },
+    {
+      "returnId": 6,
+      "returnNumber": "RET-004",
+      "totalRefund": 200,
+      "daysRemaining": 12,
+      "orderId": 49,
+      "customerId": 9,
+      "batchId": 159
+    },
+    {
+      "returnId": 7,
+      "returnNumber": "RET-005",
+      "totalRefund": 400,
+      "daysRemaining": 4,
+      "orderId": 45,
+      "customerId": 10,
+      "batchId": 163
+    },
+    {
+      "returnId": 8,
+      "returnNumber": "RET-006",
+      "totalRefund": 60,
+      "daysRemaining": 14,
+      "orderId": 50,
+      "customerId": 10,
+      "batchId": 125
+    }
+  ],
+  "resetAt": "2026-10-03T00:17:53.457Z",
+  "leadResult": {
+    "success": true,
+    "data": {
+      "refresh_mode": "read_only_on_demand",
+      "persisted_scores": false,
+      "leads": [
+        {
+          "customer_id": 8,
+          "customer_name": "Iman Fatima",
+          "email": "imanfatima0810@gmail.com",
+          "order_count": 30,
+          "scoring": {
+            "status": "scored",
+            "model_version": "med-sales-lead-1.0.0",
+            "feature_version": "lead_features_v1",
+            "target_version": "repeat_purchase_30d_v1",
+            "sales_contract_version": "sales_contract_v1",
+            "model_data_origin": "synthetic_development",
+            "model_probability": 0.9999557966854906,
+            "lead_score": 99.99557966854906,
+            "technical_threshold": 0.29511255802121295,
+            "technical_binary_prediction": true,
+            "synthetic_development_notice": "Synthetic-development model output; not a validated real-customer conversion probability or operational targeting policy.",
+            "reason": null,
+            "customer_id": "8",
+            "source_namespace": "medsense_evaluation_simulated",
+            "observation_time": "2026-10-03T03:32:38.494000Z",
+            "evaluation_data_origin": "synthetic_development",
+            "evaluation_notice": "Evaluation dataset: these orders and browsing/cart activities are simulated. Scores are calculated by the existing model."
+          }
+        },
+        {
+          "customer_id": 9,
+          "customer_name": "Amna Rana",
+          "email": "f223665@cfd.nu.edu.pk",
+          "order_count": 10,
+          "scoring": {
+            "status": "scored",
+            "model_version": "med-sales-lead-1.0.0",
+            "feature_version": "lead_features_v1",
+            "target_version": "repeat_purchase_30d_v1",
+            "sales_contract_version": "sales_contract_v1",
+            "model_data_origin": "synthetic_development",
+            "model_probability": 0.9592885248384149,
+            "lead_score": 95.92885248384148,
+            "technical_threshold": 0.29511255802121295,
+            "technical_binary_prediction": true,
+            "synthetic_development_notice": "Synthetic-development model output; not a validated real-customer conversion probability or operational targeting policy.",
+            "reason": null,
+            "customer_id": "9",
+            "source_namespace": "medsense_evaluation_simulated",
+            "observation_time": "2026-10-03T03:32:38.494000Z",
+            "evaluation_data_origin": "synthetic_development",
+            "evaluation_notice": "Evaluation dataset: these orders and browsing/cart activities are simulated. Scores are calculated by the existing model."
+          }
+        },
+        {
+          "customer_id": 10,
+          "customer_name": "Shawal Ahmad",
+          "email": "shawalahmad3303@gmail.com",
+          "order_count": 10,
+          "scoring": {
+            "status": "scored",
+            "model_version": "med-sales-lead-1.0.0",
+            "feature_version": "lead_features_v1",
+            "target_version": "repeat_purchase_30d_v1",
+            "sales_contract_version": "sales_contract_v1",
+            "model_data_origin": "synthetic_development",
+            "model_probability": 0.9354540928959233,
+            "lead_score": 93.54540928959233,
+            "technical_threshold": 0.29511255802121295,
+            "technical_binary_prediction": true,
+            "synthetic_development_notice": "Synthetic-development model output; not a validated real-customer conversion probability or operational targeting policy.",
+            "reason": null,
+            "customer_id": "10",
+            "source_namespace": "medsense_evaluation_simulated",
+            "observation_time": "2026-10-03T03:32:38.494000Z",
+            "evaluation_data_origin": "synthetic_development",
+            "evaluation_notice": "Evaluation dataset: these orders and browsing/cart activities are simulated. Scores are calculated by the existing model."
+          }
+        }
+      ]
+    }
+  },
+  "complete": true
+}

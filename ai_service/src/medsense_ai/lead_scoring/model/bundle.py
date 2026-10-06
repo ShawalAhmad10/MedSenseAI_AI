@@ -99,7 +99,8 @@ def load_bundle(directory: Path, expected_manifest_sha256: str) -> LoadedBundle:
                 or features["feature_allowlist"] != list(FEATURE_NAMES) or features["feature_version"] != FEATURE_VERSION
                 or values["target_manifest.json"]["target_version"] != TARGET_VERSION
                 or meta["data_origin"] != "synthetic_development" or meta["calibration_method"] != "none"
-                or values["dependency_versions.json"] != dependencies()):
+                or values["dependency_versions.json"].get("python", "").split(".")[:2] != dependencies().get("python", "").split(".")[:2]
+                or {k:v for k,v in values["dependency_versions.json"].items() if k != "python"} != {k:v for k,v in dependencies().items() if k != "python"}):
             raise BundleError("Incompatible bundle contracts or resolved dependency versions")
         selection_values={k:v for k,v in values["selection_frozen.json"].items() if k in FrozenSelection.model_fields}
         decision=FrozenSelection(**selection_values)

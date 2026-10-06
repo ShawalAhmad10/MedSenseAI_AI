@@ -61,7 +61,7 @@ test('successful checkout cleanup differs by explicit mode', () => {
 
 test('ProductPage Buy Now explicitly starts isolated session', () => {
   const start = productPage.indexOf('startBuyNowCheckout(');
-  const navigate = productPage.indexOf("navigate('/checkout?mode=buy-now')");
+  const navigate = productPage.indexOf("navigate('/checkout?mode=buy-now'");
 
   assert.ok(start >= 0);
   assert.ok(navigate >= 0);

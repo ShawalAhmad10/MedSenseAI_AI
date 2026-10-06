@@ -13,9 +13,8 @@ import { clearPharmacistAuth } from '../../services/pharmacistAuthSession';
 
 const homeNav = [
   { icon: LayoutDashboard, label: 'Overview', path: '/pharmacist/dashboard' },
-  { icon: FileText, label: 'Prescriptions', path: '/pharmacist/dashboard/prescriptions' },
   { icon: BarChart3, label: 'Analytics', path: '/pharmacist/dashboard/analytics' },
-  { icon: TrendingUp, label: 'Sales Report', path: '/pharmacist/dashboard/sales' },
+  { icon: TrendingUp, label: 'Sales Optimization', path: '/pharmacist/dashboard/sales' },
   { icon: User, label: 'Account', path: '/pharmacist/dashboard/settings' },
 ];
 

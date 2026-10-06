@@ -1,1356 +1,1302 @@
-import React, {
+import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+
 import {
-  AlertTriangle,
-  BrainCircuit,
   CheckCircle2,
-  Database,
-  Download,
   Info,
-  LoaderCircle,
   RefreshCw,
+  Search,
   ShieldCheck,
   Users,
 } from 'lucide-react';
 
 import api from '../../services/api';
 
-const STATUS_META = {
-  scored: {
-    label: 'Scored',
-    color: '#10b981',
-    background: '#ecfdf5',
-    description: 'Verified model score is available.',
-  },
-  insufficient_data: {
-    label: 'Insufficient Data',
-    color: '#d97706',
-    background: '#fffbeb',
-    description:
-      'Required historical coverage is not complete enough to score safely.',
-  },
-  model_unavailable: {
-    label: 'Model Unavailable',
-    color: '#dc2626',
-    background: '#fef2f2',
-    description:
-      'A verified compatible model runtime is not currently available.',
-  },
-  out_of_scope: {
-    label: 'Out of Scope',
-    color: '#64748b',
-    background: '#f8fafc',
-    description:
-      'The customer does not currently satisfy the model scope.',
-  },
-  invalid_input: {
-    label: 'Input Unavailable',
-    color: '#7c3aed',
-    background: '#faf5ff',
-    description:
-      'Canonical scoring input could not be validated.',
-  },
-};
 
-const FILTERS = [
-  { id: 'all', label: 'All Customers' },
-  { id: 'scored', label: 'Scored' },
-  { id: 'insufficient_data', label: 'Insufficient Data' },
-  { id: 'model_unavailable', label: 'Model Unavailable' },
+const SCORE_BANDS = [
+  {
+    min: 80,
+    label: 'Very High',
+    cls: 'tier-very-high',
+  },
+  {
+    min: 60,
+    label: 'High',
+    cls: 'tier-high',
+  },
+  {
+    min: 40,
+    label: 'Medium',
+    cls: 'tier-medium',
+  },
+  {
+    min: 0,
+    label: 'Low',
+    cls: 'tier-low',
+  },
 ];
 
-function statusMeta(status) {
+
+function getTier(score, status) {
+
+  if (
+    status === 'model_unavailable'
+  ) {
+    return {
+      label: 'Model Unavailable',
+      cls: 'tier-none',
+    };
+  }
+
+  if (
+    status !== 'scored' ||
+    !Number.isFinite(score)
+  ) {
+    return {
+      label: 'Not Scored',
+      cls: 'tier-none',
+    };
+  }
+
   return (
-    STATUS_META[status] || {
-      label: status
-        ? status
-            .replaceAll('_', ' ')
-            .replace(/\b\w/g, (c) => c.toUpperCase())
-        : 'Unknown',
-      color: '#64748b',
-      background: '#f8fafc',
-      description: 'No additional status description is available.',
-    }
+    SCORE_BANDS.find(
+      (band) =>
+        score >= band.min
+    ) ||
+    SCORE_BANDS[
+      SCORE_BANDS.length - 1
+    ]
   );
 }
 
-function reasonText(reason) {
-  if (!reason) return '—';
-
-  const known = {
-    historical_coverage_or_availability:
-      'Complete historical coverage is not available yet.',
-    no_known_completed_purchase_in_60d:
-      'No known completed purchase exists in the required 60-day window.',
-    'No verified bundle loaded':
-      'Verified model bundle is unavailable in the current runtime.',
-    canonical_input_validation_failed:
-      'Canonical customer history could not be validated.',
-    model_failure:
-      'Verified model execution failed safely.',
-  };
-
-  return (
-    known[reason] ||
-    String(reason)
-      .replaceAll('_', ' ')
-      .replace(/\b\w/g, (c) => c.toUpperCase())
-  );
-}
 
 function normalizeLead(row) {
-  const scoring = row?.scoring || {};
 
-  const rawScore = Number(scoring.lead_score);
-  const rawProbability = Number(scoring.model_probability);
+  const scoring =
+    row?.scoring ||
+    {};
+
+
+  const rawScore =
+    Number(
+      scoring.lead_score
+    );
+
+
+  const score =
+    scoring.lead_score !== null &&
+    scoring.lead_score !== undefined &&
+    Number.isFinite(rawScore)
+      ? rawScore
+      : null;
+
+
+  const activity =
+    row?.activity ||
+    {};
+
 
   return {
-    id: Number(row?.customer_id),
+
+    id:
+      Number(
+        row.customer_id
+      ),
+
     name:
-      row?.customer_name ||
-      `Customer #${row?.customer_id ?? '—'}`,
-    email: row?.email || '—',
-    orderCount: Number(row?.order_count || 0),
-    status: scoring.status || 'invalid_input',
-    reason: scoring.reason || null,
-    score:
-      scoring.lead_score !== null &&
-      scoring.lead_score !== undefined &&
-      Number.isFinite(rawScore)
-        ? rawScore
-        : null,
-    probability:
-      scoring.model_probability !== null &&
-      scoring.model_probability !== undefined &&
-      Number.isFinite(rawProbability)
-        ? rawProbability
-        : null,
-    modelVersion: scoring.model_version || null,
-    featureVersion: scoring.feature_version || null,
-    sourceNamespace: scoring.source_namespace || null,
-    observationTime: scoring.observation_time || null,
-    notice: scoring.synthetic_development_notice || null,
+      row.customer_name ||
+      `Customer #${row.customer_id}`,
+
+    email:
+      row.email ||
+      '-',
+
+    totalOrders:
+      Number(
+        row.order_count ||
+        0
+      ),
+
+    status:
+      scoring.status ||
+      'insufficient_data',
+
+    score,
+
+    reason:
+      scoring.reason ||
+      null,
+
+    activity: {
+
+      purchases:
+        Number(
+          activity.purchases_30d ||
+          0
+        ),
+
+      carts:
+        Number(
+          activity.cart_adds_30d ||
+          0
+        ),
+
+      views:
+        Number(
+          activity.views_30d ||
+          0
+        ),
+    },
   };
 }
 
-function StatCard({
-  icon,
+
+function signalFor(lead) {
+
+  if (
+    lead.status === 'model_unavailable'
+  ) {
+    return 'AI model temporarily unavailable';
+  }
+
+  if (
+    lead.status !== 'scored' ||
+    lead.score === null
+  ) {
+    return 'More history required';
+  }
+
+
+  if (
+    lead.activity.carts >= 10
+  ) {
+    return 'Strong cart and browsing activity';
+  }
+
+
+  if (
+    lead.activity.purchases >= 5
+  ) {
+    return 'Strong recent purchase activity';
+  }
+
+
+  if (
+    lead.activity.purchases >= 2
+  ) {
+    return 'Consistent recent activity';
+  }
+
+
+  if (
+    lead.activity.carts > 0 ||
+    lead.activity.views >= 5
+  ) {
+    return 'Active product interest';
+  }
+
+
+  return 'Limited recent engagement';
+}
+
+
+function SummaryCard({
   label,
   value,
   helper,
-  color = 'var(--navy)',
+  icon,
 }) {
+
   return (
-    <div
-      style={{
-        background: 'white',
-        borderRadius: 'var(--dash-radius)',
-        padding: '1.2rem',
-        border: '1px solid var(--dash-border)',
-        boxShadow: 'var(--dash-shadow)',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          marginBottom: '0.55rem',
-          color,
-          fontSize: '0.72rem',
-          fontWeight: 700,
-          textTransform: 'uppercase',
-        }}
-      >
+    <div className="lead-stat">
+
+      <div className="lead-stat-head">
+
+        <span>
+          {label}
+        </span>
+
         {icon}
-        {label}
+
       </div>
 
-      <div
-        style={{
-          fontFamily: 'var(--font-display)',
-          color: 'var(--navy)',
-          fontSize: '1.55rem',
-          fontWeight: 800,
-        }}
-      >
+      <strong>
         {value}
-      </div>
+      </strong>
 
-      {helper && (
-        <div
-          style={{
-            marginTop: 4,
-            fontSize: '0.7rem',
-            color: 'var(--gray-400)',
-          }}
-        >
-          {helper}
-        </div>
-      )}
+      <small>
+        {helper}
+      </small>
+
     </div>
   );
 }
 
-function StatusBadge({ status }) {
-  const meta = statusMeta(status);
-
-  return (
-    <span
-      title={meta.description}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        padding: '5px 10px',
-        borderRadius: 100,
-        fontSize: '0.72rem',
-        fontWeight: 700,
-        color: meta.color,
-        background: meta.background,
-        border: `1px solid ${meta.color}22`,
-        whiteSpace: 'nowrap',
-      }}
-    >
-      <span
-        style={{
-          width: 7,
-          height: 7,
-          borderRadius: '50%',
-          background: meta.color,
-        }}
-      />
-      {meta.label}
-    </span>
-  );
-}
-
-function csvValue(value) {
-  const text =
-    value === null || value === undefined
-      ? ''
-      : String(value);
-
-  return `"${text.replaceAll('"', '""')}"`;
-}
 
 export default function LeadScoring() {
-  const [leads, setLeads] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeFilter, setActiveFilter] = useState('all');
-  const [sortField, setSortField] = useState('name');
-  const [sortOrder, setSortOrder] = useState('asc');
-  const [error, setError] = useState('');
-  const [lastRefresh, setLastRefresh] = useState(null);
-  const [runtimeMeta, setRuntimeMeta] = useState({
-    refreshMode: null,
-    persistedScores: false,
-  });
 
-  const applyResponse = useCallback((response) => {
-    const data = response?.data?.data || {};
-    const rows = Array.isArray(data.leads)
-      ? data.leads
-      : [];
+  const activeRequest =
+    useRef(null);
 
-    setLeads(rows.map(normalizeLead));
 
-    setRuntimeMeta({
-      refreshMode: data.refresh_mode || null,
-      persistedScores: data.persisted_scores === true,
-    });
+  const [
+    leads,
+    setLeads,
+  ] =
+    useState([]);
 
-    setLastRefresh(new Date());
-  }, []);
 
-  const load = useCallback(
-    async (refresh = false) => {
-      setError('');
+  const [
+    search,
+    setSearch,
+  ] =
+    useState('');
 
-      if (refresh) {
-        setIsRefreshing(true);
-      } else {
-        setIsLoading(true);
-      }
 
-      try {
-        const response = refresh
-          ? await api.post('/leads/recalculate?limit=100')
-          : await api.get('/leads?limit=100');
+  const [
+    loading,
+    setLoading,
+  ] =
+    useState(true);
 
-        applyResponse(response);
-      } catch (err) {
-        console.error(
-          'Real lead scoring load failed:',
-          err,
-        );
 
-        setLeads([]);
+  const [
+    refreshing,
+    setRefreshing,
+  ] =
+    useState(false);
 
-        setRuntimeMeta({
-          refreshMode: null,
-          persistedScores: false,
-        });
 
-        setLastRefresh(null);
+  const [
+    error,
+    setError,
+  ] =
+    useState('');
 
-        setError(
-          err?.response?.data?.message ||
-            'Lead scoring data is currently unavailable.',
-        );
-      } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
-      }
-    },
-    [applyResponse],
-  );
 
-  useEffect(() => {
-    load(false);
-  }, [load]);
+  const [
+    lastRefresh,
+    setLastRefresh,
+  ] =
+    useState(null);
 
-  const counts = useMemo(() => {
-    return {
-      total: leads.length,
-      scored: leads.filter(
-        (lead) => lead.status === 'scored',
-      ).length,
-      insufficient: leads.filter(
-        (lead) =>
-          lead.status === 'insufficient_data',
-      ).length,
-      unavailable: leads.filter(
-        (lead) =>
-          lead.status === 'model_unavailable',
-      ).length,
-    };
-  }, [leads]);
 
-  const filteredLeads = useMemo(() => {
-    const filtered =
-      activeFilter === 'all'
-        ? [...leads]
-        : leads.filter(
-            (lead) =>
-              lead.status === activeFilter,
+  const load =
+    useCallback(
+      async (
+        refresh = false
+      ) => {
+
+        activeRequest.current
+          ?.abort();
+
+
+        const controller =
+          new AbortController();
+
+
+        activeRequest.current =
+          controller;
+
+
+        setError('');
+
+
+        if (refresh) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
+        }
+
+
+        try {
+
+          const options = {
+
+            params: {
+              limit: 100,
+            },
+
+            signal:
+              controller.signal,
+
+            timeout:
+              60000,
+          };
+
+
+          const response =
+            refresh
+
+              ? await api.post(
+                  '/leads/recalculate',
+                  null,
+                  options
+                )
+
+              : await api.get(
+                  '/leads',
+                  options
+                );
+
+
+          if (
+            controller.signal
+              .aborted
+          ) {
+            return;
+          }
+
+
+          const rows =
+            response
+              ?.data
+              ?.data
+              ?.leads;
+
+
+          setLeads(
+            Array.isArray(rows)
+
+              ? rows.map(
+                  normalizeLead
+                )
+
+              : []
           );
 
-    return filtered.sort((a, b) => {
-      let left = a[sortField];
-      let right = b[sortField];
+          setLastRefresh(
+            new Date()
+          );
 
-      if (sortField === 'score') {
-        if (left === null && right === null) return 0;
-        if (left === null) return 1;
-        if (right === null) return -1;
-      }
+        } catch (err) {
 
-      if (
-        typeof left === 'string' &&
-        typeof right === 'string'
-      ) {
-        const comparison =
-          left.localeCompare(right);
+          if (
+            controller.signal
+              .aborted
+          ) {
+            return;
+          }
 
-        return sortOrder === 'asc'
-          ? comparison
-          : -comparison;
-      }
 
-      left = left ?? 0;
-      right = right ?? 0;
+          console.error(
+            'Lead scoring load failed:',
+            err
+          );
 
-      if (left === right) return 0;
 
-      return sortOrder === 'asc'
-        ? left - right
-        : right - left;
-    });
-  }, [
-    leads,
-    activeFilter,
-    sortField,
-    sortOrder,
-  ]);
+          setLeads([]);
 
-  const firstNotice = useMemo(
-    () =>
-      leads.find((lead) => lead.notice)
-        ?.notice || null,
-    [leads],
-  );
+          setLastRefresh(null);
 
-  const featureVersion = useMemo(
-    () =>
-      leads.find((lead) => lead.featureVersion)
-        ?.featureVersion || '—',
-    [leads],
-  );
 
-  const modelVersion = useMemo(
-    () =>
-      leads.find((lead) => lead.modelVersion)
-        ?.modelVersion || '—',
-    [leads],
-  );
+          setError(
+            err?.response?.data?.message ||
+            'Lead scoring data is currently unavailable.'
+          );
 
-  const setSort = (field) => {
-    if (field === sortField) {
-      setSortOrder((current) =>
-        current === 'asc' ? 'desc' : 'asc',
-      );
-      return;
-    }
+        } finally {
 
-    setSortField(field);
-    setSortOrder(
-      field === 'name' ? 'asc' : 'desc',
-    );
-  };
+          if (
+            activeRequest.current ===
+              controller &&
+            !controller.signal
+              .aborted
+          ) {
 
-  const filterCount = (filter) => {
-    if (filter === 'all') {
-      return counts.total;
-    }
+            activeRequest.current =
+              null;
 
-    return leads.filter(
-      (lead) => lead.status === filter,
-    ).length;
-  };
+            setLoading(false);
 
-  const exportCsv = () => {
-    if (leads.length === 0) return;
-
-    const headers = [
-      'customer_id',
-      'customer_name',
-      'email',
-      'order_count',
-      'status',
-      'lead_score',
-      'model_probability',
-      'reason',
-      'model_version',
-      'feature_version',
-      'source_namespace',
-      'observation_time',
-    ];
-
-    const lines = [
-      headers.map(csvValue).join(','),
-      ...leads.map((lead) =>
-        [
-          lead.id,
-          lead.name,
-          lead.email,
-          lead.orderCount,
-          lead.status,
-          lead.score,
-          lead.probability,
-          lead.reason,
-          lead.modelVersion,
-          lead.featureVersion,
-          lead.sourceNamespace,
-          lead.observationTime,
-        ]
-          .map(csvValue)
-          .join(','),
-      ),
-    ];
-
-    const blob = new Blob(
-      [lines.join('\n')],
-      {
-        type: 'text/csv;charset=utf-8',
+            setRefreshing(false);
+          }
+        }
       },
+      []
     );
 
-    const url =
-      URL.createObjectURL(blob);
 
-    const anchor =
-      document.createElement('a');
+  useEffect(
+    () => {
 
-    anchor.href = url;
-    anchor.download =
-      'medsense-real-lead-scoring.csv';
+      load(false);
 
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
+      return () =>
+        activeRequest.current
+          ?.abort();
 
-    URL.revokeObjectURL(url);
-  };
+    },
+    [
+      load
+    ]
+  );
+
+
+  const enriched =
+    useMemo(
+      () =>
+        leads.map(
+          (lead) => ({
+
+            ...lead,
+
+            tier:
+              getTier(
+                lead.score,
+                lead.status
+              ),
+
+            signal:
+              signalFor(
+                lead
+              ),
+          })
+        ),
+      [
+        leads
+      ]
+    );
+
+
+  const stats =
+    useMemo(
+      () => {
+
+        const scored =
+          enriched.filter(
+            (lead) =>
+              lead.status === 'scored' &&
+              lead.score !== null
+          );
+
+
+        return {
+
+          total:
+            enriched.length,
+
+          scored:
+            scored.length,
+
+          high:
+            scored.filter(
+              (lead) =>
+                lead.score >= 60
+            ).length,
+
+          history:
+            enriched.filter(
+              (lead) =>
+                lead.status !== 'scored' ||
+                lead.score === null
+            ).length,
+        };
+      },
+      [
+        enriched
+      ]
+    );
+
+
+  const visible =
+    useMemo(
+      () => {
+
+        const term =
+          search
+            .trim()
+            .toLowerCase();
+
+
+        const filtered =
+          !term
+            ? enriched
+            : enriched.filter(
+                (lead) =>
+                  lead.name
+                    .toLowerCase()
+                    .includes(term) ||
+
+                  lead.email
+                    .toLowerCase()
+                    .includes(term) ||
+
+                  String(
+                    lead.id
+                  ).includes(term)
+              );
+
+
+        return [
+          ...filtered
+        ].sort(
+          (a, b) => {
+
+            const aScore =
+              a.score ??
+              -1;
+
+            const bScore =
+              b.score ??
+              -1;
+
+
+            if (
+              bScore !==
+              aScore
+            ) {
+              return (
+                bScore -
+                aScore
+              );
+            }
+
+
+            return (
+              a.name.localeCompare(
+                b.name
+              )
+            );
+          }
+        );
+      },
+      [
+        enriched,
+        search
+      ]
+    );
+
 
   return (
-    <div
-      style={{
-        padding: '1.5rem',
-        width: '100%',
-        maxWidth: 1600,
-        margin: '0 auto',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: '1rem',
-          marginBottom: '1.5rem',
-          flexWrap: 'wrap',
-        }}
-      >
+
+    <div className="lead-page">
+
+      <div className="lead-header">
+
         <div>
-          <h1
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontWeight: 800,
-              fontSize: '1.6rem',
-              color: 'var(--navy)',
-              margin: '0 0 3px',
-            }}
-          >
+
+          <h1>
             AI Lead Scoring
           </h1>
 
-          <p
-            style={{
-              fontSize: '0.78rem',
-              color: 'var(--gray-400)',
-              margin: 0,
-            }}
-          >
-            Real customer eligibility and model
-            output from authoritative pharmacy
-            history.
+          <p>
+            AI-powered customer prioritization using purchase and engagement behaviour.
           </p>
 
           {lastRefresh && (
-            <p
-              style={{
-                fontSize: '0.7rem',
-                color: 'var(--gray-400)',
-                margin: '5px 0 0',
-              }}
-            >
+
+            <small>
               Last refreshed:{' '}
               {lastRefresh.toLocaleString()}
-            </p>
+            </small>
           )}
+
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            gap: '0.7rem',
-          }}
+
+        <button
+          className="refresh-btn"
+          disabled={
+            loading ||
+            refreshing
+          }
+          onClick={() =>
+            load(true)
+          }
         >
-          <motion.button
-            whileHover={{ y: -1 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={exportCsv}
-            disabled={leads.length === 0}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '0.55rem 0.9rem',
-              borderRadius: 100,
-              border:
-                '1px solid var(--dash-border)',
-              background: 'white',
-              color: 'var(--navy)',
-              cursor:
-                leads.length === 0
-                  ? 'not-allowed'
-                  : 'pointer',
-              opacity:
-                leads.length === 0
-                  ? 0.5
-                  : 1,
-              fontWeight: 600,
-            }}
-          >
-            <Download size={14} />
-            Export CSV
-          </motion.button>
 
-          <motion.button
-            whileHover={{ y: -1 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => load(true)}
-            disabled={isRefreshing}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 7,
-              padding: '0.55rem 1rem',
-              borderRadius: 100,
-              border: 'none',
-              background:
-                'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
-              color: 'white',
-              cursor: isRefreshing
-                ? 'not-allowed'
-                : 'pointer',
-              opacity:
-                isRefreshing ? 0.75 : 1,
-              fontWeight: 650,
-            }}
-          >
-            {isRefreshing ? (
-              <LoaderCircle
-                size={14}
-                className="spin"
-              />
-            ) : (
-              <RefreshCw size={14} />
-            )}
+          <RefreshCw
+            size={15}
+            className={
+              refreshing
+                ? 'spin'
+                : ''
+            }
+          />
 
-            {isRefreshing
-              ? 'Refreshing...'
-              : 'Refresh Analysis'}
-          </motion.button>
-        </div>
+          Refresh Analysis
+
+        </button>
+
       </div>
 
+
+      <div className="stats-grid">
+
+        <SummaryCard
+          label="Customers Analyzed"
+          value={stats.total}
+          helper="Registered active customers"
+          icon={
+            <Users size={16} />
+          }
+        />
+
+        <SummaryCard
+          label="Scored Leads"
+          value={stats.scored}
+          helper="AI score available"
+          icon={
+            <CheckCircle2
+              size={16}
+            />
+          }
+        />
+
+        <SummaryCard
+          label="High Priority"
+          value={stats.high}
+          helper="High + Very High tiers"
+          icon={
+            <ShieldCheck
+              size={16}
+            />
+          }
+        />
+
+        <SummaryCard
+          label="Need More History"
+          value={stats.history}
+          helper="Score safely withheld"
+          icon={
+            <Info size={16} />
+          }
+        />
+
+      </div>
+
+
+      <div className="governance">
+
+        <strong>
+          60-Day Analysis
+        </strong>
+
+        <span>|</span>
+
+        <span>
+          Next 30-Day Purchase Target
+        </span>
+
+        <span>|</span>
+
+        <span>
+          28 Behavioral Features
+        </span>
+
+        <span>|</span>
+
+        <span>
+          On-Demand AI Scoring
+        </span>
+
+      </div>
+
+
+      <div className="unified-banner">
+
+        <ShieldCheck
+          size={14}
+        />
+
+        <span>
+          <strong>
+            Unified Lead View
+          </strong>
+          {' - '}
+          AI score, operational order history and recent customer activity are shown together.
+        </span>
+
+      </div>
+
+
       {error && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 9,
-            padding: '0.9rem 1rem',
-            marginBottom: '1rem',
-            borderRadius:
-              'var(--dash-radius)',
-            border: '1px solid #fecaca',
-            background: '#fef2f2',
-            color: '#991b1b',
-            fontSize: '0.78rem',
-          }}
-        >
-          <AlertTriangle size={16} />
+
+        <div className="error-box">
           {error}
         </div>
       )}
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns:
-            'repeat(4, minmax(0, 1fr))',
-          gap: '1rem',
-          marginBottom: '1.2rem',
-        }}
-      >
-        <StatCard
-          icon={<Users size={15} />}
-          label="Real Customers"
-          value={counts.total}
-          helper="Authoritative active customer records"
-        />
 
-        <StatCard
-          icon={<CheckCircle2 size={15} />}
-          label="Scored"
-          value={counts.scored}
-          helper="Canonical eligibility and model available"
-          color="#10b981"
-        />
+      <div className="table-card">
 
-        <StatCard
-          icon={<Info size={15} />}
-          label="Insufficient Data"
-          value={counts.insufficient}
-          helper="Score withheld instead of estimated"
-          color="#d97706"
-        />
+        <div className="table-top">
 
-        <StatCard
-          icon={<AlertTriangle size={15} />}
-          label="Model Unavailable"
-          value={counts.unavailable}
-          helper="Verified compatible runtime unavailable"
-          color="#dc2626"
-        />
-      </div>
+          <div>
 
-      <div
-        style={{
-          background: 'white',
-          border:
-            '1px solid var(--dash-border)',
-          borderRadius:
-            'var(--dash-radius)',
-          boxShadow:
-            'var(--dash-shadow)',
-          padding: '1.1rem',
-          marginBottom: '1.2rem',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            marginBottom: '0.8rem',
-          }}
-        >
-          <ShieldCheck
-            size={18}
-            color="#2563eb"
-          />
+            <h2>
+              Customer Lead Overview
+            </h2>
 
-          <strong
-            style={{
-              color: 'var(--navy)',
-              fontSize: '0.9rem',
-            }}
-          >
-            Model governance
-          </strong>
-        </div>
+            <p>
+              Highest lead scores appear first.
+            </p>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns:
-              'repeat(4, minmax(0, 1fr))',
-            gap: '0.8rem',
-          }}
-        >
-          {[
-            {
-              icon: <BrainCircuit size={15} />,
-              label: 'Model',
-              value: modelVersion,
-            },
-            {
-              icon: <Database size={15} />,
-              label: 'Features',
-              value: featureVersion,
-            },
-            {
-              icon: <ShieldCheck size={15} />,
-              label: 'Score persistence',
-              value:
-                runtimeMeta.persistedScores
-                  ? 'Enabled'
-                  : 'Disabled',
-            },
-            {
-              icon: <Info size={15} />,
-              label: 'Operational tiers',
-              value: 'None defined',
-            },
-          ].map((item) => (
-            <div
-              key={item.label}
-              style={{
-                padding: '0.8rem',
-                borderRadius: 10,
-                background:
-                  'var(--dash-bg)',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  color:
-                    'var(--gray-400)',
-                  fontSize: '0.68rem',
-                  fontWeight: 700,
-                  textTransform:
-                    'uppercase',
-                  marginBottom: 5,
-                }}
-              >
-                {item.icon}
-                {item.label}
-              </div>
+          </div>
 
-              <div
-                style={{
-                  fontSize: '0.78rem',
-                  color: 'var(--navy)',
-                  fontWeight: 650,
-                  wordBreak:
-                    'break-word',
-                }}
-              >
-                {item.value}
-              </div>
-            </div>
-          ))}
-        </div>
 
-        <div
-          style={{
-            marginTop: '0.85rem',
-            padding: '0.75rem',
-            borderRadius: 10,
-            background: '#eff6ff',
-            border:
-              '1px solid #dbeafe',
-            fontSize: '0.72rem',
-            lineHeight: 1.55,
-            color: '#1e3a8a',
-          }}
-        >
-          {firstNotice ||
-            'Lead status is based on canonical eligibility. No High/Medium/Low marketing tiers are inferred.'}
-        </div>
-      </div>
+          <div className="search-box">
 
-      <div
-        style={{
-          display: 'flex',
-          gap: '0.5rem',
-          marginBottom: '1rem',
-          flexWrap: 'wrap',
-        }}
-      >
-        {FILTERS.map((filter) => {
-          const active =
-            activeFilter === filter.id;
+            <Search
+              size={14}
+            />
 
-          return (
-            <button
-              key={filter.id}
-              onClick={() =>
-                setActiveFilter(
-                  filter.id,
-                )
+            <input
+              value={search}
+              onChange={
+                (event) =>
+                  setSearch(
+                    event.target.value
+                  )
               }
-              style={{
-                padding:
-                  '0.42rem 0.9rem',
-                borderRadius: 100,
-                border:
-                  '1px solid var(--dash-border)',
-                background: active
-                  ? 'var(--navy)'
-                  : 'white',
-                color: active
-                  ? 'white'
-                  : 'var(--gray-600)',
-                fontSize: '0.76rem',
-                fontWeight: 650,
-                cursor: 'pointer',
-              }}
-            >
-              {filter.label}{' '}
-              <span
-                style={{
-                  opacity: 0.75,
-                }}
-              >
-                ({filterCount(filter.id)})
-              </span>
-            </button>
-          );
-        })}
-      </div>
+              placeholder="Search customers..."
+            />
 
-      <div
-        style={{
-          background: 'white',
-          borderRadius:
-            'var(--dash-radius)',
-          border:
-            '1px solid var(--dash-border)',
-          boxShadow:
-            'var(--dash-shadow)',
-          overflow: 'hidden',
-          position: 'relative',
-        }}
-      >
-        <AnimatePresence>
-          {isRefreshing && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              style={{
-                position: 'absolute',
-                inset: 0,
-                background:
-                  'rgba(255,255,255,0.82)',
-                zIndex: 10,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent:
-                  'center',
-                gap: 9,
-                color: 'var(--navy)',
-                fontWeight: 700,
-              }}
-            >
-              <LoaderCircle
-                size={18}
-                className="spin"
-              />
-              Refreshing authoritative
-              customer analysis...
-            </motion.div>
-          )}
-        </AnimatePresence>
+          </div>
 
-        <div
-          style={{
-            overflowX: 'auto',
-          }}
-        >
-          <table
-            style={{
-              width: '100%',
-              borderCollapse:
-                'collapse',
-              textAlign: 'left',
-              minWidth: 980,
-            }}
-          >
+        </div>
+
+
+        <div className="table-scroll">
+
+          <table>
+
             <thead>
-              <tr
-                style={{
-                  background:
-                    'var(--dash-bg)',
-                  borderBottom:
-                    '1px solid var(--dash-border)',
-                }}
-              >
-                <th
-                  onClick={() =>
-                    setSort('name')
-                  }
-                  style={{
-                    padding: '1rem',
-                    fontSize: '0.7rem',
-                    color:
-                      'var(--gray-400)',
-                    textTransform:
-                      'uppercase',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Customer
-                </th>
 
-                <th
-                  onClick={() =>
-                    setSort(
-                      'orderCount',
-                    )
-                  }
-                  style={{
-                    padding: '1rem',
-                    fontSize: '0.7rem',
-                    color:
-                      'var(--gray-400)',
-                    textTransform:
-                      'uppercase',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Real Orders
-                </th>
+              <tr>
 
-                <th
-                  style={{
-                    padding: '1rem',
-                    fontSize: '0.7rem',
-                    color:
-                      'var(--gray-400)',
-                    textTransform:
-                      'uppercase',
-                  }}
-                >
-                  Status
-                </th>
+                <th>Customer</th>
+                <th>Total Orders</th>
+                <th>Lead Score</th>
+                <th>Recent Activity</th>
+                <th>Lead Tier</th>
+                <th>Key Signal</th>
 
-                <th
-                  onClick={() =>
-                    setSort('score')
-                  }
-                  style={{
-                    padding: '1rem',
-                    fontSize: '0.7rem',
-                    color:
-                      'var(--gray-400)',
-                    textTransform:
-                      'uppercase',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Lead Score
-                </th>
-
-                <th
-                  style={{
-                    padding: '1rem',
-                    fontSize: '0.7rem',
-                    color:
-                      'var(--gray-400)',
-                    textTransform:
-                      'uppercase',
-                  }}
-                >
-                  Model Probability
-                </th>
-
-                <th
-                  style={{
-                    padding: '1rem',
-                    fontSize: '0.7rem',
-                    color:
-                      'var(--gray-400)',
-                    textTransform:
-                      'uppercase',
-                  }}
-                >
-                  Reason
-                </th>
-
-                <th
-                  style={{
-                    padding: '1rem',
-                    fontSize: '0.7rem',
-                    color:
-                      'var(--gray-400)',
-                    textTransform:
-                      'uppercase',
-                  }}
-                >
-                  Model
-                </th>
               </tr>
+
             </thead>
 
+
             <tbody>
-              {isLoading ? (
-                Array.from({
-                  length: 5,
-                }).map((_, row) => (
-                  <tr
-                    key={row}
-                    style={{
-                      borderBottom:
-                        '1px solid var(--dash-border)',
-                    }}
-                  >
-                    {Array.from({
-                      length: 7,
-                    }).map((__, column) => (
-                      <td
-                        key={column}
-                        style={{
-                          padding:
-                            '1rem',
-                        }}
-                      >
-                        <div
-                          style={{
-                            height: 20,
-                            borderRadius:
-                              4,
-                            background:
-                              'var(--dash-bg)',
-                          }}
-                        />
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              ) : filteredLeads.length ===
-                0 ? (
+
+              {loading ? (
+
                 <tr>
+
                   <td
-                    colSpan={7}
-                    style={{
-                      padding:
-                        '3.5rem 2rem',
-                      textAlign:
-                        'center',
-                      color:
-                        'var(--gray-400)',
-                    }}
+                    colSpan={6}
+                    className="empty"
                   >
-                    <Users
-                      size={38}
-                      strokeWidth={1}
-                    />
-
-                    <div
-                      style={{
-                        marginTop:
-                          '0.8rem',
-                        fontWeight: 700,
-                      }}
-                    >
-                      No customers match
-                      this status.
-                    </div>
+                    Loading customer analysis...
                   </td>
+
                 </tr>
+
+              ) : visible.length === 0 ? (
+
+                <tr>
+
+                  <td
+                    colSpan={6}
+                    className="empty"
+                  >
+                    No registered customers found.
+                  </td>
+
+                </tr>
+
               ) : (
-                filteredLeads.map(
-                  (lead, index) => {
-                    const meta =
-                      statusMeta(
-                        lead.status,
-                      );
 
-                    return (
-                      <motion.tr
-                        key={lead.id}
-                        initial={{
-                          opacity: 0,
-                          y: 5,
-                        }}
-                        animate={{
-                          opacity: 1,
-                          y: 0,
-                        }}
-                        transition={{
-                          delay:
-                            index *
-                            0.03,
-                        }}
-                        style={{
-                          borderBottom:
-                            '1px solid var(--dash-border)',
-                        }}
-                      >
-                        <td
-                          style={{
-                            padding:
-                              '1rem',
-                          }}
-                        >
-                          <div
-                            style={{
-                              fontSize:
-                                '0.84rem',
-                              fontWeight:
-                                650,
-                              color:
-                                'var(--navy)',
-                            }}
-                          >
-                            {lead.name}
-                          </div>
+                visible.map(
+                  (lead) => (
 
-                          <div
-                            style={{
-                              marginTop:
-                                2,
-                              fontSize:
-                                '0.7rem',
-                              color:
-                                'var(--gray-400)',
-                            }}
-                          >
-                            {lead.email}
-                          </div>
+                    <tr key={lead.id}>
 
-                          <div
-                            style={{
-                              marginTop:
-                                2,
-                              fontSize:
-                                '0.65rem',
-                              color:
-                                'var(--gray-300)',
-                            }}
-                          >
-                            ID {lead.id}
-                          </div>
-                        </td>
+                      <td>
 
-                        <td
-                          style={{
-                            padding:
-                              '1rem',
-                            color:
-                              'var(--navy)',
-                            fontWeight:
-                              700,
-                          }}
-                        >
-                          {lead.orderCount}
-                        </td>
+                        <div className="name">
+                          {lead.name}
+                        </div>
 
-                        <td
-                          style={{
-                            padding:
-                              '1rem',
-                          }}
-                        >
-                          <StatusBadge
-                            status={
-                              lead.status
-                            }
-                          />
-                        </td>
+                        <div className="email">
+                          {lead.email}
+                        </div>
 
-                        <td
-                          style={{
-                            padding:
-                              '1rem',
-                          }}
-                        >
-                          {lead.score !==
-                          null ? (
-                            <div
-                              style={{
-                                fontWeight:
-                                  800,
-                                color:
-                                  'var(--navy)',
-                              }}
-                            >
-                              {lead.score.toFixed(
-                                2,
-                              )}
+                        <div className="customer-id">
+                          Customer #{lead.id}
+                        </div>
+
+                      </td>
+
+
+                      <td className="orders">
+                        {lead.totalOrders}
+                      </td>
+
+
+                      <td>
+
+                        {lead.score !== null ? (
+
+                          <>
+                            <div className="score">
+                              {lead.score.toFixed(2)}
                             </div>
-                          ) : (
-                            <span
-                              style={{
-                                color:
-                                  'var(--gray-300)',
-                                fontWeight:
-                                  700,
-                              }}
-                            >
-                              —
-                            </span>
-                          )}
-                        </td>
 
-                        <td
-                          style={{
-                            padding:
-                              '1rem',
-                            fontSize:
-                              '0.8rem',
-                            color:
-                              'var(--navy)',
-                          }}
+                            <div className="score-note">
+                              lead propensity score
+                            </div>
+                          </>
+
+                        ) : (
+
+                          <>
+                            <div className="no-score">
+                              -
+                            </div>
+
+                            <div className="need-history">
+                              More history needed
+                            </div>
+                          </>
+                        )}
+
+                      </td>
+
+
+                      <td>
+
+                        <div className="activity">
+
+                          <span>
+                            <strong>
+                              {lead.activity.purchases}
+                            </strong>
+                            {' '}
+                            purchases
+                          </span>
+
+                          <b>|</b>
+
+                          <span>
+                            <strong>
+                              {lead.activity.carts}
+                            </strong>
+                            {' '}
+                            carts
+                          </span>
+
+                          <b>|</b>
+
+                          <span>
+                            <strong>
+                              {lead.activity.views}
+                            </strong>
+                            {' '}
+                            views
+                          </span>
+
+                        </div>
+
+                      </td>
+
+
+                      <td>
+
+                        <span
+                          className={
+                            `tier ${lead.tier.cls}`
+                          }
                         >
-                          {lead.probability !==
-                          null
-                            ? `${(
-                                lead.probability *
-                                100
-                              ).toFixed(
-                                2,
-                              )}%`
-                            : '—'}
-                        </td>
+                          {lead.tier.label}
+                        </span>
 
-                        <td
-                          style={{
-                            padding:
-                              '1rem',
-                            maxWidth:
-                              330,
-                          }}
-                        >
-                          <div
-                            style={{
-                              color:
-                                meta.color,
-                              fontSize:
-                                '0.76rem',
-                              lineHeight:
-                                1.45,
-                            }}
-                          >
-                            {reasonText(
-                              lead.reason,
-                            )}
-                          </div>
-                        </td>
+                      </td>
 
-                        <td
-                          style={{
-                            padding:
-                              '1rem',
-                            fontSize:
-                              '0.7rem',
-                            color:
-                              'var(--gray-400)',
-                          }}
-                        >
-                          <div>
-                            {lead.modelVersion ||
-                              '—'}
-                          </div>
 
-                          <div
-                            style={{
-                              marginTop:
-                                3,
-                            }}
-                          >
-                            {lead.featureVersion ||
-                              '—'}
-                          </div>
-                        </td>
-                      </motion.tr>
-                    );
-                  },
+                      <td className="signal">
+                        {lead.signal}
+                      </td>
+
+                    </tr>
+                  )
                 )
               )}
+
             </tbody>
+
           </table>
+
         </div>
 
-        {!isLoading &&
-          leads.length > 0 && (
-            <div
-              style={{
-                display: 'flex',
-                justifyContent:
-                  'space-between',
-                gap: '1rem',
-                padding:
-                  '0.9rem 1.2rem',
-                borderTop:
-                  '1px solid var(--dash-border)',
-                color:
-                  'var(--gray-400)',
-                fontSize:
-                  '0.7rem',
-                flexWrap: 'wrap',
-              }}
-            >
-              <span>
-                Showing{' '}
-                {filteredLeads.length}{' '}
-                of {leads.length} real
-                customers
-              </span>
 
-              <span>
-                Mode:{' '}
-                {runtimeMeta.refreshMode ||
-                  'read-only'}
-              </span>
-            </div>
-          )}
+        <div className="footer">
+
+          <span>
+            Showing{' '}
+            {visible.length}{' '}
+            of{' '}
+            {leads.length}{' '}
+            registered customers
+          </span>
+
+          <span>
+            Lead tiers are operational score bands.
+          </span>
+
+        </div>
+
       </div>
+
+
+      <style>{`
+
+        .lead-page {
+          max-width: 1480px;
+          margin: 0 auto;
+          padding: 1.25rem 1.4rem 2rem;
+          color: #10243e;
+        }
+
+        .lead-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 1rem;
+          flex-wrap: wrap;
+          margin-bottom: 1rem;
+        }
+
+        .lead-header h1 {
+          margin: 0;
+          font-size: 1.45rem;
+          font-weight: 800;
+        }
+
+        .lead-header p {
+          margin: .3rem 0 0;
+          color: #64748b;
+          font-size: .77rem;
+        }
+
+        .lead-header small {
+          display: block;
+          margin-top: .2rem;
+          color: #94a3b8;
+          font-size: .64rem;
+        }
+
+        .refresh-btn {
+          border: 1px solid #e2e8f0;
+          background: white;
+          color: #10243e;
+          border-radius: 10px;
+          padding: .58rem .82rem;
+          font-size: .71rem;
+          font-weight: 700;
+          display: flex;
+          align-items: center;
+          gap: .4rem;
+          cursor: pointer;
+        }
+
+        .stats-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: .75rem;
+          margin-bottom: .8rem;
+        }
+
+        .lead-stat {
+          background: white;
+          border: 1px solid #e5eaf0;
+          border-radius: 14px;
+          padding: .9rem 1rem;
+          box-shadow: 0 4px 14px rgba(15,23,42,.035);
+        }
+
+        .lead-stat-head {
+          display: flex;
+          justify-content: space-between;
+          color: #64748b;
+          font-size: .65rem;
+          font-weight: 750;
+          text-transform: uppercase;
+          letter-spacing: .04em;
+        }
+
+        .lead-stat > strong {
+          display: block;
+          margin-top: .55rem;
+          font-size: 1.5rem;
+        }
+
+        .lead-stat small {
+          display: block;
+          margin-top: .4rem;
+          color: #94a3b8;
+          font-size: .63rem;
+        }
+
+        .governance {
+          display: flex;
+          gap: .5rem;
+          flex-wrap: wrap;
+          align-items: center;
+          border: 1px solid #e5eaf0;
+          background: white;
+          border-radius: 11px;
+          padding: .62rem .8rem;
+          color: #64748b;
+          font-size: .68rem;
+          margin-bottom: .7rem;
+        }
+
+        .governance strong {
+          color: #10243e;
+        }
+
+        .unified-banner {
+          display: flex;
+          align-items: center;
+          gap: .45rem;
+          border: 1px solid #bbf7d0;
+          background: #f0fdf4;
+          color: #166534;
+          border-radius: 10px;
+          padding: .62rem .8rem;
+          margin-bottom: .8rem;
+          font-size: .69rem;
+        }
+
+        .error-box {
+          border: 1px solid #fecaca;
+          background: #fef2f2;
+          color: #b91c1c;
+          padding: .7rem .8rem;
+          border-radius: 10px;
+          margin-bottom: .8rem;
+          font-size: .72rem;
+        }
+
+        .table-card {
+          background: white;
+          border: 1px solid #e5eaf0;
+          border-radius: 14px;
+          overflow: hidden;
+          box-shadow: 0 5px 18px rgba(15,23,42,.035);
+        }
+
+        .table-top {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: .8rem;
+          padding: .8rem 1rem;
+          border-bottom: 1px solid #eef2f7;
+        }
+
+        .table-top h2 {
+          margin: 0;
+          font-size: .86rem;
+          font-weight: 800;
+        }
+
+        .table-top p {
+          margin: .18rem 0 0;
+          color: #94a3b8;
+          font-size: .64rem;
+        }
+
+        .search-box {
+          width: 250px;
+          max-width: 100%;
+          display: flex;
+          gap: .4rem;
+          align-items: center;
+          border: 1px solid #e2e8f0;
+          border-radius: 9px;
+          padding: 0 .65rem;
+          color: #94a3b8;
+        }
+
+        .search-box input {
+          width: 100%;
+          border: 0;
+          outline: 0;
+          padding: .52rem 0;
+          font-size: .7rem;
+          background: transparent;
+        }
+
+        .table-scroll {
+          overflow-x: auto;
+        }
+
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          min-width: 980px;
+        }
+
+        thead {
+          background: #f8fafc;
+        }
+
+        th {
+          padding: .72rem 1rem;
+          text-align: left;
+          color: #64748b;
+          font-size: .62rem;
+          text-transform: uppercase;
+          letter-spacing: .04em;
+          border-bottom: 1px solid #e9eef5;
+        }
+
+        td {
+          padding: .84rem 1rem;
+          border-bottom: 1px solid #f1f5f9;
+          font-size: .71rem;
+          vertical-align: middle;
+        }
+
+        .name {
+          font-size: .76rem;
+          font-weight: 800;
+        }
+
+        .email {
+          margin-top: .15rem;
+          color: #64748b;
+          font-size: .63rem;
+        }
+
+        .customer-id {
+          margin-top: .1rem;
+          color: #94a3b8;
+          font-size: .58rem;
+        }
+
+        .orders {
+          font-size: .77rem;
+          font-weight: 800;
+        }
+
+        .score {
+          font-size: .91rem;
+          font-weight: 850;
+        }
+
+        .score-note {
+          margin-top: .15rem;
+          color: #94a3b8;
+          font-size: .58rem;
+        }
+
+        .no-score {
+          color: #94a3b8;
+          font-weight: 800;
+        }
+
+        .need-history {
+          margin-top: .12rem;
+          color: #b45309;
+          font-size: .58rem;
+        }
+
+        .activity {
+          display: flex;
+          gap: .34rem;
+          align-items: center;
+          white-space: nowrap;
+          color: #64748b;
+          font-size: .67rem;
+        }
+
+        .activity strong {
+          color: #10243e;
+        }
+
+        .activity b {
+          color: #cbd5e1;
+        }
+
+        .tier {
+          display: inline-flex;
+          padding: .3rem .56rem;
+          border-radius: 999px;
+          font-size: .62rem;
+          font-weight: 800;
+        }
+
+        .tier-very-high {
+          background: #ecfdf5;
+          color: #047857;
+        }
+
+        .tier-high {
+          background: #f0f9ff;
+          color: #0369a1;
+        }
+
+        .tier-medium {
+          background: #fffbeb;
+          color: #b45309;
+        }
+
+        .tier-low,
+        .tier-none {
+          background: #f1f5f9;
+          color: #64748b;
+        }
+
+        .signal {
+          color: #475569;
+          min-width: 190px;
+        }
+
+        .empty {
+          text-align: center;
+          padding: 2rem !important;
+          color: #94a3b8;
+        }
+
+        .footer {
+          display: flex;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: .5rem;
+          padding: .62rem 1rem;
+          color: #94a3b8;
+          font-size: .62rem;
+        }
+
+        .spin {
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        @media (max-width: 900px) {
+          .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+
+      `}</style>
+
     </div>
   );
 }
+

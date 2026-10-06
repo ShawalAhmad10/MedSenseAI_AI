@@ -2,6 +2,8 @@ const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
 
 const StockHistoryOpen = sequelize.define('StockHistoryOpen', {
+  source_batch_id: { type: DataTypes.INTEGER, allowNull: true },
+  opening_number: { type: DataTypes.STRING, allowNull: true },
   open_id: {
     type: DataTypes.INTEGER,
     primaryKey: true,

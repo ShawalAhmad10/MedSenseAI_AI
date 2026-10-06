@@ -167,6 +167,8 @@ exports.getCustomerDetails = async (req, res) => {
           currentBalance: Number(account.current_balance || 0),  // total outstanding (unpaid invoice)
           totalDebit:     Number(account.total_debit     || 0),  // total invoiced
           totalCredit:    Number(account.total_credit    || 0),  // total cash received
+          creditLimit:    Number(account.credit_limit || 0),
+          paymentTerms:   Number(account.payment_terms || 0),
           accountStatus:  account.account_status
         } : null,
         ledgerEntries: ledgerEntries.map(e => ({
@@ -420,6 +422,7 @@ exports.getCustomerLedger = async (req, res) => {
 exports.markPaymentReceived = async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
+    await sequelize.query('SELECT pg_advisory_xact_lock(44201,17001)', {transaction});
     const { customerId } = req.params;
     const { amount, invoiceId, invoiceNumber, notes, paymentMethod, referenceNumber, transactionType } = req.body;
 
@@ -428,7 +431,7 @@ exports.markPaymentReceived = async (req, res) => {
 
     // For regular payment: amount must be positive
     // For refund: we accept negative (frontend sends negative) or positive with transactionType='refund'
-    if (!amount || rawAmount === 0) {
+    if (!Number.isFinite(rawAmount) || rawAmount === 0) {
       await transaction.rollback();
       return res.status(400).json({ success: false, message: 'Valid payment amount is required' });
     }
@@ -437,7 +440,7 @@ exports.markPaymentReceived = async (req, res) => {
     const absAmount = Math.abs(rawAmount);
 
     const account = await CustomerAccount.findOne({
-      where: { customer_id: customerId, status: 1 }
+      where: { customer_id: customerId, status: 1 }, transaction, lock:transaction.LOCK.UPDATE
     });
     if (!account) {
       await transaction.rollback();
@@ -559,9 +562,10 @@ exports.markPaymentReceived = async (req, res) => {
            SELECT invoice_id FROM invoice
            WHERE customer_id = :cid AND status = 1
          )
+         AND (:invoiceId IS NULL OR linked_invoice_id = :invoiceId)
          AND refund_status = 'pending'
          AND status = 1`,
-        { replacements: { cid: customerId }, type: sequelize.QueryTypes.UPDATE, transaction }
+        { replacements: { cid: customerId,invoiceId:invoiceId || null }, type: sequelize.QueryTypes.UPDATE, transaction }
       );
     }
 

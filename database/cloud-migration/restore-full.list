@@ -1,0 +1,439 @@
+﻿;
+; Archive created at 2026-10-02 19:18:36
+;     dbname: medsenseai_pharm
+;     TOC Entries: 428
+;     Compression: gzip
+;     Dump Version: 1.16-0
+;     Format: CUSTOM
+;     Integer: 4 bytes
+;     Offset: 8 bytes
+;     Dumped from database version: 18.4
+;     Dumped by pg_dump version: 18.4
+;
+;
+; Selected TOC Entries:
+;
+4; 2615 2200 SCHEMA - public pg_database_owner
+5729; 0 0 COMMENT - SCHEMA public pg_database_owner
+932; 1247 16390 TYPE public enum_customer_accounts_account_status postgres
+935; 1247 16398 TYPE public enum_customer_ledger_payment_method postgres
+938; 1247 16410 TYPE public enum_customer_ledger_transaction_type postgres
+941; 1247 16422 TYPE public enum_notifications_type postgres
+944; 1247 16434 TYPE public enum_otps_type postgres
+947; 1247 16442 TYPE public enum_staff_status postgres
+950; 1247 16448 TYPE public enum_staff_type postgres
+221; 1259 16469 TABLE public active_ingredients postgres
+222; 1259 16484 SEQUENCE public active_ingredients_id_seq postgres
+5730; 0 0 SEQUENCE OWNED BY public active_ingredients_id_seq postgres
+223; 1259 16485 TABLE public stock_history postgres
+5731; 0 0 COMMENT public COLUMN stock_history.stock_id postgres
+5732; 0 0 COMMENT public COLUMN stock_history.product_id postgres
+5733; 0 0 COMMENT public COLUMN stock_history.product_title postgres
+5734; 0 0 COMMENT public COLUMN stock_history.batch_number postgres
+5735; 0 0 COMMENT public COLUMN stock_history.initial_quantity postgres
+5736; 0 0 COMMENT public COLUMN stock_history.remaining_quantity postgres
+5737; 0 0 COMMENT public COLUMN stock_history.product_quantity postgres
+5738; 0 0 COMMENT public COLUMN stock_history.product_bonus postgres
+5739; 0 0 COMMENT public COLUMN stock_history.product_price postgres
+5740; 0 0 COMMENT public COLUMN stock_history.sale_price postgres
+5741; 0 0 COMMENT public COLUMN stock_history.expiry_date postgres
+5742; 0 0 COMMENT public COLUMN stock_history.batch_status postgres
+5743; 0 0 COMMENT public COLUMN stock_history.status postgres
+224; 1259 16505 VIEW public batches postgres
+225; 1259 16509 SEQUENCE public batches_batch_id_seq postgres
+5744; 0 0 SEQUENCE OWNED BY public batches_batch_id_seq postgres
+226; 1259 16510 TABLE public brand postgres
+5745; 0 0 COMMENT public COLUMN brand.status postgres
+227; 1259 16516 VIEW public brands postgres
+228; 1259 16520 SEQUENCE public brands_brand_id_seq postgres
+5746; 0 0 SEQUENCE OWNED BY public brands_brand_id_seq postgres
+229; 1259 16521 TABLE public customer postgres
+230; 1259 16530 TABLE public customer_accounts postgres
+5747; 0 0 COMMENT public COLUMN customer_accounts.total_debit postgres
+5748; 0 0 COMMENT public COLUMN customer_accounts.total_credit postgres
+5749; 0 0 COMMENT public COLUMN customer_accounts.payment_terms postgres
+231; 1259 16545 SEQUENCE public customer_accounts_account_id_seq postgres
+5750; 0 0 SEQUENCE OWNED BY public customer_accounts_account_id_seq postgres
+232; 1259 16546 TABLE public customer_ledger postgres
+5751; 0 0 COMMENT public COLUMN customer_ledger.reference_type postgres
+5752; 0 0 COMMENT public COLUMN customer_ledger.debit_amount postgres
+5753; 0 0 COMMENT public COLUMN customer_ledger.credit_amount postgres
+5754; 0 0 COMMENT public COLUMN customer_ledger.balance postgres
+233; 1259 16559 SEQUENCE public customer_ledger_ledger_id_seq postgres
+5755; 0 0 SEQUENCE OWNED BY public customer_ledger_ledger_id_seq postgres
+234; 1259 16560 TABLE public customer_prescriptions postgres
+235; 1259 16585 SEQUENCE public customer_prescriptions_prescription_id_seq postgres
+5756; 0 0 SEQUENCE OWNED BY public customer_prescriptions_prescription_id_seq postgres
+236; 1259 16586 TABLE public customer_refill_reminders postgres
+237; 1259 16601 SEQUENCE public customer_refill_reminders_reminder_id_seq postgres
+5757; 0 0 SEQUENCE OWNED BY public customer_refill_reminders_reminder_id_seq postgres
+238; 1259 16602 VIEW public customers postgres
+239; 1259 16606 SEQUENCE public customers_customer_id_seq postgres
+5758; 0 0 SEQUENCE OWNED BY public customers_customer_id_seq postgres
+240; 1259 16607 TABLE public data_sources postgres
+241; 1259 16617 SEQUENCE public data_sources_id_seq postgres
+5759; 0 0 SEQUENCE OWNED BY public data_sources_id_seq postgres
+242; 1259 16618 TABLE public external_identifiers postgres
+243; 1259 16634 SEQUENCE public external_identifiers_id_seq postgres
+5760; 0 0 SEQUENCE OWNED BY public external_identifiers_id_seq postgres
+244; 1259 16635 TABLE public funnel_outbox postgres
+245; 1259 16648 TABLE public ingestion_batches postgres
+246; 1259 16666 SEQUENCE public ingestion_batches_id_seq postgres
+5761; 0 0 SEQUENCE OWNED BY public ingestion_batches_id_seq postgres
+247; 1259 16667 TABLE public ingredient_aliases postgres
+248; 1259 16684 SEQUENCE public ingredient_aliases_id_seq postgres
+5762; 0 0 SEQUENCE OWNED BY public ingredient_aliases_id_seq postgres
+249; 1259 16685 TABLE public interaction_records postgres
+250; 1259 16699 SEQUENCE public interaction_records_id_seq postgres
+5763; 0 0 SEQUENCE OWNED BY public interaction_records_id_seq postgres
+251; 1259 16700 TABLE public invoice postgres
+5764; 0 0 COMMENT public COLUMN invoice.customer_id postgres
+5765; 0 0 COMMENT public COLUMN invoice.card_holder_name postgres
+5766; 0 0 COMMENT public COLUMN invoice.card_last_four postgres
+5767; 0 0 COMMENT public COLUMN invoice.card_expiry postgres
+5768; 0 0 COMMENT public COLUMN invoice.billing_address postgres
+5769; 0 0 COMMENT public COLUMN invoice.wallet_account_name postgres
+5770; 0 0 COMMENT public COLUMN invoice.wallet_account_number postgres
+5771; 0 0 COMMENT public COLUMN invoice.wallet_cnic postgres
+5772; 0 0 COMMENT public COLUMN invoice.status postgres
+252; 1259 16728 TABLE public invoice_report postgres
+5773; 0 0 COMMENT public COLUMN invoice_report.invoice_id postgres
+5774; 0 0 COMMENT public COLUMN invoice_report.product_id postgres
+253; 1259 16750 VIEW public invoice_items postgres
+254; 1259 16754 SEQUENCE public invoice_items_item_id_seq postgres
+5775; 0 0 SEQUENCE OWNED BY public invoice_items_item_id_seq postgres
+255; 1259 16755 VIEW public invoices postgres
+256; 1259 16760 SEQUENCE public invoices_invoice_id_seq postgres
+5776; 0 0 SEQUENCE OWNED BY public invoices_invoice_id_seq postgres
+257; 1259 16761 TABLE public medicine_products postgres
+258; 1259 16777 SEQUENCE public medicine_products_id_seq postgres
+5777; 0 0 SEQUENCE OWNED BY public medicine_products_id_seq postgres
+259; 1259 16778 TABLE public medicines postgres
+260; 1259 16794 TABLE public notification_preferences postgres
+261; 1259 16806 TABLE public notifications postgres
+262; 1259 16821 TABLE public otps postgres
+263; 1259 16833 TABLE public pharmacist_consultations postgres
+264; 1259 16857 SEQUENCE public pharmacist_consultations_consultation_id_seq postgres
+5778; 0 0 SEQUENCE OWNED BY public pharmacist_consultations_consultation_id_seq postgres
+265; 1259 16858 TABLE public product postgres
+5779; 0 0 COMMENT public COLUMN product.product_brand postgres
+5780; 0 0 COMMENT public COLUMN product.product_supplier postgres
+5781; 0 0 COMMENT public COLUMN product.product_price postgres
+5782; 0 0 COMMENT public COLUMN product.product_pack_price postgres
+5783; 0 0 COMMENT public COLUMN product.product_salt postgres
+5784; 0 0 COMMENT public COLUMN product.product_pack_size postgres
+5785; 0 0 COMMENT public COLUMN product.product_min_threshold postgres
+5786; 0 0 COMMENT public COLUMN product.product_status postgres
+266; 1259 16868 VIEW public product_current_stock postgres
+267; 1259 16873 TABLE public product_ingredients postgres
+268; 1259 16890 SEQUENCE public product_ingredients_id_seq postgres
+5787; 0 0 SEQUENCE OWNED BY public product_ingredients_id_seq postgres
+269; 1259 16891 SEQUENCE public product_product_id_seq postgres
+5788; 0 0 SEQUENCE OWNED BY public product_product_id_seq postgres
+270; 1259 16892 TABLE public provenance_records postgres
+271; 1259 16906 SEQUENCE public provenance_records_id_seq postgres
+5789; 0 0 SEQUENCE OWNED BY public provenance_records_id_seq postgres
+272; 1259 16907 TABLE public quarantined_records postgres
+273; 1259 16925 SEQUENCE public quarantined_records_id_seq postgres
+5790; 0 0 SEQUENCE OWNED BY public quarantined_records_id_seq postgres
+274; 1259 16926 TABLE public source_releases postgres
+275; 1259 16936 SEQUENCE public source_releases_id_seq postgres
+5791; 0 0 SEQUENCE OWNED BY public source_releases_id_seq postgres
+276; 1259 16937 TABLE public staff postgres
+277; 1259 16954 TABLE public stock postgres
+5792; 0 0 COMMENT public COLUMN stock.supplier_id postgres
+278; 1259 16963 TABLE public stock_history_legacy_pre_latest postgres
+5793; 0 0 COMMENT public COLUMN stock_history_legacy_pre_latest.stock_id postgres
+5794; 0 0 COMMENT public COLUMN stock_history_legacy_pre_latest.product_id postgres
+5795; 0 0 COMMENT public COLUMN stock_history_legacy_pre_latest.product_price postgres
+279; 1259 16974 TABLE public stock_history_open postgres
+280; 1259 16983 SEQUENCE public stock_history_open_open_id_seq postgres
+5796; 0 0 SEQUENCE OWNED BY public stock_history_open_open_id_seq postgres
+281; 1259 16984 SEQUENCE public stock_history_stock_history_id_seq postgres
+5797; 0 0 SEQUENCE OWNED BY public stock_history_stock_history_id_seq postgres
+282; 1259 16985 TABLE public stock_report postgres
+5798; 0 0 COMMENT public COLUMN stock_report.batch_id postgres
+5799; 0 0 COMMENT public COLUMN stock_report.product_id postgres
+5800; 0 0 COMMENT public COLUMN stock_report.transaction_type postgres
+5801; 0 0 COMMENT public COLUMN stock_report.quantity_change postgres
+5802; 0 0 COMMENT public COLUMN stock_report.balance_after postgres
+5803; 0 0 COMMENT public COLUMN stock_report.reference_type postgres
+5804; 0 0 COMMENT public COLUMN stock_report.reference_id postgres
+5805; 0 0 COMMENT public COLUMN stock_report.reference_number postgres
+5806; 0 0 COMMENT public COLUMN stock_report.unit_price postgres
+5807; 0 0 COMMENT public COLUMN stock_report.total_value postgres
+5808; 0 0 COMMENT public COLUMN stock_report.reason postgres
+5809; 0 0 COMMENT public COLUMN stock_report.notes postgres
+5810; 0 0 COMMENT public COLUMN stock_report.performed_by postgres
+5811; 0 0 COMMENT public COLUMN stock_report.approved_by postgres
+5812; 0 0 COMMENT public COLUMN stock_report.witness postgres
+5813; 0 0 COMMENT public COLUMN stock_report.transaction_date postgres
+5814; 0 0 COMMENT public COLUMN stock_report.created_at postgres
+283; 1259 16999 VIEW public stock_ledger postgres
+284; 1259 17003 SEQUENCE public stock_ledger_ledger_id_seq postgres
+5815; 0 0 SEQUENCE OWNED BY public stock_ledger_ledger_id_seq postgres
+285; 1259 17004 TABLE public stock_return postgres
+5816; 0 0 COMMENT public COLUMN stock_return.stock_id postgres
+286; 1259 17014 TABLE public stock_return_report postgres
+5817; 0 0 COMMENT public COLUMN stock_return_report.return_id postgres
+287; 1259 17020 SEQUENCE public stock_return_report_report_id_seq postgres
+5818; 0 0 SEQUENCE OWNED BY public stock_return_report_report_id_seq postgres
+288; 1259 17021 SEQUENCE public stock_return_return_id_seq postgres
+5819; 0 0 SEQUENCE OWNED BY public stock_return_return_id_seq postgres
+289; 1259 17022 SEQUENCE public stock_stock_id_seq postgres
+5820; 0 0 SEQUENCE OWNED BY public stock_stock_id_seq postgres
+290; 1259 17023 TABLE public storefront_checkout_idempotency postgres
+291; 1259 17035 TABLE public storefront_funnel_events postgres
+297; 1259 17475 TABLE public supplier_accounts postgres
+296; 1259 17474 SEQUENCE public supplier_accounts_supplier_account_id_seq postgres
+5821; 0 0 SEQUENCE OWNED BY public supplier_accounts_supplier_account_id_seq postgres
+292; 1259 17045 TABLE public supplier_info postgres
+5822; 0 0 COMMENT public COLUMN supplier_info.status postgres
+293; 1259 17053 SEQUENCE public supplier_info_supplier_id_seq postgres
+5823; 0 0 SEQUENCE OWNED BY public supplier_info_supplier_id_seq postgres
+299; 1259 17512 TABLE public supplier_ledger postgres
+298; 1259 17511 SEQUENCE public supplier_ledger_ledger_number_seq postgres
+5824; 0 0 SEQUENCE OWNED BY public supplier_ledger_ledger_number_seq postgres
+294; 1259 17054 TABLE public team_members postgres
+295; 1259 17064 TABLE public users postgres
+5099; 2604 17079 DEFAULT public active_ingredients id postgres
+5108; 2604 17080 DEFAULT public brand brand_id postgres
+5110; 2604 17081 DEFAULT public customer customer_id postgres
+5113; 2604 17082 DEFAULT public customer_accounts account_id postgres
+5122; 2604 17083 DEFAULT public customer_ledger ledger_id postgres
+5127; 2604 17084 DEFAULT public customer_prescriptions prescription_id postgres
+5133; 2604 17085 DEFAULT public customer_refill_reminders reminder_id postgres
+5137; 2604 17086 DEFAULT public data_sources id postgres
+5138; 2604 17087 DEFAULT public external_identifiers id postgres
+5141; 2604 17088 DEFAULT public ingestion_batches id postgres
+5142; 2604 17089 DEFAULT public ingredient_aliases id postgres
+5143; 2604 17090 DEFAULT public interaction_records id postgres
+5144; 2604 17091 DEFAULT public invoice invoice_id postgres
+5155; 2604 17092 DEFAULT public invoice_report item_id postgres
+5163; 2604 17093 DEFAULT public medicine_products id postgres
+5180; 2604 17094 DEFAULT public pharmacist_consultations consultation_id postgres
+5186; 2604 17095 DEFAULT public product product_id postgres
+5192; 2604 17096 DEFAULT public product_ingredients id postgres
+5193; 2604 17097 DEFAULT public provenance_records id postgres
+5194; 2604 17098 DEFAULT public quarantined_records id postgres
+5195; 2604 17099 DEFAULT public source_releases id postgres
+5199; 2604 17100 DEFAULT public stock stock_id postgres
+5100; 2604 17101 DEFAULT public stock_history batch_id postgres
+5201; 2604 17102 DEFAULT public stock_history_legacy_pre_latest stock_history_id postgres
+5206; 2604 17103 DEFAULT public stock_history_open open_id postgres
+5209; 2604 17104 DEFAULT public stock_report ledger_id postgres
+5212; 2604 17105 DEFAULT public stock_return return_id postgres
+5215; 2604 17106 DEFAULT public stock_return_report report_id postgres
+5229; 2604 17478 DEFAULT public supplier_accounts supplier_account_id postgres
+5220; 2604 17107 DEFAULT public supplier_info supplier_id postgres
+5240; 2604 17515 DEFAULT public supplier_ledger ledger_number postgres
+5651; 0 16469 TABLE DATA public active_ingredients postgres
+5655; 0 16510 TABLE DATA public brand postgres
+5657; 0 16521 TABLE DATA public customer postgres
+5658; 0 16530 TABLE DATA public customer_accounts postgres
+5660; 0 16546 TABLE DATA public customer_ledger postgres
+5662; 0 16560 TABLE DATA public customer_prescriptions postgres
+5664; 0 16586 TABLE DATA public customer_refill_reminders postgres
+5667; 0 16607 TABLE DATA public data_sources postgres
+5669; 0 16618 TABLE DATA public external_identifiers postgres
+5671; 0 16635 TABLE DATA public funnel_outbox postgres
+5672; 0 16648 TABLE DATA public ingestion_batches postgres
+5674; 0 16667 TABLE DATA public ingredient_aliases postgres
+5676; 0 16685 TABLE DATA public interaction_records postgres
+5678; 0 16700 TABLE DATA public invoice postgres
+5679; 0 16728 TABLE DATA public invoice_report postgres
+5682; 0 16761 TABLE DATA public medicine_products postgres
+5684; 0 16778 TABLE DATA public medicines postgres
+5685; 0 16794 TABLE DATA public notification_preferences postgres
+5686; 0 16806 TABLE DATA public notifications postgres
+5687; 0 16821 TABLE DATA public otps postgres
+5688; 0 16833 TABLE DATA public pharmacist_consultations postgres
+5690; 0 16858 TABLE DATA public product postgres
+5691; 0 16873 TABLE DATA public product_ingredients postgres
+5694; 0 16892 TABLE DATA public provenance_records postgres
+5696; 0 16907 TABLE DATA public quarantined_records postgres
+5698; 0 16926 TABLE DATA public source_releases postgres
+5700; 0 16937 TABLE DATA public staff postgres
+5701; 0 16954 TABLE DATA public stock postgres
+5653; 0 16485 TABLE DATA public stock_history postgres
+5702; 0 16963 TABLE DATA public stock_history_legacy_pre_latest postgres
+5703; 0 16974 TABLE DATA public stock_history_open postgres
+5706; 0 16985 TABLE DATA public stock_report postgres
+5708; 0 17004 TABLE DATA public stock_return postgres
+5709; 0 17014 TABLE DATA public stock_return_report postgres
+5713; 0 17023 TABLE DATA public storefront_checkout_idempotency postgres
+5714; 0 17035 TABLE DATA public storefront_funnel_events postgres
+5720; 0 17475 TABLE DATA public supplier_accounts postgres
+5715; 0 17045 TABLE DATA public supplier_info postgres
+5722; 0 17512 TABLE DATA public supplier_ledger postgres
+5717; 0 17054 TABLE DATA public team_members postgres
+5718; 0 17064 TABLE DATA public users postgres
+5825; 0 0 SEQUENCE SET public active_ingredients_id_seq postgres
+5826; 0 0 SEQUENCE SET public batches_batch_id_seq postgres
+5827; 0 0 SEQUENCE SET public brands_brand_id_seq postgres
+5828; 0 0 SEQUENCE SET public customer_accounts_account_id_seq postgres
+5829; 0 0 SEQUENCE SET public customer_ledger_ledger_id_seq postgres
+5830; 0 0 SEQUENCE SET public customer_prescriptions_prescription_id_seq postgres
+5831; 0 0 SEQUENCE SET public customer_refill_reminders_reminder_id_seq postgres
+5832; 0 0 SEQUENCE SET public customers_customer_id_seq postgres
+5833; 0 0 SEQUENCE SET public data_sources_id_seq postgres
+5834; 0 0 SEQUENCE SET public external_identifiers_id_seq postgres
+5835; 0 0 SEQUENCE SET public ingestion_batches_id_seq postgres
+5836; 0 0 SEQUENCE SET public ingredient_aliases_id_seq postgres
+5837; 0 0 SEQUENCE SET public interaction_records_id_seq postgres
+5838; 0 0 SEQUENCE SET public invoice_items_item_id_seq postgres
+5839; 0 0 SEQUENCE SET public invoices_invoice_id_seq postgres
+5840; 0 0 SEQUENCE SET public medicine_products_id_seq postgres
+5841; 0 0 SEQUENCE SET public pharmacist_consultations_consultation_id_seq postgres
+5842; 0 0 SEQUENCE SET public product_ingredients_id_seq postgres
+5843; 0 0 SEQUENCE SET public product_product_id_seq postgres
+5844; 0 0 SEQUENCE SET public provenance_records_id_seq postgres
+5845; 0 0 SEQUENCE SET public quarantined_records_id_seq postgres
+5846; 0 0 SEQUENCE SET public source_releases_id_seq postgres
+5847; 0 0 SEQUENCE SET public stock_history_open_open_id_seq postgres
+5848; 0 0 SEQUENCE SET public stock_history_stock_history_id_seq postgres
+5849; 0 0 SEQUENCE SET public stock_ledger_ledger_id_seq postgres
+5850; 0 0 SEQUENCE SET public stock_return_report_report_id_seq postgres
+5851; 0 0 SEQUENCE SET public stock_return_return_id_seq postgres
+5852; 0 0 SEQUENCE SET public stock_stock_id_seq postgres
+5853; 0 0 SEQUENCE SET public supplier_accounts_supplier_account_id_seq postgres
+5854; 0 0 SEQUENCE SET public supplier_info_supplier_id_seq postgres
+5855; 0 0 SEQUENCE SET public supplier_ledger_ledger_number_seq postgres
+5303; 2606 17177 CONSTRAINT public active_ingredients active_ingredients_normalized_name_key postgres
+5305; 2606 17179 CONSTRAINT public active_ingredients active_ingredients_pkey postgres
+5309; 2606 17181 CONSTRAINT public stock_history batches_pkey postgres
+5312; 2606 17183 CONSTRAINT public brand brands_brand_name_key postgres
+5314; 2606 17185 CONSTRAINT public brand brands_pkey postgres
+5320; 2606 17187 CONSTRAINT public customer_accounts customer_accounts_pkey postgres
+5322; 2606 17189 CONSTRAINT public customer_ledger customer_ledger_pkey postgres
+5324; 2606 17191 CONSTRAINT public customer_prescriptions customer_prescriptions_pkey postgres
+5329; 2606 17193 CONSTRAINT public customer_refill_reminders customer_refill_reminders_pkey postgres
+5316; 2606 17195 CONSTRAINT public customer customers_email_key postgres
+5318; 2606 17197 CONSTRAINT public customer customers_pkey postgres
+5331; 2606 17199 CONSTRAINT public data_sources data_sources_name_key postgres
+5333; 2606 17201 CONSTRAINT public data_sources data_sources_pkey postgres
+5335; 2606 17203 CONSTRAINT public external_identifiers external_identifiers_pkey postgres
+5342; 2606 17205 CONSTRAINT public funnel_outbox funnel_outbox_pkey postgres
+5345; 2606 17207 CONSTRAINT public ingestion_batches ingestion_batches_batch_identifier_key postgres
+5347; 2606 17209 CONSTRAINT public ingestion_batches ingestion_batches_pkey postgres
+5351; 2606 17211 CONSTRAINT public ingredient_aliases ingredient_aliases_pkey postgres
+5358; 2606 17213 CONSTRAINT public interaction_records interaction_records_pkey postgres
+5371; 2606 17215 CONSTRAINT public invoice_report invoice_items_pkey postgres
+5367; 2606 17217 CONSTRAINT public invoice invoices_invoice_number_key postgres
+5369; 2606 17219 CONSTRAINT public invoice invoices_pkey postgres
+5377; 2606 17221 CONSTRAINT public medicine_products medicine_products_pkey postgres
+5379; 2606 17223 CONSTRAINT public medicines medicines_pkey postgres
+5381; 2606 17225 CONSTRAINT public notification_preferences notification_preferences_pkey postgres
+5383; 2606 17227 CONSTRAINT public notification_preferences notification_preferences_user_id_key postgres
+5385; 2606 17229 CONSTRAINT public notifications notifications_pkey postgres
+5390; 2606 17231 CONSTRAINT public otps otps_pkey postgres
+5395; 2606 17233 CONSTRAINT public pharmacist_consultations pharmacist_consultations_pkey postgres
+5404; 2606 17235 CONSTRAINT public product_ingredients product_ingredients_pkey postgres
+5398; 2606 17237 CONSTRAINT public product product_pkey postgres
+5411; 2606 17239 CONSTRAINT public provenance_records provenance_records_pkey postgres
+5417; 2606 17241 CONSTRAINT public quarantined_records quarantined_records_pkey postgres
+5420; 2606 17243 CONSTRAINT public source_releases source_releases_pkey postgres
+5424; 2606 17245 CONSTRAINT public staff staff_email_key postgres
+5426; 2606 17247 CONSTRAINT public staff staff_pkey postgres
+5428; 2606 17249 CONSTRAINT public staff staff_username_key postgres
+5257; 2606 17583 CHECK CONSTRAINT public stock_history stock_history_nonnegative_quantity postgres
+5434; 2606 17251 CONSTRAINT public stock_history_open stock_history_open_pkey postgres
+5432; 2606 17253 CONSTRAINT public stock_history_legacy_pre_latest stock_history_pkey postgres
+5436; 2606 17255 CONSTRAINT public stock_report stock_ledger_pkey postgres
+5430; 2606 17257 CONSTRAINT public stock stock_pkey postgres
+5438; 2606 17259 CONSTRAINT public stock_return stock_return_pkey postgres
+5440; 2606 17261 CONSTRAINT public stock_return_report stock_return_report_pkey postgres
+5442; 2606 17263 CONSTRAINT public storefront_checkout_idempotency storefront_checkout_idempotency_pkey postgres
+5446; 2606 17265 CONSTRAINT public storefront_funnel_events storefront_funnel_events_pkey postgres
+5459; 2606 17504 CONSTRAINT public supplier_accounts supplier_accounts_pkey postgres
+5448; 2606 17267 CONSTRAINT public supplier_info supplier_info_pkey postgres
+5461; 2606 17549 CONSTRAINT public supplier_ledger supplier_ledger_pkey postgres
+5450; 2606 17269 CONSTRAINT public team_members team_members_pkey postgres
+5452; 2606 17271 CONSTRAINT public team_members team_members_user_id_key postgres
+5356; 2606 17273 CONSTRAINT public ingredient_aliases uq_ingredient_alias_assertion postgres
+5365; 2606 17275 CONSTRAINT public interaction_records uq_interaction_source_assertion postgres
+5406; 2606 17277 CONSTRAINT public product_ingredients uq_product_ingredient_assertion postgres
+5340; 2606 17279 CONSTRAINT public external_identifiers uq_provenance_external_identifier postgres
+5413; 2606 17281 CONSTRAINT public provenance_records uq_provenance_source_record postgres
+5422; 2606 17283 CONSTRAINT public source_releases uq_source_release_identifier postgres
+5454; 2606 17285 CONSTRAINT public users users_email_key postgres
+5456; 2606 17287 CONSTRAINT public users users_pkey postgres
+5326; 1259 17288 INDEX public customer_refill_customer_date_idx postgres
+5327; 1259 17289 INDEX public customer_refill_one_active_source_idx postgres
+5325; 1259 17290 INDEX public idx_customer_prescriptions_customer_created postgres
+5343; 1259 17291 INDEX public idx_funnel_outbox_pending postgres
+5391; 1259 17292 INDEX public idx_pharmacist_consultations_cart_instance postgres
+5392; 1259 17293 INDEX public idx_pharmacist_consultations_customer_created postgres
+5393; 1259 17294 INDEX public idx_pharmacist_consultations_status_created postgres
+5372; 1259 17582 INDEX public invoice_report_batch_id_idx postgres
+5306; 1259 17295 INDEX public ix_active_ingredients_provenance_id postgres
+5307; 1259 17296 INDEX public ix_active_ingredients_verification_status postgres
+5336; 1259 17297 INDEX public ix_external_identifiers_ingredient_id postgres
+5337; 1259 17298 INDEX public ix_external_identifiers_product_id postgres
+5338; 1259 17299 INDEX public ix_external_identifiers_provenance_id postgres
+5348; 1259 17300 INDEX public ix_ingestion_batches_source_release_id postgres
+5349; 1259 17301 INDEX public ix_ingestion_batches_status postgres
+5352; 1259 17302 INDEX public ix_ingredient_aliases_ingredient_id postgres
+5353; 1259 17303 INDEX public ix_ingredient_aliases_mapping_status postgres
+5354; 1259 17304 INDEX public ix_ingredient_aliases_provenance_id postgres
+5359; 1259 17305 INDEX public ix_interaction_ingredient_pair postgres
+5360; 1259 17306 INDEX public ix_interaction_records_ingredient_a_id postgres
+5361; 1259 17307 INDEX public ix_interaction_records_ingredient_b_id postgres
+5362; 1259 17308 INDEX public ix_interaction_records_provenance_id postgres
+5363; 1259 17309 INDEX public ix_interaction_records_verification_status postgres
+5373; 1259 17310 INDEX public ix_medicine_products_normalized_name postgres
+5374; 1259 17311 INDEX public ix_medicine_products_provenance_id postgres
+5375; 1259 17312 INDEX public ix_medicine_products_verification_status postgres
+5399; 1259 17313 INDEX public ix_product_ingredients_ingredient_id postgres
+5400; 1259 17314 INDEX public ix_product_ingredients_mapping_status postgres
+5401; 1259 17315 INDEX public ix_product_ingredients_product_id postgres
+5402; 1259 17316 INDEX public ix_product_ingredients_provenance_id postgres
+5407; 1259 17317 INDEX public ix_provenance_records_ingestion_batch_id postgres
+5408; 1259 17318 INDEX public ix_provenance_records_verification_status postgres
+5409; 1259 17319 INDEX public ix_provenance_source_identifier postgres
+5414; 1259 17320 INDEX public ix_quarantined_records_ingestion_batch_id postgres
+5415; 1259 17321 INDEX public ix_quarantined_records_reason_code postgres
+5418; 1259 17322 INDEX public ix_source_releases_data_source_id postgres
+5444; 1259 17323 INDEX public ix_storefront_funnel_events_data_origin postgres
+5386; 1259 17324 INDEX public otps_email postgres
+5387; 1259 17325 INDEX public otps_expires_at postgres
+5388; 1259 17326 INDEX public otps_otp postgres
+5310; 1259 17586 INDEX public stock_history_fifo_arrival_idx postgres
+5457; 1259 17510 INDEX public supplier_accounts_active_supplier postgres
+5462; 1259 17570 INDEX public supplier_ledger_supplier_time postgres
+5396; 1259 17327 INDEX public uq_pharmacist_consultations_pending_review postgres
+5443; 1259 17328 INDEX public uq_storefront_checkout_idempotency_order postgres
+5463; 2606 17329 FK CONSTRAINT public active_ingredients active_ingredients_provenance_id_fkey postgres
+5464; 2606 17334 FK CONSTRAINT public customer_accounts customer_accounts_customer_id_fkey postgres
+5465; 2606 17339 FK CONSTRAINT public customer_ledger customer_ledger_account_id_fkey postgres
+5466; 2606 17344 FK CONSTRAINT public customer_ledger customer_ledger_customer_id_fkey postgres
+5467; 2606 17349 FK CONSTRAINT public customer_prescriptions customer_prescriptions_customer_id_fkey postgres
+5468; 2606 17354 FK CONSTRAINT public customer_refill_reminders customer_refill_reminders_customer_id_fkey postgres
+5469; 2606 17359 FK CONSTRAINT public customer_refill_reminders customer_refill_reminders_product_id_fkey postgres
+5470; 2606 17364 FK CONSTRAINT public customer_refill_reminders customer_refill_reminders_source_invoice_id_fkey postgres
+5471; 2606 17369 FK CONSTRAINT public external_identifiers external_identifiers_ingredient_id_fkey postgres
+5472; 2606 17374 FK CONSTRAINT public external_identifiers external_identifiers_product_id_fkey postgres
+5473; 2606 17379 FK CONSTRAINT public external_identifiers external_identifiers_provenance_id_fkey postgres
+5474; 2606 17384 FK CONSTRAINT public ingestion_batches ingestion_batches_source_release_id_fkey postgres
+5475; 2606 17389 FK CONSTRAINT public ingredient_aliases ingredient_aliases_ingredient_id_fkey postgres
+5476; 2606 17394 FK CONSTRAINT public ingredient_aliases ingredient_aliases_provenance_id_fkey postgres
+5477; 2606 17399 FK CONSTRAINT public interaction_records interaction_records_ingredient_a_id_fkey postgres
+5478; 2606 17404 FK CONSTRAINT public interaction_records interaction_records_ingredient_b_id_fkey postgres
+5479; 2606 17409 FK CONSTRAINT public interaction_records interaction_records_provenance_id_fkey postgres
+5480; 2606 17577 FK CONSTRAINT public invoice_report invoice_report_batch_id_fkey postgres
+5481; 2606 17414 FK CONSTRAINT public medicine_products medicine_products_provenance_id_fkey postgres
+5482; 2606 17419 FK CONSTRAINT public notifications notifications_user_id_fkey postgres
+5483; 2606 17424 FK CONSTRAINT public pharmacist_consultations pharmacist_consultations_customer_id_fkey postgres
+5484; 2606 17429 FK CONSTRAINT public pharmacist_consultations pharmacist_consultations_pharmacist_id_fkey postgres
+5485; 2606 17434 FK CONSTRAINT public product_ingredients product_ingredients_ingredient_id_fkey postgres
+5486; 2606 17439 FK CONSTRAINT public product_ingredients product_ingredients_product_id_fkey postgres
+5487; 2606 17444 FK CONSTRAINT public product_ingredients product_ingredients_provenance_id_fkey postgres
+5488; 2606 17449 FK CONSTRAINT public provenance_records provenance_records_ingestion_batch_id_fkey postgres
+5489; 2606 17454 FK CONSTRAINT public quarantined_records quarantined_records_ingestion_batch_id_fkey postgres
+5490; 2606 17459 FK CONSTRAINT public source_releases source_releases_data_source_id_fkey postgres
+5492; 2606 17505 FK CONSTRAINT public supplier_accounts supplier_accounts_supplier_id_fkey postgres
+5493; 2606 17565 FK CONSTRAINT public supplier_ledger supplier_ledger_product_id_fkey postgres
+5494; 2606 17560 FK CONSTRAINT public supplier_ledger supplier_ledger_stock_id_fkey postgres
+5495; 2606 17555 FK CONSTRAINT public supplier_ledger supplier_ledger_supplier_account_id_fkey postgres
+5496; 2606 17550 FK CONSTRAINT public supplier_ledger supplier_ledger_supplier_id_fkey postgres
+5491; 2606 17464 FK CONSTRAINT public team_members team_members_user_id_fkey postgres

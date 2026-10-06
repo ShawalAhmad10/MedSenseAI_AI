@@ -14,6 +14,7 @@ import api from '../../services/api';
 const PERIODS = [
   { id: '7',  label: 'Last 7 Days'  },
   { id: '30', label: 'Last 30 Days' },
+  { id: '60', label: 'Last 60 Days' },
   { id: '90', label: 'Last 90 Days' },
 ];
 
@@ -104,7 +105,7 @@ export default function SalesOptimization() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
         <div>
           <h1 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: 'var(--navy)' }}>Sales Optimization</h1>
-          <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: '#64748b' }}>Read-only insights from governed pharmacy sales and live stock</p>
+          <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: '#64748b' }}>Explainable decision support from real invoice history and current live stock</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           {PERIODS.map(p => (
@@ -185,6 +186,55 @@ export default function SalesOptimization() {
                     <div>
                       <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: 'var(--navy)' }}>{r.title}</p>
                       <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#64748b' }}>{r.description}</p>
+
+                      {r.evidence && (
+                        <div style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: '0.35rem',
+                          marginTop: '0.45rem'
+                        }}>
+                          {Object.entries(r.evidence).map(([key, value]) => {
+                            const label =
+                              key === 'stockQuantity' ? 'Live stock' :
+                              key === 'minimumThreshold' ? 'Min. threshold' :
+                              key === 'unitsSold' ? 'Units sold' :
+                              key === 'periodDays' ? 'Period' :
+                              key;
+
+                            return (
+                              <span
+                                key={key}
+                                style={{
+                                  background: '#f8fafc',
+                                  border: '1px solid #e2e8f0',
+                                  borderRadius: 100,
+                                  padding: '2px 7px',
+                                  color: '#475569',
+                                  fontSize: '0.66rem'
+                                }}
+                              >
+                                {label}: <strong>{value}{key === 'periodDays' ? ' days' : ''}</strong>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      <p style={{
+                        margin: '0.5rem 0 0',
+                        paddingTop: '0.45rem',
+                        borderTop: '1px solid #f1f5f9',
+                        color: '#475569',
+                        fontSize: '0.68rem',
+                        lineHeight: 1.45
+                      }}>
+                        {r.kind === 'REPLENISHMENT_REVIEW'
+                          ? 'Recommended review: verify demand and replenishment quantity before purchasing.'
+                          : r.kind === 'SLOW_MOVING_STOCK_REVIEW'
+                            ? 'Recommended review: inspect stock exposure before further procurement.'
+                            : 'No immediate operational action is currently flagged.'}
+                      </p>
                     </div>
                   </div>
                 ))
@@ -212,6 +262,24 @@ export default function SalesOptimization() {
                 ))
               )}
             </div>
+          </div>
+
+          <div style={{
+            marginTop: '1rem',
+            background: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            borderRadius: 12,
+            padding: '0.875rem 1rem',
+            color: '#64748b',
+            fontSize: '0.72rem',
+            lineHeight: 1.55
+          }}>
+            <strong style={{ color: 'var(--navy)' }}>Methodology:</strong>{' '}
+            Sales Optimization uses observed invoice history, current active
+            stock and configured minimum stock thresholds to generate
+            explainable operational review flags. It does not automatically
+            purchase inventory, change medicine prices, create discounts or
+            execute promotions.
           </div>
 
           {/* Product Table */}

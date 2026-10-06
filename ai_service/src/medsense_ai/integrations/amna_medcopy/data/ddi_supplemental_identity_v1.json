@@ -1,6 +1,6 @@
 {
   "schema_version": "amna-ddi-supplemental-identity-v1",
-  "matching_policy": "Exact governed lookup after NFKC/casefold/whitespace normalization; conservative enumerated formulation candidates and versioned DRAP-corpus aliases only; no fuzzy matching or arbitrary prefix inference.",
+  "matching_policy": "Exact governed lookup after NFKC/casefold/whitespace normalization; conservative enumerated formulation candidates and versioned governed aliases with explicit provenance only; no fuzzy matching or arbitrary prefix inference.",
   "provenance": {
     "source": "PubChem/model feature identity",
     "generated_validated_source_description": "Values copied deterministically from the hash-pinned frozen model feature table and validated against its aligned Morgan fingerprint artifact.",
@@ -27,6 +27,20 @@
       "isomeric_smiles": "CCN1CCN(C(=O)C1=O)C(=O)N[C@H](C2=CC=C(C=C2)O)C(=O)N[C@H]3[C@@H]4N(C3=O)C(=C(CS4)CSC5=NN=NN5C)C(=O)O",
       "fingerprint_index": 280,
       "frozen_model_token": "Cefoperazone",
+      "match_source": "SUPPLEMENTAL_MODEL_IDENTITY"
+    },
+    {
+      "normalized_lookup_key": "cloxacillin",
+      "canonical_display_name": "Cloxacillin",
+      "original_model_name": "Cloxacillin",
+      "normalized_model_name": "cloxacillin",
+      "identity_namespace": "PUBCHEM",
+      "identity_id": "6098",
+      "pubchem_cid": "6098",
+      "canonical_smiles": "CC1=C(C(=NO1)C2=CC=CC=C2Cl)C(=O)NC3C4N(C3=O)C(C(S4)(C)C)C(=O)O",
+      "isomeric_smiles": "CC1=C(C(=NO1)C2=CC=CC=C2Cl)C(=O)N[C@H]3[C@@H]4N(C3=O)[C@H](C(S4)(C)C)C(=O)O",
+      "fingerprint_index": 373,
+      "frozen_model_token": "Cloxacillin",
       "match_source": "SUPPLEMENTAL_MODEL_IDENTITY"
     },
     {
@@ -86,6 +100,20 @@
       "match_source": "SUPPLEMENTAL_MODEL_IDENTITY"
     },
     {
+      "normalized_lookup_key": "gliclazide",
+      "canonical_display_name": "Gliclazide",
+      "original_model_name": "Gliclazide",
+      "normalized_model_name": "gliclazide",
+      "identity_namespace": "PUBCHEM",
+      "identity_id": "3475",
+      "pubchem_cid": "3475",
+      "canonical_smiles": "CC1=CC=C(C=C1)S(=O)(=O)NC(=O)NN2CC3CCCC3C2",
+      "isomeric_smiles": "CC1=CC=C(C=C1)S(=O)(=O)NC(=O)NN2CC3CCCC3C2",
+      "fingerprint_index": 719,
+      "frozen_model_token": "Gliclazide",
+      "match_source": "SUPPLEMENTAL_MODEL_IDENTITY"
+    },
+    {
       "normalized_lookup_key": "norethisterone",
       "canonical_display_name": "Norethisterone",
       "original_model_name": "Norethisterone",
@@ -111,6 +139,20 @@
       "isomeric_smiles": "CC1=CC(=CN=C1)CN2CCC(=C3C4=C(CCC5=C3N=CC=C5)C=C(C=C4)Cl)CC2",
       "fingerprint_index": 1388,
       "frozen_model_token": "Rupatadine",
+      "match_source": "SUPPLEMENTAL_MODEL_IDENTITY"
+    },
+    {
+      "normalized_lookup_key": "salbutamol",
+      "canonical_display_name": "Salbutamol",
+      "original_model_name": "Salbutamol",
+      "normalized_model_name": "salbutamol",
+      "identity_namespace": "PUBCHEM",
+      "identity_id": "2083",
+      "pubchem_cid": "2083",
+      "canonical_smiles": "CC(C)(C)NCC(C1=CC(=C(C=C1)O)CO)O",
+      "isomeric_smiles": "CC(C)(C)NCC(C1=CC(=C(C=C1)O)CO)O",
+      "fingerprint_index": 1392,
+      "frozen_model_token": "Salbutamol",
       "match_source": "SUPPLEMENTAL_MODEL_IDENTITY"
     }
   ],
@@ -181,5 +223,5 @@
       "source": "DRAP_CORPUS_OBSERVED_ALIAS"
     }
   ],
-  "payload_sha256": "68785ebe71feed7adb958b7f2b9c25e3a65b371b5e460a565b119126b18ac2ad"
+  "payload_sha256": "daad7be299ff5eb4e7c5f87c882c610094bff1743a07e132d4fd7c4eff28db8b"
 }

@@ -71,6 +71,7 @@ export async function updateProduct(id, payload) {
   }
 }
 
+
 // Delete product
 export async function deleteProduct(id) {
   try {

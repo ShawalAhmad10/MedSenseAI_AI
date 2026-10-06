@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLiveDataRefresh } from '../../hooks/useLiveDataRefresh';
 import { motion } from 'framer-motion';
 import {
   Bell,
@@ -56,12 +57,12 @@ export default function Settings() {
   const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [pwSaving, setPwSaving] = useState(false);
 
-  const refreshTeam = async () => {
-    setIsTeamLoading(true);
+  const refreshTeam = async (quiet = false) => {
+    if (!quiet) setIsTeamLoading(true);
     try {
       setTeam(await listStaff());
     } finally {
-      setIsTeamLoading(false);
+      if (!quiet) setIsTeamLoading(false);
     }
   };
 
@@ -91,6 +92,7 @@ export default function Settings() {
     refreshTeam();
     loadNotificationPreferences();
   }, []);
+  useLiveDataRefresh(() => refreshTeam(true));
 
   useEffect(() => {
     if (user) {

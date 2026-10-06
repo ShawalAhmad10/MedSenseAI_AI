@@ -168,6 +168,13 @@ exports.enforceAuthenticatedCustomerOrderIdentity = (req, res, next) => {
     !Number.isSafeInteger(authenticatedCustomerId) ||
     authenticatedCustomerId <= 0
   ) {
+    // Guest checkout is allowed, but guest input can never claim
+    // an existing authenticated customer/account identity.
+    if (!req.body || typeof req.body !== 'object') {
+      req.body = {};
+    }
+
+    req.body.customer_id = null;
     return next();
   }
 

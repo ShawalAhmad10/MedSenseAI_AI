@@ -168,6 +168,6 @@ Access at: `http://localhost:5173/dashboard`
 ---
 
 ## Final Year Project
-**University:** FAST NUCES Chiniot-Faisalabad Campus   
-**Department:** Computer Science  
-**Session:** 2025–2026
+**University:** FAST-NUCES, Faisalabad-Chiniot Campus
+**Department:** Computer Science
+**Project:** MedSenseAI - AI-Powered Smart Pharmacy

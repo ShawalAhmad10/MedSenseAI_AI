@@ -1,4 +1,4 @@
-"""Governed exact RxCUI identity and DDInter pair-evidence sidecars."""
+﻿"""Governed exact RxCUI identity and DDInter pair-evidence sidecars."""
 
 from __future__ import annotations
 
@@ -9,6 +9,9 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from medsense_ai.medical_data_ingestion.normalization import normalize_medical_name
+from medsense_ai.integrations.amna_medcopy.runtime_ingredient_normalizer import (
+    runtime_ingredient_candidates,
+)
 
 
 IDENTITY_SCHEMA_VERSION = "amna-ddi-rxcui-identity-v1"
@@ -105,6 +108,13 @@ class ExactRxCUIIdentityResolver:
             return None
 
         mapping = self._mappings.get(normalized)
+
+        if mapping is None:
+            for candidate in runtime_ingredient_candidates(normalized):
+                mapping = self._mappings.get(candidate)
+                if mapping is not None:
+                    normalized = candidate
+                    break
 
         if mapping is None:
             return None
@@ -270,3 +280,4 @@ def load_rxcui_evidence_artifact(
         )
 
     return RxCUIEvidenceArtifact.model_validate(raw)
+

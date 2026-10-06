@@ -50,7 +50,7 @@ async function generateNextInvoiceNumber(
         FROM invoice
         WHERE invoice_number ~
               '^INV-[0-9]+$'
-        ORDER BY invoice_id DESC
+        ORDER BY substring(invoice_number from '[0-9]+$')::bigint DESC
         LIMIT 1
       `,
       {
@@ -86,7 +86,7 @@ async function generateNextInvoiceNumber(
     'INV-' +
     String(next)
       .padStart(
-        6,
+        3,
         '0'
       )
   );

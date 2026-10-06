@@ -45,6 +45,12 @@ router.get(
   customerAuthController.getProfile
 );
 
+// Customer account details are always scoped to the verified JWT identity.
+router.get('/account', verifyCustomerToken, (req, res) => {
+  req.params.customerId = req.user.id;
+  return require('../controllers/customerController').getCustomerDetails(req, res);
+});
+
 router.put(
   '/profile',
   verifyCustomerToken,

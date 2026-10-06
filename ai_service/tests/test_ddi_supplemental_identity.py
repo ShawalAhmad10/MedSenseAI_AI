@@ -23,7 +23,7 @@ def test_builder_reproduces_packaged_registry() -> None:
     )
 
     assert built == packaged
-    assert len(built["mappings"]) == 7
+    assert len(built["mappings"]) == 10
     assert all(
         mapping["match_source"] == "SUPPLEMENTAL_MODEL_IDENTITY"
         for mapping in built["mappings"]

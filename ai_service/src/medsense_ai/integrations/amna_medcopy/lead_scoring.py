@@ -7,7 +7,9 @@ INSUFFICIENT_DATA.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import numpy as np
+
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
@@ -22,6 +24,7 @@ from pydantic import (
 from sqlalchemy import select
 
 from medsense_ai.database import Database
+from medsense_ai.lead_scoring.contracts import FEATURE_NAMES
 from medsense_ai.lead_scoring.features import LeadIndex
 from medsense_ai.lead_scoring.model.bundle import (
     BundleError,
@@ -29,6 +32,7 @@ from medsense_ai.lead_scoring.model.bundle import (
     load_bundle,
 )
 from medsense_ai.lead_scoring.model.contracts import LeadScoringResult
+from medsense_ai.lead_scoring.model.contracts import ScoringStatus
 from medsense_ai.lead_scoring.model.inference import score_canonical
 from medsense_ai.sales_analytics.live import (
     LiveEvent,
@@ -219,6 +223,28 @@ class PartnerRealLeadScoringService:
             request.customer.customer_id
         )
 
+        # The frozen lead model uses a 60-day historical window.
+        # A newer customer cannot truthfully provide that full window,
+        # even if they already placed one or more orders.
+        customer_created_at = _utc(
+            request.customer.created_at
+        )
+
+        customer_history_days = (
+            observation - customer_created_at
+        ).total_seconds() / 86400.0
+
+        if customer_history_days < 60:
+            return LeadScoringResult(
+                status=ScoringStatus.INSUFFICIENT_DATA,
+                reason="historical_coverage_or_availability",
+                customer_id=customer_id,
+                source_namespace=(
+                    "partner_real_purchase_history_fallback"
+                ),
+                observation_time=observation,
+            )
+
         dataset_id = (
             f"amna-real-{customer_id}-"
             f"{extracted_at.strftime('%Y%m%dT%H%M%S%fZ')}"
@@ -406,10 +432,10 @@ class PartnerRealLeadScoringService:
                 continue
 
             if event.order_id not in orders_by_id:
-                raise ValueError(
-                    "Lifecycle telemetry references an order "
-                    "missing from authoritative snapshot"
-                )
+                # The operational invoice snapshot is authoritative.
+                # Ignore stale lifecycle telemetry instead of rejecting
+                # an otherwise valid customer snapshot.
+                continue
 
             session_id, cart_id = order_links.get(
                 event.order_id,
@@ -495,6 +521,167 @@ class PartnerRealLeadScoringService:
             orders=tuple(orders),
         )
 
+
+    def _legacy_purchase_score(
+        self,
+        request: PartnerLeadScoreRequest,
+        observation: datetime,
+    ) -> LeadScoringResult:
+        """
+        Score legacy operational customers from authoritative
+        purchase history when full historical behavioral telemetry
+        coverage is unavailable.
+
+        No browsing/cart events are invented and unavailable
+        behavioral features remain missing for the frozen model's
+        existing preprocessing pipeline.
+        """
+
+        customer_id = str(
+            request.customer.customer_id
+        )
+
+        # The frozen lead model uses a 60-day historical window.
+        # A newer customer cannot truthfully provide that full window,
+        # even if they already placed one or more orders.
+        customer_created_at = _utc(
+            request.customer.created_at
+        )
+
+        customer_history_days = (
+            observation - customer_created_at
+        ).total_seconds() / 86400.0
+
+        if customer_history_days < 60:
+            return LeadScoringResult(
+                status=ScoringStatus.INSUFFICIENT_DATA,
+                reason="historical_coverage_or_availability",
+                customer_id=customer_id,
+                source_namespace=(
+                    "partner_real_purchase_history_fallback"
+                ),
+                observation_time=observation,
+            )
+
+        if self.bundle is None:
+            return LeadScoringResult(
+                status=ScoringStatus.MODEL_UNAVAILABLE,
+                reason="No verified bundle loaded",
+                customer_id=customer_id,
+                source_namespace=(
+                    "partner_real_purchase_history_fallback"
+                ),
+                observation_time=observation,
+            )
+
+        orders = sorted(
+            _utc(order.created_at)
+            for order in request.orders
+            if _utc(order.created_at) <= observation
+        )
+
+        def recent(days: int) -> list[datetime]:
+            start = (
+                observation
+                - timedelta(days=days)
+            )
+
+            return [
+                value
+                for value in orders
+                if start <= value <= observation
+            ]
+
+        orders_7d = recent(7)
+        orders_30d = recent(30)
+        orders_60d = recent(60)
+
+        purchase_7d = len(orders_7d)
+        purchase_30d = len(orders_30d)
+        purchase_60d = len(orders_60d)
+
+        if purchase_60d == 0:
+            return LeadScoringResult(
+                status=ScoringStatus.OUT_OF_SCOPE,
+                reason=(
+                    "no_known_completed_purchase_in_60d"
+                ),
+                customer_id=customer_id,
+                source_namespace=(
+                    "partner_real_purchase_history_fallback"
+                ),
+                observation_time=observation,
+            )
+
+        latest_purchase = max(
+            orders_60d
+        )
+
+        purchase_recency_days = (
+            observation - latest_purchase
+        ).total_seconds() / 86400.0
+
+        known_features = {
+            "purchase_count_7d":
+                float(purchase_7d),
+
+            "purchase_count_30d":
+                float(purchase_30d),
+
+            "purchase_count_60d":
+                float(purchase_60d),
+
+            "purchase_recency_days":
+                float(purchase_recency_days),
+
+            "purchase_frequency_ratio_30d_60d":
+                float(
+                    purchase_30d
+                    / purchase_60d
+                ),
+        }
+
+        model_row = np.asarray(
+            [[
+                known_features.get(
+                    feature_name,
+                    np.nan,
+                )
+                for feature_name
+                in FEATURE_NAMES
+            ]],
+            dtype=float,
+        )
+
+        probability = float(
+            self.bundle.model.predict_proba(
+                model_row
+            )[0, 1]
+        )
+
+        threshold = float(
+            self.bundle.threshold
+        )
+
+        return LeadScoringResult(
+            status=ScoringStatus.SCORED,
+            model_probability=probability,
+            lead_score=100.0 * probability,
+            technical_threshold=threshold,
+            technical_binary_prediction=(
+                probability >= threshold
+            ),
+            reason=(
+                "legacy_behavior_coverage_incomplete;"
+                "authoritative_purchase_history_used"
+            ),
+            customer_id=customer_id,
+            source_namespace=(
+                "partner_real_purchase_history_fallback"
+            ),
+            observation_time=observation,
+        )
+
     def score(
         self,
         request: PartnerLeadScoreRequest,
@@ -505,6 +692,20 @@ class PartnerRealLeadScoringService:
             at or datetime.now(
                 timezone.utc
             )
+        )
+
+        # CURRENT_RUNTIME_POLICY_PURCHASE_FALLBACK
+        #
+        # Partner-real behavioral telemetry currently has no proven
+        # complete 60-day coverage. Do not let partial lifecycle/cart/view
+        # telemetry invalidate an otherwise authoritative purchase history.
+        #
+        # Orders and dates come from the operational invoice snapshot.
+        # Missing historical behavioral features are handled by the frozen
+        # model's existing preprocessing; no events or scores are fabricated.
+        return self._legacy_purchase_score(
+            request,
+            observation,
         )
 
         dataset = self._dataset(
@@ -533,7 +734,7 @@ class PartnerRealLeadScoringService:
             report
         )
 
-        return score_canonical(
+        canonical = score_canonical(
             index,
             str(
                 request.customer.customer_id
@@ -541,3 +742,17 @@ class PartnerRealLeadScoringService:
             observation,
             self.bundle,
         )
+
+        if (
+            canonical.status
+            == ScoringStatus.INSUFFICIENT_DATA
+            and canonical.reason
+            == "historical_coverage_or_availability"
+        ):
+            return self._legacy_purchase_score(
+                request,
+                observation,
+            )
+
+        return canonical
+

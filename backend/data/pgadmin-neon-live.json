@@ -1,0 +1,21 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "MedSenseAI LIVE - Neon (medsense_app)",
+      "Group": "MedSenseAI Live",
+      "Host": "ep-young-heart-b4jnkbnk.c-6.us-east-2.aws.neon.tech",
+      "Port": 5432,
+      "MaintenanceDB": "neondb",
+      "Username": "neondb_owner",
+      "DBRestriction": "neondb",
+      "ConnectionParameters": {
+        "sslmode": "require",
+        "connect_timeout": 20
+      },
+      "PasswordExecCommand": "\"C:\\Program Files\\nodejs\\node.exe\" \"C:\\Users\\Amna Rana\\Downloads\\MedSenseAI_FINAL_RUN\\MedSenseAI_FINAL_RUNNABLE_20260926-172957\\backend\\scripts\\pgadmin-neon-password.cjs\"",
+      "PasswordExecExpiration": 300,
+      "PostConnectionSQL": "SET search_path TO medsense_app, public;",
+      "Comment": "Live application database. Open neondb > Schemas > medsense_app > Tables. The local PostgreSQL 18 server and Neon public schema contain separate older data."
+    }
+  }
+}

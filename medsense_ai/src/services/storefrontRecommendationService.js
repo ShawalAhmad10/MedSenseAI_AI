@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getCategorySlug } from '../constants/categories.js';
 
 const API_URL =
   '/api/recommendations';
@@ -169,7 +170,7 @@ function mapRecommendationProduct(
       'Medicine',
 
     categorySlug:
-      slugForTitle(
+      getCategorySlug(
         product?.product_category ||
         'medicine'
       ),

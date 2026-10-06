@@ -26,6 +26,7 @@ function emptyLine() {
     discountPercent: 0, // Percentage-based discount
     purchasePrice: 0,
     salePrice: 0,
+    priceLocked: false,
     salesTax: 0,
     advanceTax: 0,
     salesTaxPercent: 0, // For real-time calculation
@@ -54,7 +55,7 @@ export default function StockIntakeModal({ isOpen, onClose, catalog, currentUser
       stockPrice: 0,
       billNo: '',
       builtyNo: '',
-      creationDate: '2026-08-09',
+      creationDate: new Date().toLocaleDateString('en-CA'),
     });
     setLines([emptyLine()]);
     setError('');
@@ -94,25 +95,26 @@ export default function StockIntakeModal({ isOpen, onClose, catalog, currentUser
   
   // Filter products based on selected supplier
   const filteredProducts = useMemo(() => {
-    if (!form.supplierId) return catalog?.products || [];
-    
-    // Special case: "Open Market" (sup-0) shows ALL products
-    if (form.supplierId === 'sup-0') {
-      return catalog?.products || [];
-    }
-    
+    if (!form.supplierId) return [];
+
     // Extract numeric ID from supplier ID (format: "sup-5" -> 5)
-    const selectedSupplierId = form.supplierId.includes('sup-') 
-      ? Number(form.supplierId.replace('sup-', ''))
-      : Number(form.supplierId);
+    const selectedSupplierId = Number(String(form.supplierId).replace(/^sup-/, ''));
     
     const filtered = (catalog?.products || []).filter(product => {
       // Product.supplierId is a plain number (e.g., 5)
-      return product.supplierId === selectedSupplierId;
+      return Number(product.supplierId) === selectedSupplierId;
     });
     
     return filtered;
   }, [catalog?.products, form.supplierId]);
+
+  const changeSupplier = (event) => {
+    setForm(current => ({ ...current, supplierId: event.target.value }));
+    setLines([emptyLine()]);
+    setProductSearches({});
+    setShowDropdowns({});
+    setError('');
+  };
   
   // Get filtered products for a specific line based on search
   const getSearchedProducts = (lineIndex) => {
@@ -138,8 +140,9 @@ export default function StockIntakeModal({ isOpen, onClose, catalog, currentUser
           const product = filteredProducts.find((entry) => entry.id === patch.productId);
           if (product) {
             next.name = product.title;
-            next.salePrice = product.price || product.defaultSalePrice || 0;
-            next.purchasePrice = product.price || 0;
+            next.salePrice = product.activeBatchPrice ?? product.price ?? 0;
+            next.purchasePrice = product.purchasePrice ?? 0;
+            next.priceLocked = false;
             next.baleSize = product.packSize || 0; // Auto-fill pack size from product
             // Expiry is now entered manually per batch, not from product
             
@@ -156,17 +159,17 @@ export default function StockIntakeModal({ isOpen, onClose, catalog, currentUser
         const advanceTaxPercent = Number((patch.advanceTaxPercent !== undefined ? patch.advanceTaxPercent : next.advanceTaxPercent) || 0);
         
         // Auto-calculate Discount = (qty × purchasePrice) × (discountPercent / 100)
-        if (patch.qty !== undefined || patch.purchasePrice !== undefined || patch.discountPercent !== undefined) {
+        if (patch.productId !== undefined || patch.qty !== undefined || patch.purchasePrice !== undefined || patch.discountPercent !== undefined) {
           next.discount = (qty * purchasePrice * discountPercent) / 100;
         }
         
         // Auto-calculate Sales Tax = (qty × purchasePrice) × (salesTaxPercent / 100)
-        if (patch.qty !== undefined || patch.purchasePrice !== undefined || patch.salesTaxPercent !== undefined) {
+        if (patch.productId !== undefined || patch.qty !== undefined || patch.purchasePrice !== undefined || patch.salesTaxPercent !== undefined) {
           next.salesTax = (qty * purchasePrice * salesTaxPercent) / 100;
         }
         
         // Auto-calculate Advance Tax = (qty × purchasePrice) × (advanceTaxPercent / 100)
-        if (patch.qty !== undefined || patch.purchasePrice !== undefined || patch.advanceTaxPercent !== undefined) {
+        if (patch.productId !== undefined || patch.qty !== undefined || patch.purchasePrice !== undefined || patch.advanceTaxPercent !== undefined) {
           next.advanceTax = (qty * purchasePrice * advanceTaxPercent) / 100;
         }
         
@@ -249,6 +252,11 @@ export default function StockIntakeModal({ isOpen, onClose, catalog, currentUser
         setError(`⚠️ Row ${i + 1}: Please select a product`);
         return;
       }
+
+      if (!filteredProducts.some(product => product.id === line.productId)) {
+        setError(`Row ${i + 1}: Select a medicine linked to the selected supplier.`);
+        return;
+      }
       
       if (!line.qty || Number(line.qty) <= 0) {
         setError(`⚠️ Row ${i + 1} (${line.name}): Quantity must be greater than 0`);
@@ -260,6 +268,10 @@ export default function StockIntakeModal({ isOpen, onClose, catalog, currentUser
         return;
       }
       
+      if (!Number.isFinite(Number(line.salePrice)) || Number(line.salePrice) <= 0) {
+        setError(`Row ${i + 1}: Enter a positive Sale Price for this batch.`);
+        return;
+      }
       if (line.salePrice && Number(line.salePrice) < Number(line.purchasePrice)) {
         setError(`⚠️ Row ${i + 1} (${line.name}): Sale price (${line.salePrice}) should not be less than purchase price (${line.purchasePrice})`);
         return;
@@ -278,22 +290,19 @@ export default function StockIntakeModal({ isOpen, onClose, catalog, currentUser
       }
     }
     
-    // Allow Open Market (sup-0) or valid supplier selection
-    const isOpenMarket = form.supplierId === 'sup-0';
-    const supplier = isOpenMarket ? { name: 'Open Market' } : suppliers.find((entry) => entry.id === form.supplierId);
+    const supplier = suppliers.find(entry => String(entry.id) === String(form.supplierId));
 
-    if (!isOpenMarket && !supplier) {
+    if (!supplier) {
       setError('⚠️ Invalid supplier selected');
       return;
     }
 
     // Extract numeric supplier ID from string format "sup-3" -> 3
-    // Special case: "sup-0" (Open Market) -> 0
-    const numericSupplierId = form.supplierId === 'sup-0' 
-      ? 0 
-      : form.supplierId.includes('sup-') 
-        ? Number(form.supplierId.replace('sup-', ''))
-        : Number(form.supplierId);
+    const numericSupplierId = Number(String(form.supplierId).replace(/^sup-/, ''));
+    if (!Number.isSafeInteger(numericSupplierId) || numericSupplierId <= 0) {
+      setError('Select a saved supplier for this stock batch.');
+      return;
+    }
 
     // Extract numeric product IDs from "prod-1" -> 1
     const formattedLines = validLines.map(line => ({
@@ -312,7 +321,7 @@ export default function StockIntakeModal({ isOpen, onClose, catalog, currentUser
       await onSubmit({
         ...form,
         supplierId: numericSupplierId,
-        supplierName: numericSupplierId === 0 ? 'Open Market' : supplier.name,
+        supplierName: supplier.name,
         createdBy: currentUserName,
         stockPrice: Number(form.stockPrice || totals.lineTotal),
         items: formattedLines,
@@ -380,7 +389,7 @@ export default function StockIntakeModal({ isOpen, onClose, catalog, currentUser
                     ⚠️ No products found. Please add products first from the Inventory or Products tab.
                   </div>
                 )}
-                {form.supplierId && form.supplierId !== 'sup-0' && filteredProducts.length === 0 && (
+                {form.supplierId && filteredProducts.length === 0 && (
                   <div style={{ borderRadius: 12, border: '1px solid #3b82f6', background: '#eff6ff', color: '#1e40af', padding: '0.85rem 1rem', fontSize: '0.82rem' }}>
                     ℹ️ No products found for selected supplier. Add products linked to this supplier from Product Management.
                   </div>
@@ -388,9 +397,8 @@ export default function StockIntakeModal({ isOpen, onClose, catalog, currentUser
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '1rem' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 700, color: 'var(--gray-600)', marginBottom: '0.35rem' }}>Supplier Name</label>
-                    <select value={form.supplierId} onChange={(event) => setForm((current) => ({ ...current, supplierId: event.target.value }))} style={fieldStyle}>
+                    <select value={form.supplierId} onChange={changeSupplier} style={fieldStyle}>
                       <option value="">Select supplier</option>
-                      <option value="sup-0" style={{ fontWeight: 'bold', background: '#f0fdf4' }}>🌐 Open Market (All Products)</option>
                       {(catalog?.suppliers || []).map((supplier) => (
                         <option key={supplier.id} value={supplier.id}>
                           {supplier.name}
@@ -400,7 +408,7 @@ export default function StockIntakeModal({ isOpen, onClose, catalog, currentUser
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 700, color: 'var(--gray-600)', marginBottom: '0.35rem' }}>Bill Number (Optional)</label>
-                    <input value={form.billNo} onChange={(event) => setForm((current) => ({ ...current, billNo: event.target.value }))} placeholder="Leave empty for auto (BILL-0001, BILL-0002...)" style={fieldStyle} />
+                    <input value={form.billNo} onChange={(event) => setForm((current) => ({ ...current, billNo: event.target.value }))} placeholder="Leave empty for auto (BILL-001, BILL-002...)" style={fieldStyle} />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 700, color: 'var(--gray-600)', marginBottom: '0.35rem' }}>Entry Date</label>
@@ -448,7 +456,7 @@ export default function StockIntakeModal({ isOpen, onClose, catalog, currentUser
                     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1600 }}>
                       <thead>
                         <tr style={{ background: '#f8fafc', borderBottom: '1px solid var(--dash-border)' }}>
-                          {['Product Name', 'Batch#', 'Brand', 'Qty', 'Bonus', 'Pack Size', 'Expiry', 'Discount%', 'Price', 'VAT%', 'Adv.Tax%', 'Total Qty', 'Total Price', ''].map((heading) => (
+                          {['Product Name', 'Batch#', 'Brand', 'Qty', 'Bonus', 'Pack Size', 'Expiry', 'Discount%', 'Purchase Cost', 'Sale Price', 'VAT%', 'Adv.Tax%', 'Total Qty', 'Total Price', ''].map((heading) => (
                             <th key={heading} style={{ padding: '0.8rem 0.75rem', textAlign: 'left', fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--gray-400)' }}>
                               {heading}
                             </th>
@@ -516,7 +524,7 @@ export default function StockIntakeModal({ isOpen, onClose, catalog, currentUser
                                           key={product.id}
                                           onClick={() => {
                                             updateLine(index, { productId: product.id });
-                                            setProductSearches(prev => ({ ...prev, [index]: product.title }));
+                                            setProductSearches(prev => ({ ...prev, [index]: `${product.title} - PKR ${product.price}/unit` }));
                                             setShowDropdowns(prev => ({ ...prev, [index]: false }));
                                           }}
                                           className="product-autocomplete-item"
@@ -528,7 +536,8 @@ export default function StockIntakeModal({ isOpen, onClose, catalog, currentUser
                                             transition: 'background 0.15s'
                                           }}
                                         >
-                                          {product.title}
+                                          {product.title} — PKR {product.price}/unit
+                                          {product.purchasePrice != null && ` (cost ${product.purchasePrice})`}
                                         </div>
                                       ))}
                                     </div>
@@ -559,6 +568,13 @@ export default function StockIntakeModal({ isOpen, onClose, catalog, currentUser
                                     </div>
                                   )}
                                 </div>
+                                {line.productId && <label style={{ display: 'block', marginTop: 8, fontSize: '0.8rem' }}>
+                                  Name for this arrival
+                                  <input aria-label={`Arrival name row ${index + 1}`} type="text" required maxLength={255}
+                                    value={line.name} onChange={event => updateLine(index, { name: event.target.value })}
+                                    style={{ ...fieldStyle, minWidth: 180, marginTop: 4 }} />
+                                  <small>Saved as a new batch; previous arrivals stay unchanged.</small>
+                                </label>}
                               </td>
                               {/* Batch */}
                               <td style={{ padding: '0.75rem' }}>
@@ -602,7 +618,10 @@ export default function StockIntakeModal({ isOpen, onClose, catalog, currentUser
                               </td>
                               {/* Price */}
                               <td style={{ padding: '0.75rem' }}>
-                                <input type="number" min="0" step="0.01" value={line.purchasePrice} onChange={(event) => updateLine(index, { purchasePrice: event.target.value })} style={{ ...fieldStyle, width: 100 }} />
+                                <input type="number" min="0.01" step="0.01" value={line.purchasePrice} onChange={(event) => updateLine(index, { purchasePrice: event.target.value })} style={{ ...fieldStyle, width: 100 }} />
+                              </td>
+                              <td style={{ padding: '0.75rem' }}>
+                                <input type="number" min="0.01" step="0.01" value={line.salePrice} onChange={(event) => updateLine(index, { salePrice: event.target.value })} style={{ ...fieldStyle, width: 100 }} />
                               </td>
                               {/* VAT (Sales Tax %) */}
                               <td style={{ padding: '0.75rem' }}>

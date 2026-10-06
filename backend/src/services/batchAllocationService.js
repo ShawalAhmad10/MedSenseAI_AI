@@ -1,19 +1,16 @@
 /**
- * FIFO/FEFO StockHistory Allocation Service
- * 
- * Handles automatic batch selection and deduction using:
- * - FEFO (First Expired First Out) - Nearest expiry first
- * - FIFO (First In First Out) - Oldest batch first
+ * Allocate oldest available arrivals first, retaining each receipt's prices.
  */
 
 const { Op } = require('sequelize');
 const StockHistory = require('../models/StockHistory');
 const StockReport = require('../models/StockReport');
 const { sequelize } = require('../config/database');
+const { findFifoBatches, synchronizeProductStatus } = require('./marketProductService');
 
 class BatchAllocationService {
   /**
-   * Allocate stock_history for a sale using FIFO/FEFO logic
+   * Allocate the selected batch's stock for a sale.
    * @param {number} productId - Product ID
    * @param {number} requestedQty - Quantity requested
    * @returns {Promise<Array>} Array of batch allocations
@@ -22,7 +19,8 @@ class BatchAllocationService {
   static async allocateBatchesForSale(
     productId,
     requestedQty,
-    transaction
+    transaction,
+    selectedBatchId = null
   ) {
     if (!transaction) {
       const error =
@@ -36,32 +34,32 @@ class BatchAllocationService {
       throw error;
     }
 
+    if (!Number.isSafeInteger(Number(requestedQty)) || Number(requestedQty) <= 0) {
+      throw new Error('Sale quantity must be a positive whole number');
+    }
+    if (selectedBatchId != null && (!Number.isSafeInteger(Number(selectedBatchId)) || Number(selectedBatchId) <= 0)) {
+      throw new Error('A valid batch ID is required');
+    }
+    requestedQty = Number(requestedQty);
     // Lock available batches inside the sale transaction.
     // The locks remain held until commit/rollback.
-    // Get available stock_history sorted by FEFO then FIFO
-    const stock_history = await StockHistory.findAll({
-      where: {
-        product_id: productId,
-        batch_status: 'ACTIVE',
-        remaining_quantity: { [Op.gt]: 0 },
-        expiry_date: { [Op.gte]: new Date() } // Exclude expired
-      },
-      order: [
-        ['expiry_date', 'ASC'],   // Nearest expiry first (FEFO)
-        ['created_at', 'ASC'],     // Older batch first (FIFO)
-        ['batch_number', 'ASC']    // Tiebreaker
-      ],
-      transaction,
-      lock: true
-    });
+    // Arrival date decides priority, with stable timestamp and ID tie-breakers.
+    const stock_history = (await findFifoBatches(productId, transaction, true)).map(batch => ({
+      ...batch, remaining_quantity: Number(batch.available),
+      sale_price: Number(batch.product_price), product_price: Number(batch.product_purchase_price)
+    }));
 
     if (stock_history.length === 0) {
       throw new Error('Product out of stock or all stock_history expired');
     }
+    if (selectedBatchId != null && Number(selectedBatchId) !== Number(stock_history[0].batch_id)) {
+      const error = new Error('FIFO batch changed. Refresh the medicine before selling.');
+      error.status = 409; throw error;
+    }
 
     const allocations = [];
     let remainingQty = requestedQty;
-    let totalAvailable = stock_history.reduce((sum, b) => sum + b.remaining_quantity, 0);
+    const totalAvailable = stock_history.reduce((sum, batch) => sum + Number(batch.remaining_quantity), 0);
 
     if (totalAvailable < requestedQty) {
       throw new Error(
@@ -76,6 +74,8 @@ class BatchAllocationService {
 
       allocations.push({
         batch_id: batch.batch_id,
+        product_id: batch.product_id,
+        product_title: batch.product_title,
         batch_number: batch.batch_number,
         quantity: qtyToDeduct,
         purchase_cost: batch.product_price,
@@ -123,6 +123,7 @@ class BatchAllocationService {
         { 
           remaining_quantity: newQuantity,
           batch_status: newQuantity === 0 ? 'FINISHED' : batch.batch_status
+          , updated_at: new Date()
         },
         { transaction }
       );
@@ -143,6 +144,8 @@ class BatchAllocationService {
         transaction_date: new Date()
       }, transaction);
     }
+    const productIds = [...new Set(allocations.map(allocation => allocation.product_id).filter(Boolean))];
+    if (productIds.length) await synchronizeProductStatus(productIds, transaction);
   }
 
   /**
@@ -302,6 +305,7 @@ class BatchAllocationService {
     const transaction = await sequelize.transaction();
     
     try {
+      await sequelize.query('SELECT pg_advisory_xact_lock(44201, 17001)', { transaction });
       const today = new Date();
       
       // Find stock_history that expired
@@ -335,6 +339,7 @@ class BatchAllocationService {
         count++;
       }
 
+      if (expiredBatches.length) await synchronizeProductStatus([...new Set(expiredBatches.map(batch => batch.product_id))], transaction);
       await transaction.commit();
       
       return {

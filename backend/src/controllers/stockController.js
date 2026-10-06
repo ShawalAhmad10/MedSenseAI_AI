@@ -1,4 +1,6 @@
 const Stock = require('../models/Stock');
+const { pakistanToday, validateReturnDate, returnTimestamp } = require('../services/stockReturnDateService');
+const { nextDocumentNumber, formatDocumentNumber } = require('../services/stockDocumentNumberService');
 const StockHistory = require('../models/StockHistory'); // New batch model
 const StockReport = require('../models/StockReport'); // New ledger model
 const StockHistoryOpen = require('../models/StockHistoryOpen');
@@ -6,6 +8,25 @@ const StockReturn = require('../models/StockReturn');
 const StockReturnReport = require('../models/StockReturnReport');
 const BatchAllocationService = require('../services/batchAllocationService');
 const { sequelize } = require('../config/database');
+const { validateStockPrices } = require('../services/productPricingService');
+const Supplier = require('../models/Supplier');
+const { updateBatch } = require('../services/salePricingService');
+const { activeCustomerBatchIds, synchronizeProductStatus } = require('../services/marketProductService');
+
+exports.updateBatchSalePrice = async (req, res) => {
+  try {
+    if (req.body.salePrice === undefined) return res.status(400).json({ message: 'Sale price is required.' });
+    res.json({ success: true, data: await updateBatch(req.params.batchId, req.body.productId,
+      { salePrice: req.body.salePrice }, req.user?.email || 'Staff') });
+  } catch (error) { res.status(error.status || 500).json({ message: error.status ? error.message : 'Failed to update batch sale price.' }); }
+};
+exports.updateBatchStock = async (req, res) => {
+  try {
+    if (req.body.stock === undefined) return res.status(400).json({ message: 'Stock is required.' });
+    res.json({ success: true, data: await updateBatch(req.params.batchId, req.body.productId,
+      { stock: req.body.stock }, req.user?.email || 'Staff') });
+  } catch (error) { res.status(error.status || 500).json({ message: error.status ? error.message : 'Failed to update batch stock.' }); }
+};
 
 // Create Stock StockHistory (Receive Stock)
 exports.createStockBatch = async (req, res) => {
@@ -24,66 +45,45 @@ exports.createStockBatch = async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    // Special case: supplierId = 0 means "Open Market" (no specific supplier)
-    if (supplierId === undefined || supplierId === null || items.length === 0) {
+    if (!Number.isSafeInteger(Number(supplierId)) || Number(supplierId) <= 0 || !Array.isArray(items) || items.length === 0) {
+      await transaction.rollback();
       return res.status(400).json({ 
         success: false, 
         message: 'Supplier and at least one item are required' 
       });
     }
 
+    const supplier = await Supplier.findByPk(supplierId, { transaction });
+    if (!supplier || supplier.status !== 1) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'Select an active supplier from the saved supplier list.' });
+    }
+
     // Check for duplicate products in the same batch
-    const productIds = items.map(item => item.productId);
+    const validDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+      Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+    if ((creationDate && !validDate(creationDate)) || items.some(item => !validDate(item.productExpiry))) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'Enter a valid arrival date and an expiry date for every batch (YYYY-MM-DD).' });
+    }
+    const productIds = items.map(item => String(item.productId).replace(/^prod-/, ''));
     const uniqueProductIds = [...new Set(productIds)];
     
     if (productIds.length !== uniqueProductIds.length) {
+      await transaction.rollback();
       return res.status(400).json({ 
         success: false, 
         message: 'Cannot add the same product multiple times in one batch. Each product should appear only once.' 
       });
     }
 
-    // Auto-generate unique batch numbers for each product
-    // Get the last batch number from database
-    const lastBatchQuery = await sequelize.query(
-      `SELECT batch_number FROM stock_history 
-       WHERE batch_number LIKE 'BATCH-%' 
-       ORDER BY batch_id DESC 
-       LIMIT 1`,
-      { type: sequelize.QueryTypes.SELECT, transaction }
-    );
-    
-    let batchCounter = 1;
-    if (lastBatchQuery.length > 0 && lastBatchQuery[0].batch_number) {
-      const lastBatch = lastBatchQuery[0].batch_number;
-      const match = lastBatch.match(/BATCH-(\d+)/);
-      if (match) {
-        batchCounter = parseInt(match[1]) + 1;
-      }
-    }
+    await sequelize.query('SELECT pg_advisory_xact_lock(44201, 17001)', { transaction });
+    await validateStockPrices(items, transaction, supplierId);
 
-    // ✅ AUTO-GENERATE BILL NUMBER (NEW)
-    let autoBillNo = billNo;
-    if (!autoBillNo || autoBillNo.trim() === '') {
-      const lastBillQuery = await sequelize.query(
-        `SELECT bill_no FROM stock 
-         WHERE bill_no LIKE 'BILL-%' 
-         ORDER BY stock_id DESC 
-         LIMIT 1`,
-        { type: sequelize.QueryTypes.SELECT, transaction }
-      );
-      
-      let billCounter = 1;
-      if (lastBillQuery.length > 0 && lastBillQuery[0].bill_no) {
-        const lastBillNo = lastBillQuery[0].bill_no;
-        const match = lastBillNo.match(/BILL-(\d+)/);
-        if (match) {
-          billCounter = parseInt(match[1]) + 1;
-        }
-      }
-      
-      autoBillNo = `BILL-${String(billCounter).padStart(4, '0')}`;
-    }
+    const firstBatchNumber = await nextDocumentNumber('batch', transaction);
+    let batchCounter = Number(firstBatchNumber.split('-')[1]);
+    const autoBillNo = billNo && billNo.trim() ? billNo.trim() : await nextDocumentNumber('bill', transaction);
+    const stockNumber = await nextDocumentNumber('stock', transaction);
 
     // Calculate totals
     const totalAmount = items.reduce((sum, item) => {
@@ -96,9 +96,10 @@ exports.createStockBatch = async (req, res) => {
     }, 0);
 
     // Create stock header
-    // If supplierId is 0, it means "Open Market" (no specific supplier link)
+    // Open Market is a real supplier master, with its own saved identifier.
     const stock = await Stock.create({
-      supplier_id: supplierId === 0 ? null : supplierId,
+      stock_number: stockNumber,
+      supplier_id: supplierId,
       total_amount: stockPrice || totalAmount,
       paid_amount: 0,
       due_amount: stockPrice || totalAmount,
@@ -156,7 +157,7 @@ exports.createStockBatch = async (req, res) => {
         total_price: totalPrice,
         batch_number: batchNumber,
         expiry_date: item.productExpiry || null,
-        batch_status: 'ACTIVE',
+        batch_status: totalQty > 0 ? 'ACTIVE' : 'FINISHED',
         creation_day: creationDate || new Date(),
         status: 1
       }, { transaction });
@@ -213,7 +214,7 @@ exports.createStockBatch = async (req, res) => {
 
       // Create one ledger entry per item (PDF: supplier_ledger has product-level detail)
       for (const batch of stockHistoryItems) {
-        const itemTotal = (Number(batch.product_quantity) + Number(batch.product_bonus || 0)) * Number(batch.product_price);
+        const itemTotal = Number(batch.total_price);
         currentBalance += itemTotal;
 
         await sequelize.query(
@@ -265,6 +266,7 @@ exports.createStockBatch = async (req, res) => {
       );
     }
 
+    await synchronizeProductStatus(uniqueProductIds.map(Number), transaction);
     await transaction.commit();
 
     res.status(201).json({
@@ -272,10 +274,11 @@ exports.createStockBatch = async (req, res) => {
       message: 'Stock batch created successfully',
       data: {
         stock_id: stock.stock_id,
-        stockNumber: `STK-${stock.stock_id}`,
+        stockNumber: stock.stock_number || formatDocumentNumber(`STK-${stock.stock_id}`),
         supplier_id: stock.supplier_id,
         supplierName,
         total_amount: stock.total_amount,
+        billNumber: formatDocumentNumber(stock.bill_no),
         billNo: stock.bill_no,
         builtyNo: stock.builty_no,
         creationDate: stock.creation_day,
@@ -304,12 +307,12 @@ exports.createStockBatch = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
+    if (error.parent?.code === '23514') return res.status(400).json({ success: false, message: error.parent.message });
     console.error('Create stock batch error:', error);
     console.error('Error stack:', error.stack);
-    console.error('Request body:', JSON.stringify(req.body, null, 2));
-    res.status(500).json({ 
+    res.status(error.status === 400 ? 400 : 500).json({ 
       success: false, 
-      message: 'Failed to create stock batch',
+      message: error.status === 400 ? error.message : 'Failed to create stock batch',
       error: error.message,
       details: error.toString()
     });
@@ -319,6 +322,7 @@ exports.createStockBatch = async (req, res) => {
 // List all stock stock_history
 exports.listStockBatches = async (req, res) => {
   try {
+    const customerBatchIds = await activeCustomerBatchIds();
     const stocks = await Stock.findAll({
       order: [['created_at', 'DESC']]
     });
@@ -342,7 +346,7 @@ exports.listStockBatches = async (req, res) => {
       return {
         id: `STK-${stock.stock_id}`,
         mode: 'stock-batch',
-        stockNumber: `STK-${stock.stock_id}`,
+        stockNumber: stock.stock_number || formatDocumentNumber(`STK-${stock.stock_id}`),
         stock_id: stock.stock_id,
         supplierId: stock.supplier_id,
         supplierName: supplierMap[stock.supplier_id] || 'Unknown Supplier',
@@ -350,6 +354,7 @@ exports.listStockBatches = async (req, res) => {
         totalAmount: Number(stock.total_amount || 0),
         paidAmount:  Number(stock.paid_amount  || 0),
         dueAmount:   Number(stock.due_amount   || 0),
+        billNumber: formatDocumentNumber(stock.bill_no),
         billNo: stock.bill_no || '',
         builtyNo: stock.builty_no || '',
         creationDate: stock.creation_day,
@@ -357,6 +362,8 @@ exports.listStockBatches = async (req, res) => {
         createdAt: stock.created_at,
         items: items.map(item => ({
           id: `stk-line-${item.batch_id}`,
+          batchId: item.batch_id,
+          activeForCustomers: customerBatchIds.has(Number(item.batch_id)),
           batchNumber: item.batch_number,
           productId: item.product_id,
           name: item.product_title,
@@ -423,11 +430,12 @@ exports.getStockBatch = async (req, res) => {
       success: true,
       data: {
         id: `STK-${stock.stock_id}`,
-        stockNumber: `STK-${stock.stock_id}`,
+        stockNumber: stock.stock_number || formatDocumentNumber(`STK-${stock.stock_id}`),
         stock_id: stock.stock_id,
         supplierId: stock.supplier_id,
         supplierName: supplierQuery[0]?.supplier_name || 'Unknown Supplier',
         stockPrice: stock.total_amount,
+        billNumber: formatDocumentNumber(stock.bill_no),
         billNo: stock.bill_no,
         builtyNo: stock.builty_no,
         creationDate: stock.creation_day,
@@ -467,6 +475,7 @@ exports.getStockBatch = async (req, res) => {
 
 // Create Stock Opening Entry
 exports.createStockOpening = async (req, res) => {
+  const transaction = await sequelize.transaction();
   try {
     const {
       productId,
@@ -482,7 +491,9 @@ exports.createStockOpening = async (req, res) => {
 
     const totalPrice = Number(quantity || 0) * Number(price || 0);
 
+    const openingNumber = await nextDocumentNumber('opening', transaction);
     const opening = await StockHistoryOpen.create({
+      opening_number: openingNumber,
       product_id: productId,
       product_title: productName,
       product_quantity: quantity,
@@ -495,13 +506,15 @@ exports.createStockOpening = async (req, res) => {
       notes: notes || '',
       user: user || 'System',
       status: 1
-    });
+    }, { transaction });
+    await transaction.commit();
 
     res.status(201).json({
       success: true,
       message: 'Stock opening created successfully',
       data: {
         id: `OPEN-${opening.open_id}`,
+        openingNumber: opening.opening_number || formatDocumentNumber(`OPEN-${opening.open_id}`),
         productId: opening.product_id,
         productName: opening.product_title,
         quantity: opening.product_quantity,
@@ -516,6 +529,7 @@ exports.createStockOpening = async (req, res) => {
       }
     });
   } catch (error) {
+    if (!transaction.finished) await transaction.rollback();
     console.error('Create stock opening error:', error);
     res.status(500).json({ 
       success: false, 
@@ -534,6 +548,7 @@ exports.listStockOpenings = async (req, res) => {
 
     const data = openings.map(opening => ({
       id: `OPEN-${opening.open_id}`,
+        openingNumber: opening.opening_number || formatDocumentNumber(`OPEN-${opening.open_id}`),
       mode: 'stock-opening',
       productId: opening.product_id,
       productName: opening.product_title,
@@ -571,13 +586,15 @@ exports.createStockReturn = async (req, res) => {
       stockId,
       supplierId,
       supplierName,
+      returnDate: requestedReturnDate,
       returnType = 'normal',
       description,
       createdBy,
       items = []
     } = req.body;
 
-    if (!supplierId || !items || items.length === 0) {
+    if (!supplierId || !Array.isArray(items) || items.length === 0) {
+      await transaction.rollback();
       return res.status(400).json({ 
         success: false, 
         message: 'Supplier and at least one item are required' 
@@ -590,13 +607,37 @@ exports.createStockReturn = async (req, res) => {
       return sum + (qty * price);
     }, 0);
 
+    await sequelize.query('SELECT pg_advisory_xact_lock(44201, 17001)', { transaction });
+    const numericStockId = Number(String(stockId || '').replace(/^STK-/, ''));
+    const receipt = await Stock.findByPk(numericStockId, { transaction });
+    if (!receipt || Number(receipt.supplier_id) !== Number(supplierId)) {
+      const error = new Error('Select the received stock belonging to this supplier.'); error.status = 400; throw error;
+    }
+    const arrivals = [receipt.creation_day];
+    const seenBatches = new Set();
+    for (const item of items) {
+      const match = String(item.batchLineId || '').match(/^stk-line-(\d+)$/);
+      const batch = match ? await StockHistory.findByPk(Number(match[1]), { transaction, lock: true }) : null;
+      if (!batch || batch.stock_id !== numericStockId || Number(batch.product_id) !== Number(item.productId) || seenBatches.has(batch.batch_id)) {
+        const error = new Error('Select a unique batch from the selected received stock.'); error.status = 400; throw error;
+      }
+      seenBatches.add(batch.batch_id);
+      if (!Number.isSafeInteger(Number(item.quantity)) || Number(item.quantity) <= 0 || Number(item.quantity) > Number(batch.remaining_quantity)) {
+        const error = new Error('Return quantity must be a whole number within the available batch stock.'); error.status = 400; throw error;
+      }
+      arrivals.push(batch.creation_day || receipt.creation_day);
+    }
+    const returnDate = validateReturnDate(requestedReturnDate || pakistanToday(), arrivals);
+    const effectiveTimestamp = returnTimestamp(returnDate);
+    const returnNumber = await nextDocumentNumber('returns', transaction);
     const stockReturn = await StockReturn.create({
+      return_number: returnNumber,
       stock_id: stockId ? stockId.replace('STK-', '') : null,
       supplier_id: supplierId,
       total_amount: totalAmount,
       return_type: returnType,
       description: description || '',
-      creation_day: new Date(),
+      creation_day: returnDate,
       created_by: createdBy || 'System',
       status: 1
     }, { transaction });
@@ -647,12 +688,12 @@ exports.createStockReturn = async (req, res) => {
               balance_after:    newQuantity,
               reference_type:   'STOCK_RETURN',
               reference_id:     stockReturn.return_id,
-              reference_number: `SRET-${stockReturn.return_id}`,
+              reference_number: stockReturn.return_number,
               unit_price:       price,
               total_value:      qty * price,
               notes: `Returned to supplier: ${description || 'Stock return'}`,
               performed_by:     createdBy || 'System',
-              transaction_date: new Date()
+              transaction_date: effectiveTimestamp
             }, transaction);
 
             batchDeducted = true;
@@ -697,12 +738,12 @@ exports.createStockReturn = async (req, res) => {
             balance_after:    newQty,
             reference_type:   'STOCK_RETURN',
             reference_id:     stockReturn.return_id,
-            reference_number: `SRET-${stockReturn.return_id}`,
+            reference_number: stockReturn.return_number,
             unit_price:       price,
             total_value:      take * price,
             notes: `Returned to supplier (FIFO fallback): ${description || 'Stock return'}`,
             performed_by:     createdBy || 'System',
-            transaction_date: new Date()
+            transaction_date: effectiveTimestamp
           }, transaction);
 
           toDeduct -= take;
@@ -759,15 +800,16 @@ exports.createStockReturn = async (req, res) => {
               (:sid, :accId, 'stock_return', 2, 0,
                :stockId, :productId, :productTitle, :qty, :price, :total,
                0, 0, :total, :balance,
-               :desc, 'STOCK_RETURN', :ref, :by, 1, NOW(), CURRENT_DATE, NOW())`,
+               :desc, 'STOCK_RETURN', :ref, :by, 1, :effectiveTimestamp, :returnDate, NOW())`,
             {
               replacements: {
                 sid: supplierId, accId: account.supplier_account_id,
+                returnDate, effectiveTimestamp,
                 stockId: stockId ? stockId.replace('STK-', '') : null,
                 productId: item.productId || null, productTitle: item.name || '',
                 qty, price, total: itemTotal, balance: runningBalance,
                 desc: description || `Stock returned — ${item.name}`,
-                ref: `SRET-${stockReturn.return_id}`, by: createdBy || 'pharmacist'
+                ref: stockReturn.return_number, by: createdBy || 'pharmacist'
               },
               type: sequelize.QueryTypes.INSERT, transaction
             }
@@ -788,6 +830,8 @@ exports.createStockReturn = async (req, res) => {
     }
     // ─────────────────────────────────────────────────────────────────
 
+    const affectedProductIds = [...new Set(items.map(item => Number(item.productId)).filter(id => Number.isSafeInteger(id) && id > 0))];
+    if (affectedProductIds.length) await synchronizeProductStatus(affectedProductIds, transaction);
     await transaction.commit();
 
     res.status(201).json({
@@ -795,7 +839,7 @@ exports.createStockReturn = async (req, res) => {
       message: 'Stock return created successfully. StockHistory quantities updated.',
       data: {
         id: `SRET-${stockReturn.return_id}`,
-        returnNumber: `SRET-${stockReturn.return_id}`,
+        returnNumber: stockReturn.return_number,
         stockId: stockId,
         supplierId: stockReturn.supplier_id,
         supplierName,
@@ -803,15 +847,16 @@ exports.createStockReturn = async (req, res) => {
         returnTotal: stockReturn.total_amount,
         description: stockReturn.description,
         createdBy: stockReturn.created_by,
+        returnDate: stockReturn.creation_day,
         createdAt: stockReturn.created_at
       }
     });
   } catch (error) {
     await transaction.rollback();
     console.error('Create stock return error:', error);
-    res.status(500).json({ 
+    res.status(error.status || 500).json({ 
       success: false, 
-      message: 'Failed to create stock return',
+      message: error.status ? error.message : 'Failed to create stock return',
       error: error.message 
     });
   }
@@ -821,7 +866,7 @@ exports.createStockReturn = async (req, res) => {
 exports.listStockReturns = async (req, res) => {
   try {
     const returns = await StockReturn.findAll({
-      order: [['created_at', 'DESC']]
+      order: [['creation_day', 'DESC'], ['return_id', 'DESC']]
     });
 
     // Fetch supplier names
@@ -834,6 +879,7 @@ exports.listStockReturns = async (req, res) => {
       supplierMap[s.supplier_id] = s.supplier_name;
     });
 
+    const stockLabels = new Map((await Stock.findAll({ attributes: ['stock_id', 'stock_number'] })).map(row => [row.stock_id, row.stock_number]));
     const data = await Promise.all(returns.map(async (ret) => {
       const items = await StockReturnReport.findAll({
         where: { return_id: ret.return_id }
@@ -842,15 +888,16 @@ exports.listStockReturns = async (req, res) => {
       return {
         id: `SRET-${ret.return_id}`,
         mode: 'stock-return',
-        returnNumber: `SRET-${ret.return_id}`,
+        returnNumber: ret.return_number || formatDocumentNumber(`SRET-${ret.return_id}`),
         stockId: ret.stock_id ? `STK-${ret.stock_id}` : null,
-        stockNumber: ret.stock_id ? `STK-${ret.stock_id}` : null,
+        stockNumber: ret.stock_id ? stockLabels.get(ret.stock_id) || formatDocumentNumber(`STK-${ret.stock_id}`) : null,
         supplierId: ret.supplier_id,
         supplierName: supplierMap[ret.supplier_id] || 'Unknown Supplier',
         returnType: ret.return_type,
         returnTotal: ret.total_amount,
         description: ret.description,
         createdBy: ret.created_by,
+        returnDate: ret.creation_day,
         createdAt: ret.created_at,
         items: items.map(item => ({
           id: `sret-line-${item.report_id}`,
@@ -926,6 +973,22 @@ exports.updateStockBatch = async (req, res) => {
       });
     }
 
+    const receiptSupplierId = supplierId === undefined ? Number(stock.supplier_id) : Number(supplierId);
+    const receiptSupplier = Number.isSafeInteger(receiptSupplierId) && receiptSupplierId > 0
+      ? await Supplier.findByPk(receiptSupplierId, { transaction }) : null;
+    if (!receiptSupplier || Number(receiptSupplier.status) !== 1) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'Select an active existing supplier.' });
+    }
+    await validateStockPrices(items, transaction, receiptSupplierId);
+
+    // Editing a sold receipt would reset remaining stock and overwrite its costing history.
+    const existingItems = await StockHistory.findAll({ where: { stock_id: stockId }, transaction, lock: true });
+    if (existingItems.length) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'Batch history cannot be rewritten. Receive a new name or price using Add New Batch.' });
+    }
+
     // Calculate new total
     const totalAmount = items.reduce((sum, item) => {
       const qty = Number(item.qty || 0);
@@ -938,7 +1001,7 @@ exports.updateStockBatch = async (req, res) => {
 
     // Update stock header
     await stock.update({
-      supplier_id: supplierId || stock.supplier_id,
+      supplier_id: receiptSupplierId,
       total_amount: stockPrice || totalAmount,
       bill_no: billNo !== undefined ? billNo : stock.bill_no,
       builty_no: builtyNo !== undefined ? builtyNo : stock.builty_no,
@@ -1000,15 +1063,18 @@ exports.updateStockBatch = async (req, res) => {
       message: 'Stock batch updated successfully',
       data: {
         stock_id: stock.stock_id,
-        stockNumber: `STK-${stock.stock_id}`
+        stockNumber: stock.stock_number || formatDocumentNumber(`STK-${stock.stock_id}`)
       }
     });
   } catch (error) {
     await transaction.rollback();
     console.error('Update stock batch error:', error);
-    res.status(500).json({ 
+    if (error.parent?.code === '23514') {
+      return res.status(400).json({ success: false, message: error.parent.message });
+    }
+    res.status(error.status === 400 ? 400 : 500).json({ 
       success: false, 
-      message: 'Failed to update stock batch',
+      message: error.status === 400 ? error.message : 'Failed to update stock batch',
       error: error.message 
     });
   }
@@ -1032,7 +1098,11 @@ exports.deleteStockBatch = async (req, res) => {
       });
     }
 
-    // Delete batch items first (foreign key constraint)
+    if (await StockHistory.count({ where: { stock_id: stockId }, transaction })) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'Receipt batch history must be preserved, including exhausted batches.' });
+    }
+    // Delete an empty receipt only.
     await StockHistory.destroy({
       where: { stock_id: stockId },
       transaction
@@ -1237,11 +1307,12 @@ exports.getBatchWiseReport = async (req, res) => {
       ? `WHERE ${whereConditions.join(' AND ')}` 
       : '';
 
+    const customerBatchIds = await activeCustomerBatchIds();
     const stock_history = await sequelize.query(
       `SELECT b.batch_id, b.batch_number, b.product_title, b.product_id,
               b.initial_quantity, b.remaining_quantity, b.product_price, b.sale_price,
               b.expiry_date, b.creation_day, b.batch_status,
-              b.stock_id, s.bill_no, si.supplier_id, si.supplier_name
+              b.stock_id, s.stock_number, s.bill_no, si.supplier_id, si.supplier_name
        FROM stock_history b
        LEFT JOIN stock s ON b.stock_id = s.stock_id
        LEFT JOIN supplier_info si ON s.supplier_id = si.supplier_id
@@ -1277,8 +1348,9 @@ exports.getBatchWiseReport = async (req, res) => {
         return {
           id: b.batch_id,
           batch_id: b.batch_id,
-          stockNumber: `STK-${b.stock_id}`,
-          billNumber: b.bill_no || '-',
+          activeForCustomers: customerBatchIds.has(Number(b.batch_id)),
+          stockNumber: b.stock_number || formatDocumentNumber(`STK-${b.stock_id}`),
+          billNumber: formatDocumentNumber(b.bill_no) || '-',
           batch_number: b.batch_number,
           product_id: b.product_id,
           productTitle: b.product_title,
@@ -1318,21 +1390,20 @@ exports.getProfitLossReport = async (req, res) => {
     if (endDate)   { dateWhere += ' AND DATE(i.invoice_date) <= :endDate';   replacements.endDate   = endDate;   }
     if (productId) { dateWhere += ' AND ii.product_id = :productId';   replacements.productId = productId; }
 
-    // Join invoice_report with stock_history via batch_number to get purchase price
+    // Use the cost captured when the invoice was created; batch edits must not change profit.
     const rows = await sequelize.query(
       `SELECT
          ii.product_id,
          ii.product_title,
          ii.quantity,
          ii.unit_price                         AS sale_price,
-         COALESCE(b.product_price, 0)          AS purchase_price,
+         COALESCE(ii.purchase_price, 0)       AS purchase_price,
          ii.quantity * ii.unit_price           AS revenue,
-         ii.quantity * COALESCE(b.product_price, 0) AS cost,
-         ii.quantity * (ii.unit_price - COALESCE(b.product_price, 0)) AS profit,
+         ii.quantity * COALESCE(ii.purchase_price, 0) AS cost,
+         ii.quantity * (ii.unit_price - COALESCE(ii.purchase_price, 0)) AS profit,
          i.invoice_date
        FROM invoice_report ii
        JOIN invoice i  ON ii.invoice_id = i.invoice_id
-       LEFT JOIN stock_history b ON b.batch_number = ii.batch_number
        WHERE i.status = 1 AND ii.status = 1
          AND i.payment_status IN ('paid')
          ${dateWhere}
@@ -1395,7 +1466,7 @@ exports.getProfitLossReport = async (req, res) => {
           profitMargin:     totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(2) + '%' : '0%',
           totalQtySold:     totalQty,
           invoicesIncluded: new Set(filteredRows.map(r => r.product_id)).size,
-          costingMethod:    'Purchase price from batch (FIFO allocated)'
+          costingMethod:    'Purchase cost saved on invoice (FIFO allocated)'
         },
         byProduct: Object.values(byProduct).sort((a, b) => b.totalProfit - a.totalProfit)
       }
@@ -1587,8 +1658,8 @@ exports.getStockReturnReport = async (req, res) => {
     let where = 'srr.status = 1';
     const replacements = {};
 
-    if (fromDate) { where += ' AND srr.created_at::date >= :fromDate'; replacements.fromDate = fromDate; }
-    if (toDate)   { where += ' AND srr.created_at::date <= :toDate';   replacements.toDate   = toDate;   }
+    if (fromDate) { where += ' AND sr.creation_day >= :fromDate'; replacements.fromDate = fromDate; }
+    if (toDate)   { where += ' AND sr.creation_day <= :toDate';   replacements.toDate   = toDate;   }
     if (search.trim()) {
       where += ` AND (srr.product_title ILIKE :search OR sr.description ILIKE :search)`;
       replacements.search = `%${search.trim()}%`;
@@ -1604,9 +1675,10 @@ exports.getStockReturnReport = async (req, res) => {
         srr.product_price,
         srr.total_price,
         srr.expiry_date   AS product_expiry,
-        srr.created_at    AS creation_day,
+        sr.creation_day    AS creation_day,
         srr.status,
         sr.description,
+        sr.return_number,
         sr.created_by,
         sr.return_type,
         si.supplier_name
@@ -1615,7 +1687,7 @@ exports.getStockReturnReport = async (req, res) => {
       LEFT JOIN product p         ON p.product_id = srr.product_id
       LEFT JOIN supplier_info si  ON si.supplier_id = sr.supplier_id
       WHERE ${where}
-      ORDER BY srr.created_at DESC, srr.report_id DESC
+      ORDER BY sr.creation_day DESC, srr.report_id DESC
       LIMIT :lim
     `, { replacements: { ...replacements, lim: parseInt(limit) }, type: sequelize.QueryTypes.SELECT });
 
@@ -1624,6 +1696,7 @@ exports.getStockReturnReport = async (req, res) => {
       data: rows.map(r => ({
         id:              r.report_id,
         returnId:        r.return_id,
+        returnNumber:    r.return_number || formatDocumentNumber(`SRET-${r.return_id}`),
         productId:       r.product_id,
         productTitle:    r.product_title    || 'Unknown',
         productQuantity: Number(r.product_quantity || 0),

@@ -2,6 +2,9 @@ const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
 
 const Product = sequelize.define('Product', {
+  fifo_family_id: { type: DataTypes.INTEGER, allowNull: true },
+  manually_inactive: { type: DataTypes.BOOLEAN, defaultValue: false },
+  archived: { type: DataTypes.BOOLEAN, defaultValue: false },
   product_id: {
     type: DataTypes.INTEGER,
     autoIncrement: true,
@@ -26,6 +29,12 @@ const Product = sequelize.define('Product', {
     field: 'product_price',
     comment: 'Price per unit'
   },
+  product_purchase_price: {
+    type: DataTypes.DECIMAL(14, 2),
+    allowNull: true,
+    field: 'product_purchase_price',
+    comment: 'Fixed purchase cost per unit; established on the first stock receipt'
+  },
   product_title: {
     type: DataTypes.STRING(255),
     allowNull: true,
@@ -42,7 +51,7 @@ const Product = sequelize.define('Product', {
     field: 'product_category'
   },
   product_pack_price: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.DECIMAL(14, 2),
     allowNull: true,
     field: 'product_pack_price',
     comment: 'Total pack price'

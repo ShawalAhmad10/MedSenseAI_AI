@@ -11,6 +11,9 @@ import re
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from medsense_ai.medical_data_ingestion.normalization import normalize_medical_name
+from medsense_ai.integrations.amna_medcopy.runtime_ingredient_normalizer import (
+    runtime_ingredient_candidates,
+)
 from medsense_ai.integrations.amna_medcopy.ddi_supplemental_identity import (
     DEFAULT_MODEL_DIR,
     DEFAULT_SUPPLEMENTAL_IDENTITY_ARTIFACT,
@@ -393,14 +396,23 @@ class ExactDDIIngredientResolver:
                 message="Partner product_salt cannot be deterministically normalized.",
                 **common,
             )
-        if _COMBINATION_PATTERN.search(normalized):
+        # Only "+" is treated as an explicit multi-ingredient delimiter.
+        #
+        # "/" must NOT be treated as a combination separator because it is
+        # also used in pharmaceutical concentrations such as 100mg/5ml and
+        # may appear in vague source descriptions such as
+        # "Iron / Ferrous preparation".
+        #
+        # Actual fixed-combination products are split on "+" by the cart
+        # integration layer before individual ingredient resolution.
+        if "+" in normalized:
             return ResolvedDDIIngredient(
                 state=IngredientResolutionState.REVIEW_REQUIRED,
                 normalized_salt=normalized,
                 review_required=True,
                 message=(
-                    "Combination ingredient text must be split into separate active ingredients "
-                    "before DDI pair generation."
+                    "Plus-separated combination ingredient text must be split into "
+                    "separate active ingredients before DDI pair generation."
                 ),
                 **common,
             )
@@ -432,7 +444,9 @@ class ExactDDIIngredientResolver:
                 tuple[IngredientIdentityNamespace, str, str],
                 tuple[DDIBridgeMapping | SupplementalIdentityMapping, bool],
             ] = {}
-            for candidate in _formulation_candidates(normalized):
+            for candidate in dict.fromkeys(
+                (*_formulation_candidates(normalized), *runtime_ingredient_candidates(normalized))
+            ):
                 alias_target = self._aliases.get(candidate)
                 for lookup_key, alias_used in (
                     (candidate, False),
@@ -507,3 +521,5 @@ class ExactDDIIngredientResolver:
             message=message,
             **common,
         )
+
+

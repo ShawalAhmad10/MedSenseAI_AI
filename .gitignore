@@ -6,3 +6,19 @@ medsense_ai/debug.log
 .env
 .env.*
 !.env.example
+
+ai_service/.env
+
+ai_service/.venv-lead-3139/
+database/cloud-migration-*/
+database/pgadmin-config-before-neon-*.db
+**/cloud-migration-tests.log
+database/final-postgresql-*/
+database/*.backup
+portable/backend.env.reference
+
+# Large/local AI source datasets - not runtime repository content
+ai_service/data/rxnorm-cpc-*/
+ai_service/data/test-temp-run-*/
+ai_service/data/processed/test-cache-*/
+

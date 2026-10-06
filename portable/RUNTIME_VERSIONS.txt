@@ -1,0 +1,13 @@
+﻿MainPython=3.12.10
+LeadPython=3.13.9
+Database=medsenseai_pharm
+PostgreSQL=18
+Products=41
+Customers=3
+Invoices=18
+FunnelEvents=194
+Migration=182/182
+MainAI=1005/1005 PASS
+LeadRuntime=PASS
+LeadModelReady=TRUE
+DBRestoreDrill=PASS

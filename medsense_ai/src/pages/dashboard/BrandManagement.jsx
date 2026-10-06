@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLiveDataRefresh } from '../../hooks/useLiveDataRefresh';
 import { AlertCircle, CheckCircle, Edit3, Plus, Power, Search, Tags, Trash2, X } from 'lucide-react';
 import BrandMasterModal from '../../components/modals/BrandMasterModal';
 import {
@@ -25,8 +26,8 @@ export default function BrandManagement() {
     setTimeout(() => setMessage(null), 5000);
   };
 
-  const refresh = async () => {
-    setIsLoading(true);
+  const refresh = async (quiet = false) => {
+    if (!quiet) setIsLoading(true);
     try {
       const [brandList, productList] = await Promise.all([listBrands(), listProducts()]);
       setBrands(brandList);
@@ -34,11 +35,12 @@ export default function BrandManagement() {
     } catch (error) {
       showMessage('error', 'Failed to load brands: ' + (error.response?.data?.message || error.message));
     } finally {
-      setIsLoading(false);
+      if (!quiet) setIsLoading(false);
     }
   };
   
   useEffect(() => { refresh(); }, []);
+  useLiveDataRefresh(() => refresh(true));
 
   const filtered = useMemo(() => brands.filter((brand) => {
     const matchesSearch = brand.name.toLowerCase().includes(search.toLowerCase());

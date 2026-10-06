@@ -6,7 +6,10 @@ import React, {
 
 import {
   Link,
+  useLocation,
 } from 'react-router-dom';
+import BackLink from '../../components/storefront/BackLink';
+import { previousStorefrontLocation } from '../../services/storefrontNavigation';
 
 import {
   AlertCircle,
@@ -47,6 +50,10 @@ function displayDate(value) {
 }
 
 export default function PrescriptionHistoryPage() {
+  const location = useLocation();
+  const previousPath = previousStorefrontLocation(location.pathname + location.search + location.hash);
+  const backPath = previousPath?.startsWith('/account') ? previousPath
+    : previousPath?.startsWith('/prescription/upload') ? previousPath : '/prescription/upload';
   const {
     isAuthenticated,
     openAuthModal,
@@ -261,6 +268,9 @@ export default function PrescriptionHistoryPage() {
   if (!isAuthenticated) {
     return (
       <div className="storefront-shell">
+        <BackLink to={backPath} style={{ marginBottom: '1rem' }}>
+          {backPath.startsWith('/account') ? 'Back to Account' : 'Back to Upload'}
+        </BackLink>
         <div className="sf-card sf-section-card">
           <h1
             style={{
@@ -290,6 +300,9 @@ export default function PrescriptionHistoryPage() {
 
   return (
     <div className="storefront-shell">
+      <BackLink to={backPath} style={{ marginBottom: '1rem' }}>
+        {backPath.startsWith('/account') ? 'Back to Account' : 'Back to Upload'}
+      </BackLink>
       <div className="sf-card sf-section-card">
         <div className="sf-page-header">
           <div>

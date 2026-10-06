@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from medsense_ai.integrations.amna_medcopy.runtime_ingredient_normalizer import split_active_ingredients
+
 from collections import defaultdict
 from collections.abc import Iterable
 from enum import Enum
@@ -392,48 +394,137 @@ class PartnerCartDDIService:
                 structural_succeeded = False
                 structural_limitation = str(exc)
 
-            ingredient = self._resolver.resolve(record.product_salt)
+            # ---------------------------------------------------------
+            # Production multi-ingredient expansion.
+            #
+            # Examples:
+            #   Ibuprofen 400mg
+            #       -> one component
+            #
+            #   Amoxicillin 500mg + Clavulanic Acid 125mg
+            #       -> two independently governed components
+            #
+            # Slash is NOT used as a separator because it is also used
+            # in concentrations such as 100mg/5ml.
+            # ---------------------------------------------------------
 
-            sidecar_identity = None
+            component_sources = split_active_ingredients(
+                record.product_salt
+            )
 
-            if self._rxcui_identity_resolver is not None:
-                sidecar_identity = self._rxcui_identity_resolver.resolve(
-                    record.product_salt
+            if not component_sources:
+                component_sources = (record.product_salt,)
+
+            component_resolutions = tuple(
+                self._resolver.resolve(component)
+                for component in component_sources
+            )
+
+            sidecar_resolutions = tuple(
+                (
+                    self._rxcui_identity_resolver.resolve(component)
+                    if self._rxcui_identity_resolver is not None
+                    else None
                 )
+                for component in component_sources
+            )
 
-            if ingredient.state is IngredientResolutionState.RESOLVED:
-                assert ingredient.frozen_model_token is not None
-                assert ingredient.identity_namespace is not None
-                assert ingredient.identity_id is not None
+            # Register every safely-resolved active ingredient.
+            #
+            # This means a combination product contributes ALL of its
+            # supported ingredients to cart-level DDI pair generation.
+            for component_ingredient, sidecar_identity in zip(
+                component_resolutions,
+                sidecar_resolutions,
+            ):
 
-                product_ids_by_token[
-                    ingredient.frozen_model_token
-                ].append(record.product_id)
-
-                identity_by_token[
-                    ingredient.frozen_model_token
-                ] = ingredient
-
-                if ingredient.rxcui is not None:
-                    product_ids_by_rxcui[
-                        ingredient.rxcui
-                    ].append(record.product_id)
-
-                    identity_name_by_rxcui[
-                        ingredient.rxcui
-                    ] = (
-                        ingredient.canonical_display_name
-                        or ingredient.frozen_model_token
+                if (
+                    component_ingredient.state
+                    is IngredientResolutionState.RESOLVED
+                ):
+                    assert (
+                        component_ingredient.frozen_model_token
+                        is not None
+                    )
+                    assert (
+                        component_ingredient.identity_namespace
+                        is not None
+                    )
+                    assert (
+                        component_ingredient.identity_id
+                        is not None
                     )
 
-            elif sidecar_identity is not None:
-                product_ids_by_rxcui[
-                    sidecar_identity.rxcui
-                ].append(record.product_id)
+                    token = (
+                        component_ingredient.frozen_model_token
+                    )
 
-                identity_name_by_rxcui[
-                    sidecar_identity.rxcui
-                ] = sidecar_identity.canonical_display_name
+                    if (
+                        record.product_id
+                        not in product_ids_by_token[token]
+                    ):
+                        product_ids_by_token[token].append(
+                            record.product_id
+                        )
+
+                    identity_by_token[token] = (
+                        component_ingredient
+                    )
+
+                    if component_ingredient.rxcui is not None:
+
+                        rxcui = component_ingredient.rxcui
+
+                        if (
+                            record.product_id
+                            not in product_ids_by_rxcui[rxcui]
+                        ):
+                            product_ids_by_rxcui[rxcui].append(
+                                record.product_id
+                            )
+
+                        identity_name_by_rxcui[rxcui] = (
+                            component_ingredient.canonical_display_name
+                            or token
+                        )
+
+                elif sidecar_identity is not None:
+
+                    rxcui = sidecar_identity.rxcui
+
+                    if (
+                        record.product_id
+                        not in product_ids_by_rxcui[rxcui]
+                    ):
+                        product_ids_by_rxcui[rxcui].append(
+                            record.product_id
+                        )
+
+                    identity_name_by_rxcui[rxcui] = (
+                        sidecar_identity.canonical_display_name
+                    )
+
+            # Preserve existing response contract:
+            #
+            # - Fully resolved combination:
+            #     representative ingredient is resolved, so the product
+            #     does NOT become falsely UNRESOLVED.
+            #
+            # - Partial/unsupported combination:
+            #     expose the first unresolved component so existing
+            #     pharmacist-review policy still activates.
+            unresolved_components = tuple(
+                component
+                for component in component_resolutions
+                if component.state
+                is not IngredientResolutionState.RESOLVED
+            )
+
+            ingredient = (
+                unresolved_components[0]
+                if unresolved_components
+                else component_resolutions[0]
+            )
 
             product_results.append(
                 CartProductResolution(
@@ -442,8 +533,12 @@ class PartnerCartDDIService:
                     product_status=record.product_status,
                     product_requires_rx=record.product_requires_rx,
                     ingredient=ingredient,
-                    structural_adaptation_succeeded=structural_succeeded,
-                    structural_limitation=structural_limitation,
+                    structural_adaptation_succeeded=(
+                        structural_succeeded
+                    ),
+                    structural_limitation=(
+                        structural_limitation
+                    ),
                 )
             )
 
@@ -455,6 +550,21 @@ class PartnerCartDDIService:
             f"{self._resolver.artifact.provenance.evidence_source_sha256}"
         )
         for token_a, token_b in itertools.combinations(sorted(product_ids_by_token), 2):
+
+            # Skip interaction checks between ingredients that exist only
+            # inside the same fixed-combination medicine.
+            product_ids_a = set(product_ids_by_token[token_a])
+            product_ids_b = set(product_ids_by_token[token_b])
+
+            has_cross_product_pair = any(
+                product_a != product_b
+                for product_a in product_ids_a
+                for product_b in product_ids_b
+            )
+
+            if not has_cross_product_pair:
+                continue
+
             runtime_result = self._runtime.predict(token_a, token_b)
             if (
                 runtime_result.model_version != expected_model_version
@@ -725,6 +835,33 @@ class PartnerCartDDIService:
             # DDInter is selected before the official-label fallback above;
             # frozen-model metadata is retained when exact evidence merges.
             continue
+
+        # Final cart-level invariant:
+        # DDI pair results must represent interaction candidates between
+        # DIFFERENT products in the cart.
+        #
+        # Fixed-combination ingredients may legitimately have interaction
+        # evidence with each other, but that internal formulation evidence
+        # must not be emitted as a cart-level drug-to-drug interaction.
+        #
+        # Apply this guard after ALL pair/evidence sources are consolidated
+        # so the rule covers frozen-model, RxCUI/DDInter and official-label
+        # evidence paths consistently.
+        def _has_cross_product_pair(pair: CartPairResult) -> bool:
+            product_ids_a = set(pair.product_ids_a)
+            product_ids_b = set(pair.product_ids_b)
+
+            return any(
+                product_a != product_b
+                for product_a in product_ids_a
+                for product_b in product_ids_b
+            )
+
+        consolidated_pair_results = [
+            pair
+            for pair in consolidated_pair_results
+            if _has_cross_product_pair(pair)
+        ]
 
         pair_results = [
             _pair_with_policy(pair)

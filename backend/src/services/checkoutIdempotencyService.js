@@ -113,6 +113,7 @@ function canonicalItems(
         scalar(
           item?.product_id
         ),
+      batch_id: scalar(item?.batch_id),
       quantity:
         scalar(
           item?.quantity

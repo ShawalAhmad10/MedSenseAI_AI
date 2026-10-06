@@ -1,11 +1,15 @@
 // SRS EUC-02: authenticated customer prescription upload and governed OCR review.
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import BackLink from '../../components/storefront/BackLink';
+import { prescriptionUploadReturnPath } from '../../services/storefrontNavigation';
 
 import PrescriptionDropzone from '../../components/storefront/PrescriptionDropzone';
 import { useAuth } from '../../context/AuthContext';
 
 export default function PrescriptionUploadPage() {
+  const location = useLocation();
+  const returnPath = prescriptionUploadReturnPath(location.pathname + location.search + location.hash);
   const {
     isAuthenticated,
     openAuthModal,
@@ -14,6 +18,7 @@ export default function PrescriptionUploadPage() {
   if (!isAuthenticated) {
     return (
       <div className="storefront-shell">
+        <BackLink to={returnPath} />
         <div className="sf-card sf-section-card">
           <h1
             style={{
@@ -71,6 +76,7 @@ export default function PrescriptionUploadPage() {
 
   return (
     <div className="storefront-shell">
+      <BackLink to={returnPath} style={{ marginBottom: '1rem' }}>Back</BackLink>
       <div className="sf-card sf-section-card">
         <div className="sf-page-header">
           <div>

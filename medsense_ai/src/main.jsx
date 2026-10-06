@@ -23,7 +23,6 @@ import ProtectedRoute from './routes/ProtectedRoute'
 // Pharmacist Portal
 import DashboardLayout from './layouts/DashboardLayout'
 import Dashboard from './pages/dashboard/Dashboard'
-import PrescriptionReview from './pages/dashboard/PrescriptionReview'
 import Inventory from './pages/dashboard/Inventory'
 import Customers from './pages/dashboard/Customers'
 import RecordPayment from './pages/dashboard/RecordPayment'
@@ -81,7 +80,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 <Route element={<ProtectedRoute />}>
                   <Route path="/pharmacist/dashboard" element={<DashboardLayout />}>
                     <Route index element={<Dashboard />} />
-                    <Route path="prescriptions" element={<PrescriptionReview />} />
+                    {/* Pharmacist prescription review UI is disabled until a real
+                        pharmacist-side review API is implemented. Customer OCR remains
+                        available through the governed storefront prescription workflow. */}
+                    <Route
+                      path="prescriptions"
+                      element={<Navigate to="/pharmacist/dashboard" replace />}
+                    />
                     <Route path="inventory" element={<Inventory />} />
                     <Route path="customers" element={<Customers />} />
                     <Route path="record-payment" element={<RecordPayment />} />

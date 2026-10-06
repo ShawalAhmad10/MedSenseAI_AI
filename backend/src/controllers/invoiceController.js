@@ -58,21 +58,17 @@ exports.createInvoice = async (req, res) => {
         transaction
       );
 
-    // Calculate totals and allocate stock_history using FIFO
+    // Calculate totals using the selected batch's sale price.
     let subtotal = 0;
     const processedItems = [];
     const batchAllocations = []; // Track allocations for ledger entries
 
     for (const item of items) {
-      const qty = Number(item.quantity || item.qty || 1);
-      const unitPrice = Number(item.unitPrice || item.unit_price || item.price || 0);
+      const qty = Number(item.quantity ?? item.qty ?? 1);
       const itemDiscount = Number(item.discount || 0);
       const tax = Number(item.tax || 0);
-      const totalPrice = (qty * unitPrice) - itemDiscount + tax;
 
-      subtotal += totalPrice;
-
-      const productId = item.productId || item.product_id;
+      const productId = String(item.productId || item.product_id || '').replace(/^prod-/, '');
       
       if (!productId) {
         await transaction.rollback();
@@ -82,15 +78,40 @@ exports.createInvoice = async (req, res) => {
         });
       }
 
-      // Allocate stock_history using FIFO/FEFO
+      const pricedProduct = await Product.findByPk(String(productId).replace(/^prod-/, ''), { transaction });
+      if (!pricedProduct || pricedProduct.product_status === 0) {
+        await transaction.rollback();
+        return res.status(400).json({ success: false, message: 'Selected product is unavailable.' });
+      }
+      let allocations;
       try {
-        const allocations =
-          await BatchAllocationService
-            .allocateBatchesForSale(
-              productId,
-              qty,
-              transaction
-            );
+        allocations = await BatchAllocationService.allocateBatchesForSale(productId, qty, transaction, item.batchId ?? item.batch_id ?? null);
+      } catch (error) {
+        await transaction.rollback();
+        return res.status(400).json({ success: false, message: error.message });
+      }
+      const unitPrice = Number(allocations[0].sale_price);
+      if (Array.isArray(item.fifo_quote) && (item.fifo_quote.length !== allocations.length || allocations.some((allocation, index) =>
+        Number(item.fifo_quote[index]?.batch_id) !== Number(allocation.batch_id) ||
+        Number(item.fifo_quote[index]?.quantity) !== Number(allocation.quantity) ||
+        Number(item.fifo_quote[index]?.unit_price) !== Number(allocation.sale_price)))) {
+        await transaction.rollback();
+        return res.status(409).json({ success: false, message: 'FIFO stock or prices changed. Refresh the invoice before saving.' });
+      }
+      if (!Array.isArray(item.fifo_quote) && allocations.some(allocation => Number(allocation.sale_price) !== unitPrice)) {
+        await transaction.rollback();
+        return res.status(409).json({ success: false, message: 'Review the FIFO price breakdown before saving this invoice.' });
+      }
+      const submittedPrice = item.unitPrice ?? item.unit_price ?? item.price;
+      if (submittedPrice != null && Number(submittedPrice) !== unitPrice) {
+        await transaction.rollback();
+        return res.status(400).json({ success: false, message: 'The selected batch sale price has changed. Refresh the batch before invoicing.' });
+      }
+      const totalPrice = allocations.reduce((sum, allocation) => sum + allocation.quantity * Number(allocation.sale_price), 0) - itemDiscount + tax;
+      subtotal += totalPrice;
+
+      // The selected batch owns the price; its identity and cost are captured on the invoice.
+      try {
         
         // Store allocations for ledger entry
         batchAllocations.push({
@@ -101,16 +122,17 @@ exports.createInvoice = async (req, res) => {
         // Create invoice item for each batch allocation
         for (const alloc of allocations) {
           processedItems.push({
-            product_id: productId,
-            product_title: item.name || item.productTitle || item.product_title || 'Unknown Item',
+            product_id: alloc.product_id,
+            product_title: alloc.product_title || item.name || item.productTitle || item.product_title || 'Unknown Item',
             batch_number: alloc.batch_number,
+            batch_id: alloc.batch_id,
             expiry_date: alloc.expiry_date,
             quantity: alloc.quantity,
-            unit_price: unitPrice,
+            unit_price: Number(alloc.sale_price),
             purchase_price: Number(alloc.purchase_cost || 0), // ← store at invoice time
-            discount: itemDiscount / allocations.length, // Distribute discount proportionally
-            tax: tax / allocations.length, // Distribute tax proportionally
-            total_price: (alloc.quantity * unitPrice) - (itemDiscount / allocations.length) + (tax / allocations.length)
+            discount: itemDiscount * alloc.quantity / qty,
+            tax: tax * alloc.quantity / qty,
+            total_price: (alloc.quantity * Number(alloc.sale_price)) - (itemDiscount * alloc.quantity / qty) + (tax * alloc.quantity / qty)
           });
         }
       } catch (error) {
@@ -296,11 +318,12 @@ exports.listInvoices = async (req, res) => {
          i.total_amount, i.discount, i.delivery_fee,
          i.paid_amount, i.due_amount, i.payment_status, i.payment_method,
          i.delivery_status, i.delivery_address, i.builty_no,
-         i.notes, i.created_by, i.invoice_date, i.created_at, i.updated_at,
+         i.legacy_source_schema, i.legacy_source_invoice_id, i.legacy_source_invoice_number,
+         i.status, i.notes, i.created_by, i.invoice_date, i.created_at, i.updated_at,
          -- item fields
          ii.item_id, ii.product_id, ii.product_title, ii.quantity,
          ii.unit_price, ii.discount AS item_discount, ii.tax, ii.total_price,
-         ii.batch_number, ii.expiry_date,
+         ii.batch_id, ii.batch_number, ii.expiry_date,
          -- purchase price stored at invoice creation time (no stock_history join needed)
          COALESCE(ii.purchase_price, 0) AS purchase_price,
          -- pack info from product table
@@ -309,7 +332,7 @@ exports.listInvoices = async (req, res) => {
        FROM invoice i
        LEFT JOIN invoice_report ii ON ii.invoice_id = i.invoice_id AND ii.status = 1
        LEFT JOIN product p ON p.product_id = ii.product_id
-       WHERE i.status = 1
+       WHERE (i.status = 1 OR i.legacy_source_schema IS NOT NULL)
        ORDER BY i.${sortCol} ${order}
        LIMIT :lim`,
       { replacements: { lim }, type: sequelize.QueryTypes.SELECT }
@@ -322,7 +345,10 @@ exports.listInvoices = async (req, res) => {
         invoiceMap.set(row.invoice_id, {
           id:              Number(row.invoice_id),
           mode:            'invoice',
-          invoiceNumber:   row.invoice_number,
+          legacy_source_schema: row.legacy_source_schema,
+          legacy_source_invoice_id: row.legacy_source_invoice_id,
+          archived: Boolean(row.legacy_source_schema && row.status === 0),
+          invoiceNumber:   row.legacy_source_invoice_number || row.invoice_number,
           orderNumber:     row.invoice_number,
           invoiceTotal:    Number(row.total_amount || 0),
           totalAmount:     Number(row.total_amount || 0),
@@ -359,6 +385,7 @@ exports.listInvoices = async (req, res) => {
         inv.items.push({
           id:            row.item_id,
           productId:     row.product_id,
+          batchId:       row.batch_id,
           name:          row.product_title,
           batchNumber:   row.batch_number,
           expiryDate:    row.expiry_date,
@@ -424,8 +451,11 @@ exports.getInvoice = async (req, res) => {
       );
 
       return {
+        legacy_source_schema: invoice.legacy_source_schema,
+        legacy_source_invoice_id: invoice.legacy_source_invoice_id,
         id:              item.item_id,
         productId:       item.product_id,
+        batchId:         item.batch_id,
         name:            item.product_title,
         batchNumber:     item.batch_number,
         expiryDate:      item.expiry_date,
@@ -449,7 +479,7 @@ exports.getInvoice = async (req, res) => {
       data: {
         id:              invoice.invoice_id,
         mode:            'invoice',
-        invoiceNumber:   invoice.invoice_number,
+        invoiceNumber:   invoice.legacy_source_invoice_number || invoice.invoice_number,
         invoiceTotal:    totalAmount,
         totalAmount,
         customerName:    invoice.customer_name,
@@ -498,6 +528,11 @@ exports.updateInvoiceStatus = async (req, res) => {
     if (!invoice) {
       await transaction.rollback();
       return res.status(404).json({ success: false, message: 'Invoice not found' });
+    }
+
+    if (invoice.legacy_source_schema) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: 'Imported cloud history is read-only; original item and stock records were not supplied.' });
     }
 
     const updates = {};
@@ -611,6 +646,10 @@ exports.deleteInvoice = async (req, res) => {
       });
     }
 
+    if (invoice.legacy_source_schema) {
+      return res.status(409).json({ success: false, message: 'Imported cloud history is read-only; original item and stock records were not supplied.' });
+    }
+
     await invoice.update({ status: 0 });
     await InvoiceReport.update(
       { status: 0 },
@@ -667,464 +706,17 @@ exports.getInvoiceStats = async (req, res) => {
   }
 };
 
-// Generate sequential return number: RET-000001, RET-000002...
-async function generateReturnNumber() {
-  const [last] = await sequelize.query(
-    `SELECT return_number FROM invoice_return
-     WHERE return_number ~ '^RET-[0-9]+$'
-     ORDER BY return_id DESC LIMIT 1`,
-    { type: sequelize.QueryTypes.SELECT }
-  );
-  let next = 1;
-  if (last?.return_number) {
-    const m = last.return_number.match(/RET-(\d+)/);
-    if (m) next = parseInt(m[1]) + 1;
-  }
-  return `RET-${String(next).padStart(6, '0')}`;
-}
-
 // Create invoice return
 exports.createInvoiceReturn = async (req, res) => {
-  const transaction = await sequelize.transaction();
-  
   try {
-    console.log('=== Invoice Return Request ===');
-    console.log('Body:', JSON.stringify(req.body, null, 2));
-    
-    const {
-      linkedInvoiceId,
-      invoiceNumber,
-      customerName,
-      invoiceType,
-      description,
-      createdBy,
-      items = []
-    } = req.body;
-
-    // Validate required fields
-    if (!linkedInvoiceId || !customerName) {
-      await transaction.rollback();
-      console.error('Validation failed:', { linkedInvoiceId, customerName });
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Linked invoice and customer name are required' 
-      });
-    }
-
-    if (!items || items.length === 0) {
-      await transaction.rollback();
-      return res.status(400).json({ 
-        success: false, 
-        message: 'At least one item is required for return' 
-      });
-    }
-
-    // Extract numeric invoice ID if it's in format "inv-123" or just a string number
-    let numericInvoiceId = linkedInvoiceId;
-    if (typeof linkedInvoiceId === 'string') {
-      if (linkedInvoiceId.includes('-')) {
-        numericInvoiceId = parseInt(linkedInvoiceId.split('-').pop());
-      } else {
-        numericInvoiceId = parseInt(linkedInvoiceId);
-      }
-    }
-    
-    console.log('Parsed invoice ID:', numericInvoiceId);
-
-    // Verify invoice exists
-    const invoiceCheck = await Invoice.findOne({
-      where: { invoice_id: numericInvoiceId, status: 1 }
-    });
-
-    if (!invoiceCheck) {
-      await transaction.rollback();
-      return res.status(404).json({
-        success: false,
-        message: `Invoice with ID ${numericInvoiceId} not found`
-      });
-    }
-
-    // Calculate totals
-    let subtotal = 0;
-    const processedItems = [];
-
-    for (const item of items) {
-      const qty = Number(item.qty || 0);
-      const unitPrice = Number(item.unitPrice || 0);
-      const purchasePrice = Number(item.purchasePrice || 0);
-      const totalPrice = qty * unitPrice;
-      const productProfit = (unitPrice - purchasePrice) * qty;  // PDF: product_profit
-
-      if (qty <= 0) continue;
-
-      // Keep product ID as-is (UUID)
-      let numericProductId = item.productId;
-
-      subtotal += totalPrice;
-      processedItems.push({
-        productId: numericProductId,
-        productName: item.name,
-        quantity: qty,
-        unitPrice: unitPrice,
-        totalPrice: totalPrice,
-        purchasePrice: purchasePrice,
-        productProfit: Number(productProfit.toFixed(2))   // ← PDF: product_profit
-      });
-    }
-
-    console.log('Processed items:', processedItems.length);
-
-    if (processedItems.length === 0) {
-      await transaction.rollback();
-      return res.status(400).json({
-        success: false,
-        message: 'At least one item with valid quantity is required'
-      });
-    }
-
-    const totalAmount = subtotal;
-    const returnNumber = await generateReturnNumber();
-    
-    console.log('Creating return:', { returnNumber, numericInvoiceId, totalAmount });
-
-    // Create invoice return record - using INSERT with RETURNING
-    const [returnResult] = await sequelize.query(`
-      INSERT INTO invoice_return (
-        return_number,
-        linked_invoice_id,
-        linked_invoice_number,
-        customer_name,
-        invoice_type,
-        return_description,
-        subtotal,
-        total_amount,
-        refund_amount,
-        refund_status,
-        created_by,
-        status
-      ) VALUES (
-        :returnNumber,
-        :linkedInvoiceId,
-        :invoiceNumber,
-        :customerName,
-        :invoiceType,
-        :description,
-        :subtotal,
-        :totalAmount,
-        :refundAmount,
-        'pending',
-        :createdBy,
-        1
-      )
-      RETURNING return_id, return_number
-    `, {
-      replacements: {
-        returnNumber,
-        linkedInvoiceId: numericInvoiceId,
-        invoiceNumber: invoiceNumber || invoiceCheck.invoice_number,
-        customerName,
-        invoiceType: invoiceType || 'normal',
-        description: description || '',
-        subtotal,
-        totalAmount,
-        refundAmount: totalAmount, // Full refund by default
-        createdBy: createdBy || 'System'
-      },
-      transaction,
-      type: sequelize.QueryTypes.INSERT
-    });
-
-    const returnId = returnResult[0]?.return_id;
-    
-    if (!returnId) {
-      throw new Error('Failed to get return_id from database');
-    }
-    
-    console.log('Return created with ID:', returnId);
-
-    // Insert return items
-    for (const item of processedItems) {
-      await sequelize.query(`
-        INSERT INTO invoice_return_report (
-          return_id,
-          product_id,
-          product_name,
-          quantity,
-          unit_price,
-          total_price,
-          product_profit,
-          invoice_type,
-          status
-        ) VALUES (
-          :returnId,
-          :productId,
-          :productName,
-          :quantity,
-          :unitPrice,
-          :totalPrice,
-          :productProfit,
-          :invoiceType,
-          1
-        )
-      `, {
-        replacements: {
-          returnId,
-          productId: item.productId,
-          productName: item.productName,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          totalPrice: item.totalPrice,
-          productProfit: item.productProfit || 0,    // ← PDF: product_profit
-          invoiceType: invoiceType || 'normal'       // ← PDF: invoice_type
-        },
-        transaction
-      });
-
-      // Return stock back to inventory (add to stock_history)
-      // Find the most recent batch for this product
-      const [stock_history] = await sequelize.query(`
-        SELECT batch_id, remaining_quantity
-        FROM stock_history
-        WHERE product_id = :productId
-          AND batch_status = 'ACTIVE'
-          AND (expiry_date IS NULL OR expiry_date > CURRENT_DATE)
-        ORDER BY created_at DESC
-        LIMIT 1
-      `, {
-        replacements: { productId: item.productId },
-        transaction
-      });
-
-      if (stock_history && stock_history.length > 0) {
-        const batch = stock_history[0];
-        const currentQty = batch.remaining_quantity;
-        const newQty = currentQty + item.quantity;
-        
-        // Add returned quantity back to batch
-        await sequelize.query(`
-          UPDATE stock_history
-          SET remaining_quantity = remaining_quantity + :quantity
-          WHERE batch_id = :batchId
-        `, {
-          replacements: {
-            batchId: batch.batch_id,
-            quantity: item.quantity
-          },
-          transaction
-        });
-
-        // Log in stock ledger with balance_after
-        await sequelize.query(`
-          INSERT INTO stock_report (
-            batch_id,
-            product_id,
-            transaction_type,
-            quantity_change,
-            balance_after,
-            reference_type,
-            reference_id,
-            notes,
-            created_at
-          ) VALUES (
-            :batchId,
-            :productId,
-            'RETURN',
-            :quantityChange,
-            :balanceAfter,
-            'INVOICE_RETURN',
-            :returnId,
-            :notes,
-            CURRENT_TIMESTAMP
-          )
-        `, {
-          replacements: {
-            batchId: batch.batch_id,
-            productId: item.productId,
-            quantityChange: item.quantity,
-            balanceAfter: newQty,
-            returnId,
-            notes: `Returned from invoice ${invoiceNumber || invoiceCheck.invoice_number}`
-          },
-          transaction
-        });
-      }
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // BUG-FIX: Update customer account + ledger + original invoice on return
-    // ══════════════════════════════════════════════════════════════════════════
-
-    // Step A: Get customer_id from the linked invoice
-    const customerId = invoiceCheck.customer_id;
-
-    // ── Bug 2 & 3: Customer account balance + customer ledger credit entry ──
-    if (customerId) {
-      const customerAccount = await CustomerAccount.findOne({
-        where: { customer_id: customerId, status: 1 },
-        transaction
-      });
-
-      if (customerAccount) {
-        // Invoice return: reduce outstanding (customer owes less)
-        // Correct formula: balance = total_debit - total_credit (after deducting return amount from debit)
-        const reducedDebit   = Math.max(Number(customerAccount.total_debit) - totalAmount, 0);
-        const reducedBalance = reducedDebit - Number(customerAccount.total_credit);
-
-        await customerAccount.update({
-          current_balance: reducedBalance,
-          total_debit:     reducedDebit,
-          updated_at:      new Date()
-        }, { transaction });
-
-        // Bug 3: Create customer_ledger CREDIT entry (refund type)
-        await CustomerLedger.create({
-          customer_id:      customerId,
-          account_id:       customerAccount.account_id,
-          transaction_date: new Date(),
-          transaction_type: 'refund',
-          reference_type:   'INVOICE_RETURN',
-          reference_id:     returnId,
-          reference_number: returnNumber,
-          debit_amount:     0,
-          credit_amount:    totalAmount,   // credit = reduces what customer owes
-          balance:          reducedBalance,
-          payment_method:   null,
-          description:      `Return ${returnNumber} — ${customerName} (Invoice: ${invoiceNumber || invoiceCheck.invoice_number})`,
-          performed_by:     createdBy || 'System',
-          status:           1,
-          created_at:       new Date(),
-          updated_at:       new Date()
-        }, { transaction });
-      }
-    }
-
-    // ── Bug 4: Adjust original invoice paid_amount / due_amount ─────────────
-    // Logic:
-    //  • If invoice was fully paid and full return → set paid_amount -= returnTotal, due_amount += returnTotal
-    //  • If invoice was unpaid → reduce total_amount conceptually via due_amount -= returnTotal
-    //  • payment_status recalculated from new paid vs total
-    const origTotal = Number(invoiceCheck.total_amount || 0);
-    const origPaid  = Number(invoiceCheck.paid_amount  || 0);
-    const origDue   = Number(invoiceCheck.due_amount   || 0);
-
-    // New effective total after return (items returned reduces what was billed)
-    const newInvoiceTotal = Math.max(origTotal - totalAmount, 0);
-    // Paid amount can't exceed new total
-    const newPaidAmount   = Math.min(origPaid, newInvoiceTotal);
-    const newDueAmount    = Math.max(newInvoiceTotal - newPaidAmount, 0);
-    const newPaymentStatus = newDueAmount <= 0 ? 'paid' : 'unpaid';
-
-    await sequelize.query(
-      `UPDATE invoice
-       SET total_amount    = :newTotal,
-           paid_amount     = :newPaid,
-           due_amount      = :newDue,
-           payment_status  = :payStatus,
-           updated_at      = NOW()
-       WHERE invoice_id = :invId`,
-      {
-        replacements: {
-          newTotal:  newInvoiceTotal,
-          newPaid:   newPaidAmount,
-          newDue:    newDueAmount,
-          payStatus: newPaymentStatus,
-          invId:     numericInvoiceId
-        },
-        type: sequelize.QueryTypes.UPDATE,
-        transaction
-      }
-    );
-
-    // ── Bug 5: Recalculate profit on invoice_report ──────────────────────────
-    // For each returned product, reduce the invoice_report quantity and total_price.
-    // Profit on a line item = (unit_price - purchase_price) * quantity_remaining
-    // We achieve this by updating invoice_report rows for returned products:
-    //   new_qty = original_qty - returned_qty  (min 0)
-    //   new_total_price = new_qty * unit_price
-    // If quantity hits 0, the line still exists but shows 0 (no deletion so history is preserved).
-    for (const item of processedItems) {
-      await sequelize.query(
-        `UPDATE invoice_report
-         SET quantity   = GREATEST(quantity   - :retQty, 0),
-             total_price = GREATEST(total_price - (:retQty * unit_price), 0),
-             updated_at  = NOW()
-         WHERE invoice_id  = :invId
-           AND product_id  = :productId
-           AND status      = 1`,
-        {
-          replacements: {
-            retQty:    item.quantity,
-            invId:     numericInvoiceId,
-            productId: item.productId
-          },
-          type: sequelize.QueryTypes.UPDATE,
-          transaction
-        }
-      );
-    }
-
-    // ── Update original invoice delivery_status to 'returned' ──────────────
-    // Also mark payment_status based on whether full return (total=0) or partial
-    const returnStatus = newInvoiceTotal <= 0 ? 'cancelled' : 'returned';
-    await sequelize.query(
-      `UPDATE invoice
-       SET delivery_status = :retStatus,
-           updated_at      = NOW()
-       WHERE invoice_id = :invId`,
-      {
-        replacements: { retStatus: returnStatus, invId: numericInvoiceId },
-        type: sequelize.QueryTypes.UPDATE,
-        transaction
-      }
-    );
-    // ═══════════════════════════════════════════════════════════════════════
-
-    await transaction.commit();
-    console.log('✓ Invoice return completed successfully');
-
-    res.status(201).json({
-      success: true,
-      message: 'Invoice return created successfully',
-      data: {
-        returnId,
-        returnNumber,
-        linkedInvoiceNumber: invoiceNumber || invoiceCheck.invoice_number,
-        customerName,
-        totalAmount,
-        itemCount: processedItems.length,
-        invoiceAdjusted: {
-          newInvoiceTotal,
-          newPaidAmount,
-          newDueAmount,
-          newPaymentStatus,
-          deliveryStatus: returnStatus
-        },
-        customerAccountUpdated: !!customerId
-      }
-    });
-
-  } catch (error) {
-    await transaction.rollback();
-    console.error('❌ Create invoice return error:', error);
-    console.error('Error name:', error.name);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
-    if (error.sql) {
-      console.error('SQL:', error.sql);
-    }
-    if (error.original) {
-      console.error('Original error:', error.original);
-    }
-    res.status(500).json({ 
-      success: false, 
-      message: 'Failed to create invoice return',
-      error: error.message,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
+    const invoiceId = Number(String(req.body.linkedInvoiceId || '').replace(/^inv-/,''));
+    const data = await require('../services/customerOrderReturnService').createReturn({staff:true,
+      invoiceId,items:req.body.items,description:req.body.description,performedBy:req.user?.email});
+    return res.status(201).json({success:true,message:'Invoice return created successfully',data});
+  } catch(error) {
+    return res.status(error.status || 500).json({success:false,message:error.status ? error.message : 'Failed to create invoice return'});
   }
 };
-
-// Get all invoice returns
 exports.listInvoiceReturns = async (req, res) => {
   try {
     const { page = 1, limit = 50, search = '' } = req.query;
@@ -1420,193 +1012,17 @@ exports.listInvoiceReturnReport = async (req, res) => {
 // POST /api/invoice/customer-return
 // ─────────────────────────────────────────────────────────────────────────────
 exports.createCustomerReturn = async (req, res) => {
-  const transaction = await sequelize.transaction();
   try {
-    const customerId = req.user?.id;               // from verifyCustomerToken
-    const { linkedInvoiceId, items, description } = req.body;
-
-    if (!linkedInvoiceId || !items || items.length === 0) {
-      await transaction.rollback();
-      return res.status(400).json({ success: false, message: 'Invoice ID and at least one item are required' });
-    }
-
-    // Verify the invoice belongs to this customer
-    const invoiceCheck = await Invoice.findOne({
-      where: { invoice_id: linkedInvoiceId, customer_id: customerId, status: 1 }
+    const data = await require('../services/customerOrderReturnService').createReturn({
+      customerId:req.user.id, invoiceId:req.body.linkedInvoiceId, items:req.body.items,
+      description:req.body.description, performedBy:req.user.email
     });
-    if (!invoiceCheck) {
-      await transaction.rollback();
-      return res.status(404).json({ success: false, message: 'Invoice not found or does not belong to your account' });
-    }
-
-    // ── 14-day rule ──────────────────────────────────────────────────────────
-    const invoiceDate   = new Date(invoiceCheck.invoice_date || invoiceCheck.created_at);
-    const today         = new Date();
-    const diffDays      = Math.floor((today - invoiceDate) / (1000 * 60 * 60 * 24));
-    if (diffDays > 14) {
-      await transaction.rollback();
-      return res.status(400).json({
-        success: false,
-        message: `Return window has expired. Returns are only accepted within 14 days of purchase. This order was placed ${diffDays} days ago.`
-      });
-    }
-
-    // Check if already returned
-    const existingReturn = await sequelize.query(
-      `SELECT return_id FROM invoice_return WHERE linked_invoice_id = :invId AND status = 1 LIMIT 1`,
-      { replacements: { invId: linkedInvoiceId }, type: sequelize.QueryTypes.SELECT, transaction }
-    );
-    if (existingReturn.length > 0) {
-      await transaction.rollback();
-      return res.status(400).json({ success: false, message: 'A return has already been submitted for this order.' });
-    }
-
-    // Get invoice items with purchase prices for profit calculation
-    const invoiceItems = await InvoiceReport.findAll({
-      where: { invoice_id: linkedInvoiceId, status: 1 }
-    });
-    const priceMap = {};
-    invoiceItems.forEach(it => { priceMap[String(it.product_id)] = Number(it.purchase_price || 0); });
-
-    // Validate quantities don't exceed original
-    const qtyMap = {};
-    invoiceItems.forEach(it => { qtyMap[String(it.product_id)] = (qtyMap[String(it.product_id)] || 0) + Number(it.quantity); });
-
-    let subtotal = 0;
-    const processedItems = [];
-    for (const item of items) {
-      const qty = Number(item.qty || 0);
-      if (qty <= 0) continue;
-      const unitPrice     = Number(item.unitPrice || 0);
-      const purchasePrice = priceMap[String(item.productId)] ?? Number(item.purchasePrice || 0);
-      const maxQty        = qtyMap[String(item.productId)] || 0;
-      if (qty > maxQty) {
-        await transaction.rollback();
-        return res.status(400).json({ success: false, message: `Return quantity for ${item.name} (${qty}) exceeds original order quantity (${maxQty}).` });
-      }
-      subtotal += qty * unitPrice;
-      processedItems.push({
-        productId: item.productId, productName: item.name, quantity: qty,
-        unitPrice, totalPrice: qty * unitPrice,
-        purchasePrice, productProfit: (unitPrice - purchasePrice) * qty
-      });
-    }
-    if (processedItems.length === 0) {
-      await transaction.rollback();
-      return res.status(400).json({ success: false, message: 'No valid items to return' });
-    }
-
-    const totalAmount  = subtotal;
-    const returnNumber = await generateReturnNumber();
-
-    // Insert invoice_return
-    const [returnResult] = await sequelize.query(`
-      INSERT INTO invoice_return (
-        return_number, linked_invoice_id, linked_invoice_number,
-        customer_name, invoice_type, return_description,
-        subtotal, total_amount, refund_amount, refund_status,
-        created_by, status
-      ) VALUES (
-        :returnNumber, :linkedInvoiceId, :invoiceNumber,
-        :customerName, 'normal', :description,
-        :subtotal, :totalAmount, :totalAmount, 'pending',
-        :createdBy, 1
-      ) RETURNING return_id, return_number`,
-      {
-        replacements: {
-          returnNumber, linkedInvoiceId,
-          invoiceNumber: invoiceCheck.invoice_number,
-          customerName:  invoiceCheck.customer_name,
-          description:   description || 'Customer return request',
-          subtotal, totalAmount,
-          createdBy: req.user?.email || 'customer'
-        },
-        transaction, type: sequelize.QueryTypes.INSERT
-      }
-    );
-    const returnId = returnResult[0]?.return_id;
-    if (!returnId) throw new Error('Failed to create return record');
-
-    // Insert return items + restore stock + update invoice_report quantities
-    for (const item of processedItems) {
-      // invoice_return_report
-      await sequelize.query(`
-        INSERT INTO invoice_return_report (return_id, product_id, product_name, quantity, unit_price, total_price, product_profit, invoice_type, status)
-        VALUES (:returnId, :productId, :productName, :quantity, :unitPrice, :totalPrice, :productProfit, 'normal', 1)`,
-        { replacements: { returnId, productId: item.productId, productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice, productProfit: Number(item.productProfit.toFixed(2)) }, transaction }
-      );
-
-      // Restore stock
-      const [batch] = await sequelize.query(`
-        SELECT batch_id, remaining_quantity FROM stock_history
-        WHERE product_id = :pid AND batch_status = 'ACTIVE' AND (expiry_date IS NULL OR expiry_date > CURRENT_DATE)
-        ORDER BY created_at DESC LIMIT 1`,
-        { replacements: { pid: item.productId }, type: sequelize.QueryTypes.SELECT, transaction }
-      );
-      if (batch) {
-        await sequelize.query(`UPDATE stock_history SET remaining_quantity = remaining_quantity + :qty WHERE batch_id = :bid`,
-          { replacements: { qty: item.quantity, bid: batch.batch_id }, transaction });
-        await sequelize.query(`INSERT INTO stock_report (product_id, batch_id, transaction_type, quantity_change, balance_after, reference_type, reference_id, notes, created_at)
-          VALUES (:pid, :bid, 'RETURN', :qty, :bal, 'INVOICE_RETURN', :rid, :notes, NOW())`,
-          { replacements: { pid: item.productId, bid: batch.batch_id, qty: item.quantity, bal: batch.remaining_quantity + item.quantity, rid: returnId, notes: `Customer return - ${returnNumber}` }, transaction }
-        );
-      }
-
-      // Reduce invoice_report quantity
-      await sequelize.query(`
-        UPDATE invoice_report SET quantity = GREATEST(quantity - :qty, 0), total_price = GREATEST(total_price - (:qty * unit_price), 0), updated_at = NOW()
-        WHERE invoice_id = :invId AND product_id = :pid AND status = 1`,
-        { replacements: { qty: item.quantity, invId: linkedInvoiceId, pid: item.productId }, transaction }
-      );
-    }
-
-    // Recalculate invoice total
-    const [newTotal] = await sequelize.query(
-      `SELECT COALESCE(SUM(total_price), 0) AS total FROM invoice_report WHERE invoice_id = :invId AND status = 1`,
-      { replacements: { invId: linkedInvoiceId }, type: sequelize.QueryTypes.SELECT, transaction }
-    );
-    const newInvoiceTotal = Number(newTotal?.total || 0);
-    const returnStatus    = newInvoiceTotal <= 0 ? 'cancelled' : 'returned';
-    await sequelize.query(
-      `UPDATE invoice SET total_amount = :total, delivery_status = :status, updated_at = NOW() WHERE invoice_id = :invId`,
-      { replacements: { total: newInvoiceTotal, status: returnStatus, invId: linkedInvoiceId }, transaction }
-    );
-
-    // Update customer account balance
-    if (customerId) {
-      const customerAccount = await CustomerAccount.findOne({ where: { customer_id: customerId, status: 1 }, transaction });
-      if (customerAccount) {
-        const reducedDebit   = Math.max(Number(customerAccount.total_debit) - totalAmount, 0);
-        const reducedBalance = reducedDebit - Number(customerAccount.total_credit);
-        await customerAccount.update({ current_balance: reducedBalance, total_debit: reducedDebit, updated_at: new Date() }, { transaction });
-        await CustomerLedger.create({
-          customer_id: customerId, account_id: customerAccount.account_id,
-          transaction_date: new Date(), transaction_type: 'refund',
-          reference_type: 'INVOICE_RETURN', reference_id: returnId, reference_number: returnNumber,
-          debit_amount: 0, credit_amount: totalAmount, balance: reducedBalance,
-          payment_method: null, description: `Return ${returnNumber} — ${invoiceCheck.invoice_number}`,
-          performed_by: req.user?.email || 'customer', status: 1, created_at: new Date(), updated_at: new Date()
-        }, { transaction });
-      }
-    }
-
-    await transaction.commit();
-    res.status(201).json({
-      success: true,
-      message: 'Return request submitted successfully. Your refund will be processed within 3-5 business days.',
-      data: { returnId, returnNumber, totalRefund: totalAmount, daysRemaining: 14 - diffDays }
-    });
-  } catch (error) {
-    await transaction.rollback();
-    console.error('Customer return error:', error);
-    res.status(500).json({ success: false, message: 'Failed to submit return', error: error.message });
+    return res.status(201).json({success:true,message:'Return request submitted successfully',data});
+  } catch(error) {
+    if(!error.status) console.error('Customer return failed:',error.message);
+    return res.status(error.status || 500).json({success:false,message:error.status ? error.message : 'Failed to submit return'});
   }
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// LIST CUSTOMER'S OWN RETURNS  (storefront)
-// GET /api/invoice/customer-returns
-// ─────────────────────────────────────────────────────────────────────────────
 exports.listCustomerReturns = async (req, res) => {
   try {
     const customerId = req.user?.id;
@@ -1644,14 +1060,15 @@ exports.updateReturnStatus = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid refund_status. Must be pending | refunded | rejected' });
     }
 
-    await sequelize.query(
-      `UPDATE invoice_return SET refund_status = :status, updated_at = NOW() WHERE return_id = :id`,
-      { replacements: { status: refund_status, id }, type: sequelize.QueryTypes.UPDATE }
-    );
+    if (refund_status === 'refunded') {
+      await require('../services/customerOrderReturnService').refundReturn(Number(id),req.user?.email);
+    } else {
+      return res.status(409).json({success:false,message:'A recorded stock return cannot be reversed by changing its refund label.'});
+    }
 
     res.json({ success: true, message: `Return status updated to ${refund_status}` });
   } catch (error) {
     console.error('Update return status error:', error);
-    res.status(500).json({ success: false, message: 'Failed to update return status', error: error.message });
+    res.status(error.status || 500).json({ success: false, message: error.status ? error.message : 'Failed to update return status' });
   }
 };

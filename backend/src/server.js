@@ -1,5 +1,6 @@
-// src/server.js
+﻿// src/server.js
 const express = require('express');
+const inventoryStatsAuth = require('./middleware/auth').authenticateToken;
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -26,6 +27,7 @@ const leadRoutes = require('./routes/leadRoutes');
 const consultationRoutes = require('./routes/consultationRoutes');
 const prescriptionRoutes = require('./routes/prescriptionRoutes');
 const customerRefillRoutes = require('./routes/customerRefillRoutes');
+const customerSubscriptionRoutes = require('./routes/customerSubscriptionRoutes');
 const medicineRecommendationRoutes = require('./routes/medicineRecommendationRoutes');
 const assistantRoutes = require('./routes/assistantRoutes');
 const alertRoutes  = require('./routes/alertRoutes');
@@ -34,7 +36,13 @@ const analyticsRoutes = require('./routes/analyticsRoutes');
 const app = express();
 const PORT = process.env.PORT || 5005;
 
-// ─── Middleware ──────────────────────────────────────────────────────────────
+const HOST =
+  process.env.HOST ||
+  (process.env.NODE_ENV === 'production'
+    ? '0.0.0.0'
+    : '127.0.0.1');
+
+// â”€â”€â”€ Middleware â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // Security headers with Google OAuth compatibility
 app.use(helmet({
@@ -69,7 +77,7 @@ const limiter = rateLimit({
 });
 app.use('/api/auth', limiter);
 
-// ─── Routes ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Routes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 app.get('/', (req, res) => {
   res.json({
@@ -91,7 +99,7 @@ app.get('/health', (req, res) => {
 });
 
 // Inventory stats endpoint (stub for now)
-app.get('/api/inventory/stats', (req, res) => {
+app.get('/api/inventory/stats', inventoryStatsAuth, (req, res) => {
   res.json({
     totalProducts: 0,
     lowStock: 0,
@@ -121,11 +129,14 @@ app.use('/api/leads', leadRoutes);
 app.use('/api/consultations', consultationRoutes);
 app.use('/api/prescriptions', prescriptionRoutes);
 app.use('/api/refills', customerRefillRoutes);
+app.use('/api/subscriptions', customerSubscriptionRoutes);
+// PayPal Dashboard listener URL: https://your-backend/api/paypal/webhook
+app.use('/api/paypal', customerSubscriptionRoutes);
 app.use('/api/recommendations', medicineRecommendationRoutes);
 app.use('/api/assistant', assistantRoutes);
 app.use('/api/alerts', alertRoutes);
 
-// ─── Error Handling ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Error Handling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // 404 handler
 app.use((req, res) => {
@@ -160,7 +171,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ─── Database & Server Startup ───────────────────────────────────────────────
+// â”€â”€â”€ Database & Server Startup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const startServer = async () => {
   try {
@@ -169,16 +180,16 @@ const startServer = async () => {
 
     // Note: We are not using sequelize.sync() to avoid ENUM conflicts
     // Schema changes should be done via manual migration scripts
-    console.log('✅ Database connection established');
+    console.log('âœ… Database connection established');
 
     // Start server
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running on http://localhost:${PORT}`);
-      console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
+    app.listen(PORT, HOST, () => {
+      console.log(`ðŸš€ Server running on http://localhost:${PORT}`);
+      console.log(`ðŸ“¡ Environment: ${process.env.NODE_ENV || 'development'}`);
 
     });
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    console.error('âŒ Failed to start server:', error);
     process.exit(1);
   }
 };
@@ -186,3 +197,4 @@ const startServer = async () => {
 startServer();
 
 module.exports = app;
+

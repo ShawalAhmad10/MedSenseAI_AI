@@ -52,6 +52,7 @@ export default function OrderDetailModal({ isOpen, onClose, order }) {
   const isInvoiceReturn  = detailMode === 'invoice-return';
   const isOrder          = !isInvoice && !isInvoiceReturn;
 
+  const historicalCloud = Boolean(order.legacy_source_schema);
   const items    = order.items ?? [];
   const subtotal = isOrder
     ? (Number(order.subtotalAmount) > 0
@@ -175,6 +176,8 @@ export default function OrderDetailModal({ isOpen, onClose, order }) {
                   </div>
                 </div>
 
+                {historicalCloud && <p style={{ margin: 0, padding: 12, background: '#f1f5f9', borderRadius: 8 }}>Previous cloud invoice. Item details were not included in the original data; this record is available for viewing.</p>}
+
                 {/* Line Items */}
                 <div>
                   <h3 style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:'1.1rem', color:'var(--navy)', marginBottom:'1rem' }}>
@@ -250,7 +253,7 @@ export default function OrderDetailModal({ isOpen, onClose, order }) {
                         {items.length === 0 && (
                           <tr>
                             <td colSpan={invoiceHeadings.length} style={{ padding:'1.5rem', textAlign:'center', color:'var(--gray-400)', fontSize:'0.85rem' }}>
-                              No items found
+                              {historicalCloud ? 'Item details unavailable in original cloud record' : 'No items found'}
                             </td>
                           </tr>
                         )}
@@ -261,7 +264,7 @@ export default function OrderDetailModal({ isOpen, onClose, order }) {
                   {/* Totals */}
                   <div style={{ display:'flex', justifyContent:'flex-end', marginTop:'1.5rem' }}>
                     <div style={{ width:290, display:'grid', gap:'0.5rem' }}>
-                      <KVRow label="Subtotal" value={`PKR ${subtotal.toLocaleString()}`} />
+                      <KVRow label="Subtotal" value={historicalCloud ? 'Unavailable' : `PKR ${subtotal.toLocaleString()}`} />
                       {discount > 0 && <KVRow label="Discount" value={`- PKR ${discount.toLocaleString()}`} />}
                       {tax > 0       && <KVRow label="Tax"      value={`PKR ${tax.toLocaleString()}`} />}
                       {isInvoice && totalProfit > 0 && (

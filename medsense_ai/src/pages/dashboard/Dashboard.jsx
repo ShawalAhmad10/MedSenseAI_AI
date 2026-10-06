@@ -15,7 +15,7 @@ import {
 
 import { fadeUp, cardReveal, staggerContainer } from '../../utils/animations';
 import { useToast } from '../../hooks/useToast';
-import { consultationService } from '../../services/consultationService';
+import { askPharmacistAssistant, assistantErrorMessage } from '../../services/pharmacistAssistantService';
 import api from '../../services/api';
 
 import MetricCard from '../../components/common/MetricCard';
@@ -25,10 +25,22 @@ import OrderDetailModal from '../../components/modals/OrderDetailModal';
 // ─── helpers ──────────────────────────────────────────────────────────────────
 function fmt(n) {
   const v = Number(n || 0);
-  if (v >= 1_000_000) return `₨${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000)     return `₨${(v / 1_000).toFixed(1)}K`;
-  return `₨${v.toLocaleString()}`;
+
+  if (v >= 1_000_000) {
+    return `PKR ${(v / 1_000_000).toFixed(1)}M`;
+  }
+
+  if (v >= 1_000) {
+    return `PKR ${(v / 1_000).toFixed(1)}K`;
+  }
+
+  return `PKR ${v.toLocaleString()}`;
 }
+
+let inventoryWatchCache = {
+  fetchedAt: 0,
+  items: [],
+};
 
 const FALLBACK_DASH = {
   kpi: { todayOrders: 0, monthlyRevenue: 0, activeAlerts: 0, activeCustomers: 0 },
@@ -60,6 +72,7 @@ export default function Dashboard() {
   const [alerts, setAlerts]           = useState([]);
   const [topMeds, setTopMeds]         = useState([]);
   const [lowStockItems, setLowStockItems] = useState([]);
+  const [inventoryWatchItems, setInventoryWatchItems] = useState([]);
 
   const [aiInput, setAiInput]   = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -171,6 +184,75 @@ export default function Dashboard() {
       const lowStock    = lowStockRes.data?.data?.lowStock    || [];
       const outOfStock  = lowStockRes.data?.data?.outOfStock  || [];
 
+      // INVENTORY WATCH FALLBACK:
+      // Only used when there are NO genuine low/out-of-stock alerts.
+      // Data comes from the real product catalogue where stockQty is
+      // calculated from active, non-expired StockHistory inventory.
+      if (lowStock.length === 0 && outOfStock.length === 0) {
+        try {
+          const now = Date.now();
+          const cacheAge = now - inventoryWatchCache.fetchedAt;
+
+          if (
+            inventoryWatchCache.items.length === 0 ||
+            cacheAge >= 60000
+          ) {
+            const productRes = await api.get('/products');
+
+            const payload = productRes.data;
+
+            const products = Array.isArray(payload)
+              ? payload
+              : Array.isArray(payload?.data)
+                ? payload.data
+                : Array.isArray(payload?.data?.products)
+                  ? payload.data.products
+                  : [];
+
+            const lowestLiveStock = products
+              .filter((product) =>
+                product &&
+                product.status === 'active' &&
+                Number(product.stockQty || 0) > 0
+              )
+              .sort(
+                (a, b) =>
+                  Number(a.stockQty || 0) -
+                  Number(b.stockQty || 0)
+              )
+              .slice(0, 3)
+              .map((product, index) => ({
+                id: product.id || `inventory-watch-${index}`,
+                name: product.title || 'Unknown medicine',
+                stock: Number(product.stockQty || 0),
+                minStock: Number(product.minThreshold || 0),
+                expiryDate: product.expiryDate || '',
+                rank: index + 1,
+              }));
+
+            inventoryWatchCache = {
+              fetchedAt: now,
+              items: lowestLiveStock,
+            };
+          }
+
+          setInventoryWatchItems(
+            inventoryWatchCache.items
+          );
+        } catch (watchError) {
+          console.warn(
+            'Inventory watch unavailable:',
+            watchError?.message || watchError
+          );
+
+          setInventoryWatchItems(
+            inventoryWatchCache.items || []
+          );
+        }
+      } else {
+        setInventoryWatchItems([]);
+      }
+
       // Alerts section — combine low + out-of-stock
       setAlerts([
         ...outOfStock.slice(0, 3).map((item, i) => ({
@@ -238,10 +320,13 @@ export default function Dashboard() {
     setAiMessages(m => [...m, { role: 'user', content: userMsg }]);
     setIsTyping(true);
     try {
-      const reply = await consultationService.askAI(userMsg);
-      setAiMessages(m => [...m, { role: 'assistant', content: reply }]);
-    } catch {
-      setAiMessages(m => [...m, { role: 'assistant', content: 'Sorry, I had trouble with that. Try again.' }]);
+      const result = await askPharmacistAssistant(userMsg);
+      setAiMessages(m => [...m, { role: 'assistant', content: result.reply }]);
+    } catch (error) {
+      setAiMessages(m => [
+        ...m,
+        { role: 'assistant', content: assistantErrorMessage(error) },
+      ]);
     } finally {
       setIsTyping(false);
     }
@@ -406,7 +491,7 @@ export default function Dashboard() {
             Pharmacy Overview
           </h1>
           <p style={{ fontSize: '0.78rem', color: 'var(--gray-400)', fontWeight: 300, margin: 0 }}>
-            Real-time data · auto-refreshes every 30 s
+            Real-time data Â· auto-refreshes every 30 s
           </p>
         </div>
 
@@ -576,7 +661,7 @@ export default function Dashboard() {
           <div style={{ padding: '1.25rem 1.5rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: '1rem', margin: 0 }}>Stock Alerts</h3>
+                <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: '1rem', margin: 0 }}>{alerts.length > 0 ? 'Stock Alerts' : 'Inventory Watch'}</h3>
                 <motion.div animate={{ scale: [1, 1.15, 1] }} transition={{ duration: 1.5, repeat: Infinity }}
                   style={{ background: 'var(--red)', color: 'white', borderRadius: 100, fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px', minWidth: 20, textAlign: 'center' }}>
                   {dashData.kpi.activeAlerts}
@@ -594,7 +679,183 @@ export default function Dashboard() {
             <div>
               {alerts.length === 0 ? (
                 <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-400)', fontSize: '0.85rem' }}>
-                  ✅ No stock alerts — inventory looks good!
+                  {inventoryWatchItems.length > 0 ? (
+                    <div
+                      style={{
+                        width: '100%',
+                        display: 'grid',
+                        gap: '0.5rem',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.6rem',
+                          padding: '0.15rem 0 0.35rem',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 8,
+                            background: '#fffbeb',
+                            border: '1px solid #fde68a',
+                            color: '#d97706',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 800,
+                            flexShrink: 0,
+                          }}
+                        >
+                          !
+                        </div>
+
+                        <div>
+                          <div
+                            style={{
+                              fontSize: '0.8rem',
+                              fontWeight: 700,
+                              color: 'var(--navy)',
+                            }}
+                          >
+                            Inventory Watch
+                          </div>
+
+                          <div
+                            style={{
+                              marginTop: 1,
+                              fontSize: '0.67rem',
+                              color: 'var(--gray-400)',
+                            }}
+                          >
+                            No product currently violates its configured low-stock threshold.
+                          </div>
+                        </div>
+                      </div>
+
+                      {inventoryWatchItems.map((item, index) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() =>
+                            navigate('/pharmacist/dashboard/inventory')
+                          }
+                          style={{
+                            width: '100%',
+                            border: '1px solid #f1f5f9',
+                            borderRadius: 10,
+                            background: '#fff',
+                            padding: '0.55rem 0.65rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '0.75rem',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            fontFamily: 'inherit',
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.6rem',
+                              minWidth: 0,
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: 30,
+                                height: 30,
+                                borderRadius: 8,
+                                background: '#fffbeb',
+                                color: '#d97706',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                                fontSize: '0.72rem',
+                                fontWeight: 800,
+                              }}
+                            >
+                              {index + 1}
+                            </div>
+
+                            <div style={{ minWidth: 0 }}>
+                              <div
+                                style={{
+                                  color: 'var(--navy)',
+                                  fontSize: '0.78rem',
+                                  fontWeight: 700,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {item.name}
+                              </div>
+
+                              <div
+                                style={{
+                                  marginTop: 2,
+                                  color: 'var(--gray-400)',
+                                  fontSize: '0.66rem',
+                                }}
+                              >
+                                Lowest current live-stock position
+                              </div>
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              flexShrink: 0,
+                              textAlign: 'right',
+                            }}
+                          >
+                            <div
+                              style={{
+                                color: '#d97706',
+                                fontSize: '0.76rem',
+                                fontWeight: 800,
+                              }}
+                            >
+                              {item.stock.toLocaleString()} units
+                            </div>
+
+                            <div
+                              style={{
+                                marginTop: 2,
+                                color: 'var(--gray-400)',
+                                fontSize: '0.62rem',
+                              }}
+                            >
+                              Watch only
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+
+                      <div
+                        style={{
+                          paddingTop: '0.15rem',
+                          color: 'var(--gray-400)',
+                          fontSize: '0.64rem',
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        These medicines are shown for monitoring only and are not classified as stock alerts.
+                      </div>
+                    </div>
+                  ) : (
+                    <span style={{ color: 'var(--gray-400)' }}>
+                      Inventory healthy — no current stock alerts.
+                    </span>
+                  )}
                 </div>
               ) : alerts.map((alert, i) => (
                 <motion.div key={alert.id}
@@ -610,7 +871,7 @@ export default function Dashboard() {
                       {alert.patientName}
                     </p>
                     <p style={{ fontSize: '0.72rem', color: 'var(--gray-400)', fontWeight: 300, margin: 0 }}>
-                      {alert.medicines.join(' · ')}
+                      {alert.medicines.join(' Â· ')}
                     </p>
                   </div>
                   <SeverityBadge severity={alert.severity} />
@@ -625,7 +886,7 @@ export default function Dashboard() {
             <div style={{ textAlign: 'right', marginTop: '0.75rem' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--blue)', fontWeight: 500, cursor: 'pointer' }}
                 onClick={() => navigate('/pharmacist/dashboard/inventory')}>
-                View all stock →
+                View all stock >
               </span>
             </div>
           </div>
@@ -698,7 +959,7 @@ export default function Dashboard() {
                 <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: '1rem', margin: '0 0 2px' }}>
                   Top Selling Medicines
                 </h3>
-                <p style={{ fontSize: '0.72rem', color: 'var(--gray-400)', margin: 0 }}>by units sold · last 30 days</p>
+                <p style={{ fontSize: '0.72rem', color: 'var(--gray-400)', margin: 0 }}>by units sold Â· last 30 days</p>
               </div>
               <span style={{ fontSize: '0.7rem', fontWeight: 600, padding: '4px 10px', borderRadius: 100, background: 'var(--navy)', color: 'white' }}>
                 30 Days
@@ -770,7 +1031,7 @@ export default function Dashboard() {
                       {item.name}
                     </p>
                     <p style={{ fontSize: '0.68rem', color: 'var(--gray-400)', fontWeight: 300, margin: 0 }}>
-                      {item.level === 'out' ? 'Out of stock' : `${item.stock} left · Min ${item.minStock}`}
+                      {item.level === 'out' ? 'Out of stock' : `${item.stock} left Â· Min ${item.minStock}`}
                     </p>
                   </div>
                   <span style={{ background: item.level === 'out' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)', color: item.level === 'out' ? '#ef4444' : '#f59e0b', fontSize: '0.65rem', fontWeight: 700, padding: '2px 7px', borderRadius: 100, flexShrink: 0 }}>
@@ -783,7 +1044,7 @@ export default function Dashboard() {
             <div style={{ textAlign: 'center', marginTop: '0.75rem' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--blue)', fontWeight: 500, cursor: 'pointer' }}
                 onClick={() => navigate('/pharmacist/dashboard/suppliers')}>
-                Order from suppliers →
+                Order from suppliers >
               </span>
             </div>
           </div>
@@ -859,7 +1120,7 @@ export default function Dashboard() {
               </div>
               <span style={{ fontSize: '0.75rem', color: 'var(--blue)', fontWeight: 500, cursor: 'pointer' }}
                 onClick={() => navigate('/pharmacist/dashboard/orders')}>
-                View all orders →
+                View all orders >
               </span>
             </div>
 

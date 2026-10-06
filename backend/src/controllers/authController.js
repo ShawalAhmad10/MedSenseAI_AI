@@ -134,43 +134,12 @@ exports.verifyOtp = async (req, res) => {
       });
     }
 
-    // Verify email and approve user
+    // Verify email only. Pharmacist approval requires an authorized staff action.
     pharmacist.isEmailVerified = true;
-    pharmacist.isApproved = true; // Directly approve after OTP
     pharmacist.isActive = true;
     pharmacist.otpCode = null;
     pharmacist.otpExpiresAt = null;
     await pharmacist.save();
-
-    // ✅ AUTO-ADD TO TEAM MEMBERS
-    const { sequelize } = require('../config/database');
-    try {
-      // Check if already in team members
-      const [existing] = await sequelize.query(
-        'SELECT * FROM team_members WHERE user_id = :userId',
-        { replacements: { userId: pharmacist.id } }
-      );
-
-      if (existing.length === 0) {
-        // Add to team members
-        await sequelize.query(
-          `INSERT INTO team_members (user_id, position, joined_date, is_active, created_at, updated_at)
-           VALUES (:userId, :position, :joinedDate, :isActive, NOW(), NOW())`,
-          {
-            replacements: {
-              userId: pharmacist.id,
-              position: pharmacist.role || 'pharmacist',
-              joinedDate: new Date(),
-              isActive: true
-            }
-          }
-        );
-        console.log(`✅ User ${pharmacist.email} auto-added to team members`);
-      }
-    } catch (teamError) {
-      console.error('⚠️  Failed to auto-add to team members:', teamError.message);
-      // Don't fail the verification if team member creation fails
-    }
 
     // Send welcome email — non-blocking, failure doesn't break verification
     try { await sendWelcomeEmail(email, pharmacist.fullName); } catch (e) { console.error('Welcome email failed:', e.message); }
@@ -184,7 +153,7 @@ exports.verifyOtp = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Email verified successfully! Your account is now active.',
+      message: 'Email verified successfully. Your account is pending administrator approval.',
       data: {
         token,
         user: pharmacist.toPublicJSON(),
@@ -443,8 +412,6 @@ exports.googleLogin = async (req, res) => {
           },
         });
       }
-
-      pharmacist.isApproved = true;
       await pharmacist.save();
 
       // Generate token
@@ -571,35 +538,7 @@ exports.completeProfile = async (req, res) => {
     user.province = province;
     user.phone = phone;
     user.address = address;
-    user.isApproved = true; // Approve immediately after completing profile
     await user.save();
-
-    // ✅ AUTO-ADD TO TEAM MEMBERS
-    const { sequelize } = require('../config/database');
-    try {
-      const [existing] = await sequelize.query(
-        'SELECT * FROM team_members WHERE user_id = :userId',
-        { replacements: { userId: user.id } }
-      );
-
-      if (existing.length === 0) {
-        await sequelize.query(
-          `INSERT INTO team_members (user_id, position, joined_date, is_active, created_at, updated_at)
-           VALUES (:userId, :position, :joinedDate, :isActive, NOW(), NOW())`,
-          {
-            replacements: {
-              userId: user.id,
-              position: user.role || 'pharmacist',
-              joinedDate: new Date(),
-              isActive: true
-            }
-          }
-        );
-        console.log(`✅ User ${user.email} auto-added to team members`);
-      }
-    } catch (teamError) {
-      console.error('⚠️  Failed to auto-add to team members:', teamError.message);
-    }
 
     // Send welcome email — non-blocking
     try { await sendWelcomeEmail(user.email, user.fullName); } catch (e) { console.error('Welcome email failed:', e.message); }
@@ -613,7 +552,7 @@ exports.completeProfile = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Profile completed successfully! Your account is now active.',
+      message: 'Profile completed successfully. Your account is pending administrator approval.',
       data: {
         token,
         user: user.toPublicJSON(),

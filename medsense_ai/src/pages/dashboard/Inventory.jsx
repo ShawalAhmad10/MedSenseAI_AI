@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLiveDataRefresh } from '../../hooks/useLiveDataRefresh';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   AlertTriangle,
@@ -152,6 +153,20 @@ function StatusBadge({ value }) {
   );
 }
 
+function stockDiscountPercent(batch) {
+  const totals = (batch.items || []).reduce((sum, item) => {
+    const quantity = Number(item.qty ?? item.quantity ?? 0);
+    const purchasePrice = Number(item.purchasePrice ?? item.price ?? item.productPrice ?? 0);
+    const gross = quantity * purchasePrice;
+    const discount = Number(item.discount ?? 0);
+    return {
+      gross: sum.gross + (Number.isFinite(gross) ? gross : 0),
+      discount: sum.discount + (Number.isFinite(discount) ? discount : 0),
+    };
+  }, { gross: 0, discount: 0 });
+  return totals.gross > 0 ? Number((totals.discount / totals.gross * 100).toFixed(2)) : 0;
+}
+
 export default function Inventory() {
   const user = getStoredUser();
   const currentUserName = user?.fullName || user?.full_name || user?.name || 'Pharmacist';
@@ -195,8 +210,8 @@ export default function Inventory() {
 
   // Reports state removed (Profit/Loss moved to Invoices page)
 
-  const refreshPhaseThreeData = useCallback(async () => {
-    setIsLoading(true);
+  const refreshPhaseThreeData = useCallback(async (quiet = false) => {
+    if (!quiet) setIsLoading(true);
     try {
       const [productList, brandList, supplierList] = await Promise.all([
         listProducts(),
@@ -211,14 +226,14 @@ export default function Inventory() {
       console.error('Error loading data:', err);
       setError(err.message);
     } finally {
-      setIsLoading(false);
+      if (!quiet) setIsLoading(false);
     }
   }, []);
 
-  const refreshStockWorkspace = useCallback(async () => {
-    setIsStockLoading(true);
+  const refreshStockWorkspace = useCallback(async (quiet = false) => {
+    if (!quiet) setIsStockLoading(true);
     try {
-      const phaseData = await refreshPhaseThreeData();
+      const phaseData = await refreshPhaseThreeData(quiet);
       const { supplierList = [], productList = [] } = phaseData || {};
       const [batches, openings, returns] = await Promise.all([
         listStockBatches(),
@@ -237,11 +252,11 @@ export default function Inventory() {
     } catch (err) {
       console.error('Error loading stock data:', err);
     } finally {
-      setIsStockLoading(false);
+      if (!quiet) setIsStockLoading(false);
     }
 
     // Fetch stock report + return report — INDEPENDENT (always runs)
-    setReportLoading(true);
+    if (!quiet) setReportLoading(true);
     try {
       const [stockRep, returnRep] = await Promise.all([
         api.get('/stock/reports/stock-report?limit=300'),
@@ -252,9 +267,10 @@ export default function Inventory() {
     } catch (repErr) {
       console.error('Report fetch error:', repErr.message);
     } finally {
-      setReportLoading(false);
+      if (!quiet) setReportLoading(false);
     }
   }, [refreshPhaseThreeData]);
+  useLiveDataRefresh(() => refreshStockWorkspace(true));
 
   // refreshReports removed — Profit/Loss report is on Invoices page
 
@@ -630,7 +646,7 @@ export default function Inventory() {
           )}
           {surface === 'procurement' && (
             <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setIsStockIntakeOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '0.5rem 1.1rem', borderRadius: 9, background: '#1e3a8a', color: 'white', border: 'none', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer' }}>
-              <PackagePlus size={15} /> Receive Stock
+              <PackagePlus size={15} /> Add New Batch
             </motion.button>
           )}
           {surface === 'opening' && (
@@ -931,6 +947,7 @@ export default function Inventory() {
                   <th style={thStyle}>Bill No</th>
                   <th style={thStyle}>Date</th>
                   <th style={thStyle}>Products & Quantities</th>
+                  <th style={thStyle}>Discount%</th>
                   <th style={thStyle}>Total</th>
                   <th style={thStyle}>Paid</th>
                   <th style={thStyle}>Due</th>
@@ -941,14 +958,14 @@ export default function Inventory() {
               <tbody>
                 {isStockLoading ? (
                   <tr>
-                    <td colSpan="10" style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-400)' }}>
+                    <td colSpan="11" style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-400)' }}>
                       <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 0.5rem' }} />
                       <div>Loading stock batches...</div>
                     </td>
                   </tr>
                 ) : filteredStockBatches.length === 0 ? (
                   <tr>
-                    <td colSpan="10" style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-400)' }}>
+                    <td colSpan="11" style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-400)' }}>
                       <PackagePlus size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />
                       <div>No stock batches found</div>
                     </td>
@@ -963,13 +980,13 @@ export default function Inventory() {
                       <td style={tdStyle}>
                         <span style={{ 
                           fontWeight: 600, 
-                          color: batch.billNo ? '#2563eb' : 'var(--gray-400)',
-                          background: batch.billNo ? '#eff6ff' : 'transparent',
+                          color: (batch.billNumber || batch.billNo) ? '#2563eb' : 'var(--gray-400)',
+                          background: (batch.billNumber || batch.billNo) ? '#eff6ff' : 'transparent',
                           padding: '4px 8px',
                           borderRadius: 6,
                           fontSize: '0.78rem'
                         }}>
-                          {batch.billNo || 'No Bill'}
+                          {batch.billNumber || batch.billNo || 'No Bill'}
                         </span>
                       </td>
                       <td style={tdStyle}>
@@ -1005,6 +1022,7 @@ export default function Inventory() {
                           <span style={{ color: 'var(--gray-400)', fontSize: '0.78rem' }}>No items</span>
                         )}
                       </td>
+                      <td style={tdStyle}>{stockDiscountPercent(batch)}%</td>
                       <td style={tdStyle}>PKR {Number(batch.stockPrice || 0).toLocaleString()}</td>
                       <td style={tdStyle}>
                         <span style={{ fontWeight: 700, color: '#10b981', fontSize: '0.82rem' }}>
@@ -1034,6 +1052,7 @@ export default function Inventory() {
                       </td>
                       <td style={tdStyle}>
                         <ViewBtn onClick={() => setSelectedStockDetail(batch)} />
+                        <button type="button" onClick={() => setSelectedStockDetail(batch)} style={{ border: 0, background: 'transparent', color: '#2563eb', cursor: 'pointer' }}>View Batches</button>
                       </td>
                     </tr>
                   ))
@@ -1072,7 +1091,7 @@ export default function Inventory() {
                 ) : (
                   filteredOpenings.map((entry, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid var(--dash-border)' }}>
-                      <td style={tdStyle}>{entry.id || entry.stockNumber || '-'}</td>
+                      <td style={tdStyle}>{entry.openingNumber || entry.id || entry.stockNumber || '-'}</td>
                       <td style={tdStyle}>{entry.productName || '-'}</td>
                       <td style={tdStyle}>{entry.batchNumber || '-'}</td>
                       <td style={tdStyle}>
@@ -1166,7 +1185,7 @@ export default function Inventory() {
                     <tr><td colSpan={11} style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray-400)' }}>No return report items found</td></tr>
                   ) : stockReturnReport.map(r => (
                     <tr key={r.id} style={{ borderBottom: '1px solid var(--dash-border)' }}>
-                      <td style={{ padding: '0.75rem', fontFamily: 'monospace', fontSize: '0.78rem', color: '#d97706', fontWeight: 600 }}>SRET-{r.returnId}</td>
+                      <td style={{ padding: '0.75rem', fontFamily: 'monospace', fontSize: '0.78rem', color: '#d97706', fontWeight: 600 }}>{r.returnNumber || `SRET-${String(r.returnId).padStart(3, '0')}`}</td>
                       <td style={{ padding: '0.75rem', fontSize: '0.78rem', color: 'var(--navy)', fontWeight: 600 }}>{r.productTitle}</td>
                       <td style={{ padding: '0.75rem', fontSize: '0.82rem', color: 'var(--gray-600)', textAlign: 'center' }}>{r.productQuantity}</td>
                       <td style={{ padding: '0.75rem', fontSize: '0.82rem', color: 'var(--gray-600)' }}>PKR {Number(r.productPrice).toLocaleString()}</td>
@@ -1200,6 +1219,7 @@ export default function Inventory() {
                   <th style={thStyle}>Stock #</th>
                   <th style={thStyle}>Supplier</th>
                   <th style={thStyle}>Type</th>
+                  <th style={thStyle}>Reason</th>
                   <th style={thStyle}>Items</th>
                   <th style={thStyle}>Total</th>
                   <th style={thStyle}>Date</th>
@@ -1208,14 +1228,14 @@ export default function Inventory() {
               <tbody>
                 {isStockLoading ? (
                   <tr>
-                    <td colSpan="7" style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-400)' }}>
+                    <td colSpan="8" style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-400)' }}>
                       <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 0.5rem' }} />
                       <div>Loading returns...</div>
                     </td>
                   </tr>
                 ) : filteredReturns.length === 0 ? (
                   <tr>
-                    <td colSpan="7" style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-400)' }}>
+                    <td colSpan="8" style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-400)' }}>
                       <RotateCcw size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />
                       <div>No stock returns found</div>
                     </td>
@@ -1238,9 +1258,10 @@ export default function Inventory() {
                           {entry.returnType || 'normal'}
                         </span>
                       </td>
+                      <td style={tdStyle}>{entry.description || '-'}</td>
                       <td style={tdStyle}>{entry.items?.length || 0}</td>
                       <td style={tdStyle}>PKR {Number(entry.returnTotal || 0).toLocaleString()}</td>
-                      <td style={tdStyle}>{entry.createdAt ? new Date(entry.createdAt).toLocaleDateString() : '-'}</td>
+                      <td style={tdStyle}>{(entry.returnDate || entry.createdAt) ? new Date(entry.returnDate || entry.createdAt).toLocaleDateString() : '-'}</td>
                     </tr>
                   ))
                 )}
@@ -1286,7 +1307,15 @@ export default function Inventory() {
         currentUserName={currentUserName}
         onSubmit={handleCreateStockReturn}
       />
-      <StockDetailModal isOpen={!!selectedStockDetail} onClose={() => setSelectedStockDetail(null)} entry={selectedStockDetail} />
+      <StockDetailModal isOpen={!!selectedStockDetail} onClose={() => setSelectedStockDetail(null)} entry={selectedStockDetail}
+        onUpdateBatch={async (item, changes) => {
+          const batchId = item.batchId ?? Number(String(item.id).replace('stk-line-', ''));
+          const kind = changes.salePrice !== undefined ? 'sale-price' : 'stock';
+          await api.patch(`/stock/batch-items/${batchId}/${kind}`, { productId: item.productId, ...changes });
+          await refreshStockWorkspace();
+          const receipts = await listStockBatches();
+          setSelectedStockDetail(receipts.find(receipt => receipt.stockNumber === selectedStockDetail.stockNumber) || null);
+        }} />
       <BrandMasterModal
         isOpen={isBrandModalOpen}
         brand={selectedBrand}

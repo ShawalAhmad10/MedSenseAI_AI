@@ -43,7 +43,6 @@ exports.listTeamMembers = async (req, res) => {
 // Add new team member - creates user first, then team_member entry
 exports.addTeamMember = async (req, res) => {
   try {
-    console.log('Add team member request body:', JSON.stringify(req.body, null, 2));
     const { name, email, phone, password, position } = req.body;
 
     // Validation
@@ -97,17 +96,20 @@ exports.addTeamMember = async (req, res) => {
       });
     }
 
-    // Hash password (default: email before @)
-    const defaultPassword = password || email.split('@')[0];
-    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+    // Password is mandatory. User model hashes it exactly once.
+    if (typeof password !== 'string' || password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'A password of at least 8 characters is required'
+      });
+    }
 
     // Create new user with role = pharmacist
     const user = await User.create({
       fullName: name,
       email,
       phone: phone || null,
-      password_hash: hashedPassword,
-      password: hashedPassword,
+      password,
       role: 'pharmacist',
       isActive: true,
       isApproved: true,
@@ -253,9 +255,15 @@ exports.toggleTeamMemberStatus = async (req, res) => {
         message: 'Cannot deactivate admin account'
       });
     }
+    const nextActive = !teamMember.isActive;
+
+    // Authentication middleware reads users.is_active, so keep both states aligned.
+    await teamMember.user.update({
+      isActive: nextActive
+    });
 
     await teamMember.update({
-      isActive: !teamMember.isActive
+      isActive: nextActive
     });
 
     res.json({
@@ -302,6 +310,11 @@ exports.removeTeamMember = async (req, res) => {
     }
 
     // Remove from team_members table (user record stays in users table)
+    // Revoke authentication before removing team membership.
+    await teamMember.user.update({
+      isActive: false
+    });
+
     await teamMember.destroy();
 
     res.json({
@@ -324,6 +337,13 @@ exports.resetTeamMemberPassword = async (req, res) => {
     const { id } = req.params;
     const { password } = req.body;
 
+    if (typeof password !== 'string' || password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'A password of at least 8 characters is required'
+      });
+    }
+
     const teamMember = await TeamMember.findByPk(id, {
       include: [{ model: User, as: 'user' }]
     });
@@ -335,13 +355,16 @@ exports.resetTeamMemberPassword = async (req, res) => {
       });
     }
 
-    // Generate password (default: email before @)
-    const newPassword = password || teamMember.user.email.split('@')[0];
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    if (teamMember.user.role === 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Cannot reset administrator password through team management'
+      });
+    }
 
+    // User model hashes plaintext exactly once.
     await teamMember.user.update({
-      password_hash: hashedPassword,
-      password: hashedPassword
+      password
     });
 
     res.json({
@@ -349,8 +372,7 @@ exports.resetTeamMemberPassword = async (req, res) => {
       message: 'Password reset successfully',
       data: {
         id: teamMember.id,
-        userId: teamMember.userId,
-        tempPassword: newPassword // Return temp password
+        userId: teamMember.userId
       }
     });
   } catch (error) {

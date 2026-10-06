@@ -15,6 +15,7 @@ const StockHistory =
 
 const StockReport =
   require('../src/models/StockReport');
+const { sequelize } = require('../src/config/database');
 
 const BatchAllocationService =
   require('../src/services/batchAllocationService');
@@ -61,11 +62,10 @@ test(
   'POS allocation reads available batches with transaction row lock',
   { concurrency: false },
   async (t) => {
-    const originalFindAll =
-      StockHistory.findAll;
+    const originalFindAll = sequelize.query;
 
     t.after(() => {
-      StockHistory.findAll =
+      sequelize.query =
         originalFindAll;
     });
 
@@ -78,8 +78,10 @@ test(
     let optionsSeen =
       null;
 
-    StockHistory.findAll =
-      async (options) => {
+    sequelize.query =
+      async (sql, options) => {
+        assert.match(sql, /FOR UPDATE OF h/);
+        assert.match(sql, /ASC NULLS LAST/);
         optionsSeen =
           options;
 
@@ -88,11 +90,11 @@ test(
             batch_id: 11,
             batch_number:
               'B-11',
-            remaining_quantity:
+            available:
               5,
-            product_price:
+            product_purchase_price:
               10,
-            sale_price:
+            product_price:
               20,
             expiry_date:
               new Date(
@@ -116,8 +118,8 @@ test(
     );
 
     assert.equal(
-      optionsSeen.lock,
-      true
+      optionsSeen.replacements.productId,
+      4
     );
 
     assert.equal(
@@ -137,22 +139,21 @@ test(
   'locked allocation rejects insufficient current stock',
   { concurrency: false },
   async (t) => {
-    const originalFindAll =
-      StockHistory.findAll;
+    const originalFindAll = sequelize.query;
 
     t.after(() => {
-      StockHistory.findAll =
+      sequelize.query =
         originalFindAll;
     });
 
-    StockHistory.findAll =
+    sequelize.query =
       async () => [
         {
           batch_id: 1,
           batch_number: 'B-1',
-          remaining_quantity: 2,
-          product_price: 5,
-          sale_price: 10,
+          available: 2,
+          product_purchase_price: 5,
+          product_price: 10,
           expiry_date:
             new Date('2030-01-01')
         }
@@ -176,6 +177,11 @@ test(
   'deduction defensively re-locks current batch before quantity calculation',
   { concurrency: false },
   async (t) => {
+    t.mock.method(sequelize, 'query', async (sql, options) => {
+      assert.match(sql, /UPDATE product/);
+      assert.equal(options.transaction.marker, 'tx');
+      return [];
+    });
     const originalFindByPk =
       StockHistory.findByPk;
 

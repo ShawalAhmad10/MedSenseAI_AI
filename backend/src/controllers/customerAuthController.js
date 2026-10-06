@@ -282,7 +282,17 @@ exports.getProfile = async (req, res) => {
 exports.updateProfile = async (req, res) => {
   try {
     const customerId = req.user.id;
-    const { name, phone, city, address } = req.body;
+    const fields = {};
+    for (const key of ['name', 'phone', 'city', 'address']) {
+      if (req.body?.[key] !== undefined) {
+        if (typeof req.body[key] !== 'string' || !req.body[key].trim()) {
+          return res.status(400).json({ success: false, message: `Please enter a valid ${key === 'name' ? 'full name' : key}.` });
+        }
+        fields[key] = req.body[key].trim();
+      }
+    }
+    if (fields.phone?.length > 50) return res.status(400).json({ success: false, message: 'Phone number is too long.' });
+    const { name, phone, city, address } = fields;
 
     const customer = await Customer.findByPk(customerId);
     if (!customer) {

@@ -1,6 +1,9 @@
 // Checkout with real-time data and customer information
 import React, { useMemo, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import BackLink from '../../components/storefront/BackLink';
+import { fifoQuote, fifoTotal, fifoBreakdown } from '../../services/storefrontFifoPricing';
+import { isStorefrontPath } from '../../services/storefrontNavigation';
 import CheckoutStepper from '../../components/storefront/CheckoutStepper';
 import InteractionWarningModal from '../../components/storefront/InteractionWarningModal';
 import { useAuth } from '../../context/AuthContext';
@@ -42,6 +45,7 @@ export default function CheckoutPage() {
   const {
     clearCart,
     cartInstanceId,
+    refreshCartInventory,
     items: cartItems,
     prescriptionItems: cartPrescriptionItems,
     subtotal: cartSubtotal,
@@ -51,6 +55,9 @@ export default function CheckoutPage() {
     ddiWarnings: cartDdiWarnings,
     ddiCheckoutAllowed: cartDdiCheckoutAllowed,
   } = useCart();
+  useEffect(() => {
+    if (checkoutMode === 'CART') void refreshCartInventory();
+  }, [checkoutMode, cartInstanceId, refreshCartInventory]);
 
   const buyNowOwnerId =
     isAuthenticated && user?.id
@@ -111,6 +118,12 @@ export default function CheckoutPage() {
   ]);
 
   const items = checkoutMode === 'BUY_NOW' ? buyNowItems : cartItems;
+  const buyNowProductPath = isStorefrontPath(location.state?.returnTo) && location.state.returnTo.startsWith('/product/')
+    ? location.state.returnTo
+    : buyNowItems[0]?.name
+      ? '/product/' + buyNowItems[0].name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+      : '/search';
+  const checkoutBackPath = checkoutMode === 'BUY_NOW' ? buyNowProductPath : '/cart';
 
   const prescriptionItems = useMemo(
     () => checkoutMode === 'BUY_NOW'
@@ -121,7 +134,7 @@ export default function CheckoutPage() {
 
   const subtotal = useMemo(
     () => checkoutMode === 'BUY_NOW'
-      ? items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+      ? items.reduce((sum, item) => sum + fifoTotal(item), 0)
       : cartSubtotal,
     [checkoutMode, items, cartSubtotal],
   );
@@ -625,6 +638,9 @@ export default function CheckoutPage() {
           )}
 
           <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+            {stepIndex === 0 && (
+              <BackLink to={checkoutBackPath}>{checkoutMode === 'BUY_NOW' ? 'Back to Product' : 'Back to Cart'}</BackLink>
+            )}
             {stepIndex > 0 && (
               <button className="sf-button-secondary" onClick={() => setStepIndex((current) => current - 1)} type="button">
                 Back
@@ -723,15 +739,13 @@ export default function CheckoutPage() {
                           : item.id;
                         return {
                           product_id: productId,
+                          batch_id: item.batchId ?? null,
+                          fifo_quote: item.fifoBatches?.length ? fifoQuote(item) : undefined,
                           product_title: item.name,
                           quantity: item.quantity,
                           unit_price: item.price,
-                          discount: 0,
-                          tax: 0
                         };
                       }),
-                      discount: 0,
-                      delivery_fee: 120
                     };
 
                     // Create order via API
@@ -907,7 +921,7 @@ export default function CheckoutPage() {
                 <div className="sf-summary-block" key={item.id}>
                   <strong style={{ display: 'block' }}>{item.name}</strong>
                   <span className="sf-muted" style={{ fontSize: '0.84rem' }}>
-                    {item.quantity} x PKR {item.price.toFixed(2)}
+                    {fifoBreakdown(item)}
                   </span>
                 </div>
               ))}

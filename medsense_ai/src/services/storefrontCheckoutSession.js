@@ -17,6 +17,8 @@ function normalizeBuyNowItem(product) {
 
   return {
     id: product.id,
+    batchId: product.batchId,
+    fifoBatches: product.fifoBatches,
     name:
       product.name ||
       product.title ||

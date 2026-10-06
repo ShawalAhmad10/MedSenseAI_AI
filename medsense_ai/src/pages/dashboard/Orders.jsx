@@ -1,5 +1,6 @@
 // src/pages/dashboard/Orders.jsx
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLiveDataRefresh } from '../../hooks/useLiveDataRefresh';
 import { Eye, FilePlus2, PackageX, RefreshCw, RotateCcw, Search, Loader2 } from 'lucide-react';
 import OrderDetailModal from '../../components/modals/OrderDetailModal';
 import InvoiceComposerModal from '../../components/modals/InvoiceComposerModal';
@@ -17,6 +18,26 @@ import {
 } from '../../services/invoiceService';
 
 const AUTH_KEY = 'medsense_auth_user';
+
+const ORDER_DELIVERY_STATUSES = [
+  'pending',
+  'confirmed',
+  'processing',
+  'ready',
+  'shipped',
+  'delivered',
+  'cancelled'
+];
+
+const ORDER_DELIVERY_TRANSITIONS = {
+  pending: ['pending', 'confirmed', 'processing', 'cancelled'],
+  confirmed: ['confirmed', 'processing', 'cancelled'],
+  processing: ['processing', 'ready', 'delivered', 'cancelled'],
+  ready: ['ready', 'shipped', 'delivered', 'cancelled'],
+  shipped: ['shipped', 'delivered', 'cancelled'],
+  delivered: ['delivered'],
+  cancelled: ['cancelled']
+};
 
 const ORDER_STATUS_COLORS = {
   pending: { bg: 'rgba(59,130,246,0.15)', color: '#3b82f6' },
@@ -73,11 +94,12 @@ function normaliseOrder(order) {
     ...order,
     id: order.invoice_id ?? order.id,
     mode: 'order',
+    archived: Boolean(order.legacy_source_schema && order.status === 0),
     deliveryStatus: status,
     paymentStatus: order.payment_status ?? order.paymentStatus ?? 'unpaid',
     paymentMethod: order.payment_method ?? order.paymentMethod ?? 'cash',
     totalAmount: parseFloat(order.total_amount ?? order.totalAmount ?? 0),
-    orderNumber: order.invoice_number ?? order.orderNumber ?? order.order_number ?? order.id,
+    orderNumber: order.legacy_source_invoice_number ?? order.invoice_number ?? order.orderNumber ?? order.order_number ?? order.id,
     deliveryFee: Number(order.delivery_fee ?? order.deliveryFee ?? 0),
     discount: Number(order.discount ?? 0),
     itemCount: itemCount, // ✅ Add item count
@@ -165,6 +187,7 @@ export default function Orders({ initialSurface = 'invoices' }) {
   const [isLoading, setIsLoading] = useState(false);
   const [surface, setSurface] = useState(initialSurface);
   const [statusTab, setStatusTab] = useState('All');
+  const [orderSource, setOrderSource] = useState('all');
   const [search, setSearch]           = useState('');
   const [reportSearch, setReportSearch] = useState('');
   const [selectedDetail, setSelectedDetail] = useState(null);
@@ -180,13 +203,18 @@ export default function Orders({ initialSurface = 'invoices' }) {
   const fetchOrders = useCallback(async () => {
     if (!isPharmacist) return;
     try {
-      const response = await api.get('/orders?limit=100&sortBy=created_at&sortDir=desc');
-      console.log('✅ Raw API Response:', response.data); // Debug log
-      const raw = response.data?.data?.orders ?? response.data?.orders ?? response.data?.data ?? [];
-      console.log('✅ Extracted orders:', raw); // Debug log
-      const normalized = Array.isArray(raw) ? raw.map(normaliseOrder) : [];
-      console.log('✅ Normalized orders:', normalized); // Debug log
-      setOrders(normalized);
+      const allOrders = [];
+      let page = 1;
+      let totalPages = 1;
+      do {
+        const response = await api.get(`/orders?limit=100&page=${page}&sortBy=created_at&sortDir=desc`);
+        const raw = response.data?.data?.orders ?? response.data?.orders ?? response.data?.data ?? [];
+        if (!Array.isArray(raw)) throw new Error('Invalid orders response');
+        allOrders.push(...raw);
+        totalPages = Number(response.data?.data?.pagination?.totalPages || 1);
+        page += 1;
+      } while (page <= totalPages);
+      setOrders(allOrders.map(normaliseOrder));
     } catch (error) {
       console.error('❌ fetchOrders error:', error.message);
     }
@@ -226,10 +254,10 @@ export default function Orders({ initialSurface = 'invoices' }) {
     }
   }, [isPharmacist]);
 
-  const refreshInvoiceWorkspace = useCallback(async () => {
+  const refreshInvoiceWorkspace = useCallback(async (quiet = false) => {
     try {
       const [invoiceList, returnsList, catalogData] = await Promise.all([
-        listInvoices({ limit: 100, sortBy: 'created_at', sortDir: 'DESC' }),
+        listInvoices({ limit: 1000, sortBy: 'created_at', sortDir: 'DESC' }),
         listInvoiceReturns({ limit: 100 }),
         getInvoiceCatalog()
       ]);
@@ -261,7 +289,7 @@ export default function Orders({ initialSurface = 'invoices' }) {
       } catch { /* non-fatal */ }
 
       // Fetch report data
-      setReportLoading(true);
+      if (!quiet) setReportLoading(true);
       try {
         const [repData, retRepData] = await Promise.all([
           api.get('/invoice/report?limit=200'),
@@ -272,36 +300,26 @@ export default function Orders({ initialSurface = 'invoices' }) {
       } catch (repErr) {
         console.error('Report fetch error:', repErr.message);
       } finally {
-        setReportLoading(false);
+        if (!quiet) setReportLoading(false);
       }
     } catch (err) {
       console.error('refreshInvoiceWorkspace error:', err);
     }
   }, []);
 
-  const refreshAll = useCallback(async () => {
-    setIsLoading(true);
+  const refreshAll = useCallback(async (quiet = false) => {
+    if (!quiet) setIsLoading(true);
     try {
-      await Promise.all([fetchOrders(), fetchOrderStats(), refreshInvoiceWorkspace()]);
+      await Promise.all([fetchOrders(), fetchOrderStats(), refreshInvoiceWorkspace(quiet)]);
     } finally {
-      setIsLoading(false);
+      if (!quiet) setIsLoading(false);
     }
   }, [fetchOrderStats, fetchOrders, refreshInvoiceWorkspace]);
 
   useEffect(() => {
     refreshAll();
-    const interval = setInterval(() => {
-      refreshAll();
-    }, 20000);
-    const onFocus = () => {
-      refreshAll();
-    };
-    window.addEventListener('focus', onFocus);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', onFocus);
-    };
   }, [refreshAll]);
+  useLiveDataRefresh(() => refreshAll(true));
 
   useEffect(() => {
     setStatusTab('All');
@@ -345,6 +363,8 @@ export default function Orders({ initialSurface = 'invoices' }) {
   const filteredData = useMemo(() => {
     if (surface === 'orders') {
       let filtered = orders.filter((order) => {
+        if (orderSource === 'cloud' && !order.legacy_source_schema) return false;
+        if (orderSource === 'current' && order.legacy_source_schema) return false;
         if (statusTab !== 'All' && order.deliveryStatus !== statusTab) return false;
         if (search.trim()) {
           const query = search.toLowerCase();
@@ -398,6 +418,8 @@ export default function Orders({ initialSurface = 'invoices' }) {
     }
 
     return invoices.filter((invoice) => {
+      if (orderSource === 'cloud' && !invoice.legacy_source_schema) return false;
+      if (orderSource === 'current' && invoice.legacy_source_schema) return false;
       if (statusTab !== 'All') {
         const matchesStatus = invoice.deliveryStatus === statusTab || invoice.paymentStatus === statusTab;
         if (!matchesStatus) return false;
@@ -408,7 +430,7 @@ export default function Orders({ initialSurface = 'invoices' }) {
       }
       return true;
     });
-  }, [invoiceReturns, invoices, orders, search, statusTab, surface]);
+  }, [invoiceReturns, invoices, orders, search, statusTab, surface, orderSource]);
 
   const dynamicStats = useMemo(() => {
     if (surface === 'invoiceReport') {
@@ -476,7 +498,7 @@ export default function Orders({ initialSurface = 'invoices' }) {
     : 'Invoices & POS';
 
   const pageSubtitle = surface === 'orders'
-    ? `${orders.length} live orders · PKR ${(orderStats.totalRevenue || 0).toLocaleString()} revenue`
+    ? `${orders.length} recorded orders Â· PKR ${(orderStats.totalRevenue || 0).toLocaleString()} revenue`
     : surface === 'returns'
       ? `${invoiceReturns.length} return records linked to invoices`
       : surface === 'invoiceReport'
@@ -604,6 +626,16 @@ export default function Orders({ initialSurface = 'invoices' }) {
       </div>
 
       <div style={{ marginBottom: '1.5rem' }}>
+        {(surface === 'orders' || surface === 'invoices') && (
+          <label style={{ display: 'block', marginBottom: 12, fontSize: '0.85rem' }}>
+            Records: {' '}
+            <select aria-label="Record source" value={orderSource} onChange={event => setOrderSource(event.target.value)} style={{ padding: 8, borderRadius: 8, border: '1px solid var(--dash-border)' }}>
+              <option value="all">All records</option>
+              <option value="cloud">Previous cloud records</option>
+              <option value="current">Current pharmacy records</option>
+            </select>
+          </label>
+        )}
         <div style={{ position: 'relative', maxWidth: 420 }}>
           <Search size={16} color="var(--gray-400)" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
           <input
@@ -648,6 +680,7 @@ export default function Orders({ initialSurface = 'invoices' }) {
                         <span style={{ fontFamily: 'monospace', fontSize: '0.78rem', fontWeight: 600, color: 'var(--navy)', background: 'var(--dash-bg)', padding: '2px 5px', borderRadius: 4 }}>
                           {order.orderNumber}
                         </span>
+                        {order.legacy_source_schema && <small style={{ display: 'block', marginTop: 4, color: '#64748b' }}>Previous cloud</small>}
                       </td>
                       <td style={{ padding: '0.875rem 0.75rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -670,7 +703,7 @@ export default function Orders({ initialSurface = 'invoices' }) {
                         <StatusPill value={order.paymentStatus || 'unpaid'} palette={PAYMENT_COLORS} />
                       </td>
                       <td style={{ padding: '0.875rem 0.75rem' }}>
-                        {isPharmacist ? (
+                        {isPharmacist && !order.legacy_source_schema ? (
                           <select
                             value={order.deliveryStatus || 'pending'}
                             onChange={(event) => handleOrderStatusChange(order.id, event.target.value, order.deliveryStatus)}
@@ -687,14 +720,14 @@ export default function Orders({ initialSurface = 'invoices' }) {
                               textTransform: 'capitalize',
                             }}
                           >
-                            {Object.keys(ORDER_STATUS_COLORS).map((status) => (
+                            {(ORDER_DELIVERY_TRANSITIONS[order.deliveryStatus || 'pending'] || [order.deliveryStatus || 'pending']).map((status) => (
                               <option key={status} value={status}>
                                 {status.charAt(0).toUpperCase() + status.slice(1)}
                               </option>
                             ))}
                           </select>
                         ) : (
-                          <StatusPill value={order.deliveryStatus || 'pending'} palette={ORDER_STATUS_COLORS} />
+                          <StatusPill value={order.archived ? 'Archived' : order.deliveryStatus || 'pending'} palette={ORDER_STATUS_COLORS} />
                         )}
                       </td>
                       <td style={{ padding: '0.875rem 0.75rem' }}>
@@ -719,7 +752,7 @@ export default function Orders({ initialSurface = 'invoices' }) {
                               ...full,
                               id:             full.invoice_id ?? order.id,
                               mode:           'order',
-                              orderNumber:    full.invoice_number ?? order.orderNumber,
+                              orderNumber:    full.legacy_source_invoice_number ?? full.invoice_number ?? order.orderNumber,
                               totalAmount:    Number(full.total_amount ?? order.totalAmount ?? 0),
                               discount:       Number(full.discount ?? 0),
                               deliveryFee:    Number(full.delivery_fee ?? 0),
@@ -769,6 +802,7 @@ export default function Orders({ initialSurface = 'invoices' }) {
                       <span style={{ fontFamily: 'monospace', fontSize: '0.78rem', fontWeight: 600, color: 'var(--navy)', background: 'var(--dash-bg)', padding: '2px 5px', borderRadius: 4 }}>
                         {invoice.invoiceNumber}
                       </span>
+                      {invoice.legacy_source_schema && <small style={{ display: 'block', marginTop: 4, color: '#64748b' }}>Previous cloud</small>}
                     </td>
                     <td style={{ padding: '0.875rem 0.75rem' }}>
                       <div>
@@ -787,7 +821,7 @@ export default function Orders({ initialSurface = 'invoices' }) {
                       <StatusPill value={invoice.paymentStatus} palette={PAYMENT_COLORS} />
                     </td>
                     <td style={{ padding: '0.875rem 0.75rem' }}>
-                      <StatusPill value={invoice.deliveryStatus} palette={ORDER_STATUS_COLORS} />
+                      <StatusPill value={invoice.archived ? 'Archived' : invoice.deliveryStatus} palette={ORDER_STATUS_COLORS} />
                     </td>
                     <td style={{ padding: '0.875rem 0.75rem' }}>
                       <ViewButton onClick={() => setSelectedDetail(invoice)} />

@@ -1,5 +1,6 @@
 // SRS EUC-03: Category and search results browsing page for storefront users.
 import React, { useEffect, useMemo, useState } from 'react';
+import { useLiveDataRefresh } from '../../hooks/useLiveDataRefresh';
 import { SlidersHorizontal } from 'lucide-react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ProductCard from '../../components/storefront/ProductCard';
@@ -26,6 +27,18 @@ export default function CategoryPage() {
   const query = params.get('q') || '';
   const sort = params.get('sort') || 'featured';
   const currentSlug = slug || 'all';
+  useLiveDataRefresh(async () => {
+    const [items, categoryList] = await Promise.all([
+      searchProducts(query, currentSlug === 'all' ? '' : currentSlug), getCategories(),
+    ]);
+    const sorted = [...items];
+    if (sort === 'discount') sorted.sort((a, b) => b.discountPercent - a.discountPercent);
+    else if (sort === 'priceLow') sorted.sort((a, b) => a.price - b.price);
+    else if (sort === 'priceHigh') sorted.sort((a, b) => b.price - a.price);
+    setProducts(sorted);
+    setCategories(categoryList);
+    setError('');
+  }, !loading);
 
   // Load categories once
   useEffect(() => {

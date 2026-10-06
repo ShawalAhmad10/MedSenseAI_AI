@@ -1,3 +1,9 @@
+> **HISTORICAL DEVELOPMENT SNAPSHOT**
+>
+> This document records an earlier MedSenseAI engineering stage.
+> Some implementation-status, database, runtime-port, or feature-completion statements below are intentionally preserved as historical evidence and may no longer describe the integrated application.
+>
+> For the current system state, use the repository root `README.md`, `CURRENT_SYSTEM_STATUS.md`, and `ai_service/README.md`.
 # Architecture
 
 The service uses a `src/` package layout and keeps HTTP, configuration, persistence, schemas, and domain-oriented capabilities separated.

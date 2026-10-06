@@ -5,6 +5,8 @@ import { Minus, Plus, Trash2, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import InteractionBadge from './InteractionBadge';
+import FifoPriceBreakdown from './FifoPriceBreakdown';
+import { fifoTotal } from '../../services/storefrontFifoPricing';
 import { getDdiPresentation } from '../../services/storefrontDdiService';
 
 export default function CartDrawer({ isOpen, onClose }) {
@@ -69,7 +71,8 @@ export default function CartDrawer({ isOpen, onClose }) {
                         </button>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', marginTop: '0.9rem' }}>
-                        <strong>PKR {item.price * item.quantity}</strong>
+                        <strong>PKR {fifoTotal(item).toFixed(2)}</strong>
+                        <FifoPriceBreakdown item={item} />
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                           <button className="sf-icon-button" onClick={() => updateQuantity(item.id, item.quantity - 1)} type="button">
                             <Minus size={15} />

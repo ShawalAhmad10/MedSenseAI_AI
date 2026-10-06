@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ClipboardList, RotateCcw, Warehouse, X } from 'lucide-react';
 import { formatDate, formatTimeAgo } from '../../utils/formatters';
@@ -12,7 +12,12 @@ function SummaryRow({ label, value }) {
   );
 }
 
-export default function StockDetailModal({ isOpen, onClose, entry }) {
+export default function StockDetailModal({ isOpen, onClose, entry, onUpdateBatch }) {
+  const [editing, setEditing] = useState(null);
+  const [value, setValue] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => { setEditing(null); setError(''); }, [entry?.stockNumber, isOpen]);
   if (!entry) return null;
 
   const isBatch = entry.mode === 'stock-batch';
@@ -23,7 +28,7 @@ export default function StockDetailModal({ isOpen, onClose, entry }) {
     ? `Stock Batch ${entry.stockNumber}`
     : isReturn
       ? `Stock Return ${entry.returnNumber}`
-      : `Stock Opening ${entry.id}`;
+      : `Stock Opening ${entry.openingNumber || entry.id}`;
 
   const icon = isBatch ? <Warehouse size={18} /> : isReturn ? <RotateCcw size={18} /> : <ClipboardList size={18} />;
 
@@ -71,6 +76,22 @@ export default function StockDetailModal({ isOpen, onClose, entry }) {
             </div>
 
             <div style={{ padding: '1.5rem', display: 'grid', gap: '1.5rem' }}>
+              {editing && <form onSubmit={async event => {
+                event.preventDefault(); setSaving(true); setError('');
+                try { await onUpdateBatch(editing.item, { [editing.field]: Number(value) }); setEditing(null); }
+                catch (err) { setError(err.response?.data?.message || err.message); }
+                finally { setSaving(false); }
+              }} style={{ padding: 14, border: '1px solid var(--dash-border)', borderRadius: 10 }}>
+                <label>{editing.field === 'salePrice' ? 'Edit Batch Sale Price' : 'Edit Batch Stock'} — {editing.item.batchNumber}
+                  <input type="number" required min={editing.field === 'salePrice' ? '0.01' : '0'}
+                    step={editing.field === 'salePrice' ? '0.01' : '1'} value={value}
+                    onChange={event => setValue(event.target.value)} style={{ margin: '0 10px', padding: 8, width: 100 }} />
+                </label>
+                <button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+                <button type="button" disabled={saving} onClick={() => setEditing(null)} style={{ marginLeft: 8 }}>Cancel</button>
+                <p style={{ marginBottom: 0 }}>Only this batch changes. Purchase cost and completed invoices stay recorded.</p>
+                {error && <p role="alert" style={{ color: '#b91c1c' }}>{error}</p>}
+              </form>}
               <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '1.5rem' }}>
                 <div style={{ border: '1px solid var(--dash-border)', borderRadius: 16, overflow: 'hidden' }}>
                   <div style={{ padding: '0.95rem 1rem', borderBottom: '1px solid var(--dash-border)', background: 'var(--dash-bg)', fontWeight: 700, color: 'var(--navy)' }}>
@@ -91,7 +112,7 @@ export default function StockDetailModal({ isOpen, onClose, entry }) {
                         <thead>
                           <tr style={{ background: '#f8fafc', borderBottom: '1px solid var(--dash-border)' }}>
                             {(isBatch
-                              ? ['Batch', 'Product', 'Bale', 'Qty', 'Bonus', 'Purchase', 'Sale', 'Discount', 'Sales Tax', 'Advance Tax', 'Expiry', 'Total']
+                              ? ['Batch', 'Product', 'Bale', 'Qty', 'Bonus', 'Purchase Cost', 'Sale Price', 'Discount', 'Sales Tax', 'Advance Tax', 'Expiry', 'Total', 'Stock', 'Actions']
                               : ['Product', 'Quantity', 'Price', 'Expiry', 'Total']
                             ).map((heading) => (
                               <th key={heading} style={{ padding: '0.8rem 0.75rem', textAlign: 'left', fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--gray-400)' }}>
@@ -105,7 +126,9 @@ export default function StockDetailModal({ isOpen, onClose, entry }) {
                             <tr key={`${item.id}-${index}`} style={{ borderTop: '1px solid var(--dash-border)' }}>
                               {isBatch ? (
                                 <>
-                                  <td style={{ padding: '0.8rem 0.75rem', color: 'var(--navy)', fontWeight: 700 }}>{item.batchNumber}</td>
+                                  <td style={{ padding: '0.8rem 0.75rem', color: 'var(--navy)', fontWeight: 700 }}>{item.batchNumber}
+                                    {item.activeForCustomers && <small style={{ display: 'block', color: '#059669' }}>Active for Customers</small>}
+                                  </td>
                                   <td style={{ padding: '0.8rem 0.75rem', color: 'var(--navy)' }}>{item.name}</td>
                                   <td style={{ padding: '0.8rem 0.75rem', color: 'var(--gray-600)' }}>{item.bale || '-'} / {item.baleSize || '-'}</td>
                                   <td style={{ padding: '0.8rem 0.75rem', color: 'var(--gray-600)' }}>{item.qty}</td>
@@ -117,6 +140,13 @@ export default function StockDetailModal({ isOpen, onClose, entry }) {
                                   <td style={{ padding: '0.8rem 0.75rem', color: 'var(--gray-600)' }}>PKR {Number(item.advanceTax || 0).toLocaleString()}</td>
                                   <td style={{ padding: '0.8rem 0.75rem', color: 'var(--gray-600)' }}>{item.productExpiry || '-'}</td>
                                   <td style={{ padding: '0.8rem 0.75rem', color: 'var(--navy)', fontWeight: 700 }}>PKR {Number(item.totalPrice || 0).toLocaleString()}</td>
+                                  <td style={{ padding: '0.8rem 0.75rem' }}>{item.remainingQty ?? item.totalQty ?? 0}
+                                    {Number(item.remainingQty ?? item.totalQty ?? 0) === 0 && <small style={{ display: 'block' }}>Inactive / Out of stock</small>}
+                                  </td>
+                                  <td style={{ padding: '0.8rem 0.75rem' }}>{onUpdateBatch && <>
+                                    <small style={{ display: 'block' }}>Price preserved · Add New Batch for a new price</small>
+                                    <button type="button" onClick={() => { setEditing({ item, field: 'stock' }); setValue(String(item.remainingQty ?? 0)); setError(''); }}>Edit Stock</button>
+                                  </>}</td>
                                 </>
                               ) : (
                                 <>
@@ -142,7 +172,7 @@ export default function StockDetailModal({ isOpen, onClose, entry }) {
                   {isBatch && (
                     <>
                       <SummaryRow label="Supplier" value={entry.supplierName} />
-                      <SummaryRow label="Bill No" value={entry.billNo} />
+                      <SummaryRow label="Bill No" value={entry.billNumber || entry.billNo} />
                       <SummaryRow label="Builty No" value={entry.builtyNo} />
                       <SummaryRow label="Created By" value={entry.createdBy} />
                       <SummaryRow label="Stock Price" value={`PKR ${Number(entry.stockPrice || 0).toLocaleString()}`} />

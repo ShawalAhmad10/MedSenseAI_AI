@@ -1,0 +1,2734 @@
+{
+  "customers": [
+    {
+      "customer_id": 2,
+      "customer_name": "Shawal Ahmad",
+      "email": "shawal20260905071019@example.com",
+      "phone": "03001234567",
+      "customer_city": "Faisalabad",
+      "address": "Test Address"
+    },
+    {
+      "customer_id": 5,
+      "customer_name": "amna",
+      "email": "amnarana6c@gmail.com",
+      "phone": "03061835525",
+      "customer_city": "multan",
+      "address": "housed46 hehe"
+    },
+    {
+      "customer_id": 6,
+      "customer_name": "F223665 Amna Rana",
+      "email": "f223665@cfd.nu.edu.pk",
+      "phone": "03001234567",
+      "customer_city": "Lahore",
+      "address": "123 Street, Lahore"
+    },
+    {
+      "customer_id": 7,
+      "customer_name": "Iman Fatima",
+      "email": "imanfatima0810@gmail.com",
+      "phone": "03111234567",
+      "customer_city": "lahore",
+      "address": "123 Street, lahore"
+    }
+  ],
+  "tables": [
+    [
+      "active_ingredients"
+    ],
+    [
+      "batches"
+    ],
+    [
+      "brand"
+    ],
+    [
+      "brands"
+    ],
+    [
+      "customer"
+    ],
+    [
+      "customer_accounts"
+    ],
+    [
+      "customer_ledger"
+    ],
+    [
+      "customer_prescriptions"
+    ],
+    [
+      "customer_refill_reminders"
+    ],
+    [
+      "customer_subscriptions"
+    ],
+    [
+      "customers"
+    ],
+    [
+      "data_sources"
+    ],
+    [
+      "external_identifiers"
+    ],
+    [
+      "funnel_outbox"
+    ],
+    [
+      "ingestion_batches"
+    ],
+    [
+      "ingredient_aliases"
+    ],
+    [
+      "interaction_records"
+    ],
+    [
+      "invoice"
+    ],
+    [
+      "invoice_items"
+    ],
+    [
+      "invoice_report"
+    ],
+    [
+      "invoices"
+    ],
+    [
+      "medicine_categories"
+    ],
+    [
+      "medicine_products"
+    ],
+    [
+      "medicine_supplier_bindings"
+    ],
+    [
+      "medicines"
+    ],
+    [
+      "notification_preferences"
+    ],
+    [
+      "notifications"
+    ],
+    [
+      "otps"
+    ],
+    [
+      "paypal_webhook_events"
+    ],
+    [
+      "pharmacist_consultations"
+    ],
+    [
+      "product"
+    ],
+    [
+      "product_current_stock"
+    ],
+    [
+      "product_ingredients"
+    ],
+    [
+      "provenance_records"
+    ],
+    [
+      "quarantined_records"
+    ],
+    [
+      "source_releases"
+    ],
+    [
+      "staff"
+    ],
+    [
+      "stock"
+    ],
+    [
+      "stock_history"
+    ],
+    [
+      "stock_history_legacy_pre_latest"
+    ],
+    [
+      "stock_history_open"
+    ],
+    [
+      "stock_ledger"
+    ],
+    [
+      "stock_report"
+    ],
+    [
+      "stock_return"
+    ],
+    [
+      "stock_return_report"
+    ],
+    [
+      "stock_workbook_activity_imports"
+    ],
+    [
+      "stock_workbook_imports"
+    ],
+    [
+      "storefront_checkout_idempotency"
+    ],
+    [
+      "storefront_funnel_events"
+    ],
+    [
+      "subscription_payments"
+    ],
+    [
+      "supplier_accounts"
+    ],
+    [
+      "supplier_info"
+    ],
+    [
+      "supplier_ledger"
+    ],
+    [
+      "team_members"
+    ],
+    [
+      "users"
+    ]
+  ],
+  "foreignKeys": [
+    {
+      "source": "active_ingredients",
+      "target": "provenance_records",
+      "definition": "FOREIGN KEY (provenance_id) REFERENCES provenance_records(id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "customer_accounts",
+      "target": "customer",
+      "definition": "FOREIGN KEY (customer_id) REFERENCES customer(customer_id)"
+    },
+    {
+      "source": "customer_ledger",
+      "target": "customer_accounts",
+      "definition": "FOREIGN KEY (account_id) REFERENCES customer_accounts(account_id)"
+    },
+    {
+      "source": "customer_ledger",
+      "target": "customer",
+      "definition": "FOREIGN KEY (customer_id) REFERENCES customer(customer_id)"
+    },
+    {
+      "source": "customer_prescriptions",
+      "target": "customer",
+      "definition": "FOREIGN KEY (customer_id) REFERENCES customer(customer_id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "customer_refill_reminders",
+      "target": "customer",
+      "definition": "FOREIGN KEY (customer_id) REFERENCES customer(customer_id) ON DELETE CASCADE"
+    },
+    {
+      "source": "customer_refill_reminders",
+      "target": "product",
+      "definition": "FOREIGN KEY (product_id) REFERENCES product(product_id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "customer_refill_reminders",
+      "target": "invoice",
+      "definition": "FOREIGN KEY (source_invoice_id) REFERENCES invoice(invoice_id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "external_identifiers",
+      "target": "active_ingredients",
+      "definition": "FOREIGN KEY (ingredient_id) REFERENCES active_ingredients(id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "external_identifiers",
+      "target": "medicine_products",
+      "definition": "FOREIGN KEY (product_id) REFERENCES medicine_products(id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "external_identifiers",
+      "target": "provenance_records",
+      "definition": "FOREIGN KEY (provenance_id) REFERENCES provenance_records(id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "ingestion_batches",
+      "target": "source_releases",
+      "definition": "FOREIGN KEY (source_release_id) REFERENCES source_releases(id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "ingredient_aliases",
+      "target": "active_ingredients",
+      "definition": "FOREIGN KEY (ingredient_id) REFERENCES active_ingredients(id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "ingredient_aliases",
+      "target": "provenance_records",
+      "definition": "FOREIGN KEY (provenance_id) REFERENCES provenance_records(id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "interaction_records",
+      "target": "active_ingredients",
+      "definition": "FOREIGN KEY (ingredient_a_id) REFERENCES active_ingredients(id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "interaction_records",
+      "target": "active_ingredients",
+      "definition": "FOREIGN KEY (ingredient_b_id) REFERENCES active_ingredients(id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "interaction_records",
+      "target": "provenance_records",
+      "definition": "FOREIGN KEY (provenance_id) REFERENCES provenance_records(id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "invoice_report",
+      "target": "stock_history",
+      "definition": "FOREIGN KEY (batch_id) REFERENCES stock_history(batch_id)"
+    },
+    {
+      "source": "medicine_products",
+      "target": "provenance_records",
+      "definition": "FOREIGN KEY (provenance_id) REFERENCES provenance_records(id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "notifications",
+      "target": "users",
+      "definition": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+    },
+    {
+      "source": "pharmacist_consultations",
+      "target": "customer",
+      "definition": "FOREIGN KEY (customer_id) REFERENCES customer(customer_id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "pharmacist_consultations",
+      "target": "users",
+      "definition": "FOREIGN KEY (pharmacist_id) REFERENCES users(id) ON DELETE SET NULL"
+    },
+    {
+      "source": "product_ingredients",
+      "target": "active_ingredients",
+      "definition": "FOREIGN KEY (ingredient_id) REFERENCES active_ingredients(id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "product_ingredients",
+      "target": "medicine_products",
+      "definition": "FOREIGN KEY (product_id) REFERENCES medicine_products(id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "product_ingredients",
+      "target": "provenance_records",
+      "definition": "FOREIGN KEY (provenance_id) REFERENCES provenance_records(id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "provenance_records",
+      "target": "ingestion_batches",
+      "definition": "FOREIGN KEY (ingestion_batch_id) REFERENCES ingestion_batches(id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "quarantined_records",
+      "target": "ingestion_batches",
+      "definition": "FOREIGN KEY (ingestion_batch_id) REFERENCES ingestion_batches(id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "source_releases",
+      "target": "data_sources",
+      "definition": "FOREIGN KEY (data_source_id) REFERENCES data_sources(id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "supplier_accounts",
+      "target": "supplier_info",
+      "definition": "FOREIGN KEY (supplier_id) REFERENCES supplier_info(supplier_id)"
+    },
+    {
+      "source": "supplier_ledger",
+      "target": "product",
+      "definition": "FOREIGN KEY (product_id) REFERENCES product(product_id)"
+    },
+    {
+      "source": "supplier_ledger",
+      "target": "stock",
+      "definition": "FOREIGN KEY (stock_id) REFERENCES stock(stock_id)"
+    },
+    {
+      "source": "supplier_ledger",
+      "target": "supplier_accounts",
+      "definition": "FOREIGN KEY (supplier_account_id) REFERENCES supplier_accounts(supplier_account_id)"
+    },
+    {
+      "source": "supplier_ledger",
+      "target": "supplier_info",
+      "definition": "FOREIGN KEY (supplier_id) REFERENCES supplier_info(supplier_id)"
+    },
+    {
+      "source": "team_members",
+      "target": "users",
+      "definition": "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+    },
+    {
+      "source": "customer_subscriptions",
+      "target": "customer",
+      "definition": "FOREIGN KEY (customer_id) REFERENCES customer(customer_id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "subscription_payments",
+      "target": "customer_subscriptions",
+      "definition": "FOREIGN KEY (subscription_id, environment) REFERENCES customer_subscriptions(subscription_id, environment) ON DELETE RESTRICT"
+    },
+    {
+      "source": "paypal_webhook_events",
+      "target": "customer_subscriptions",
+      "definition": "FOREIGN KEY (subscription_id, environment) REFERENCES customer_subscriptions(subscription_id, environment) ON DELETE RESTRICT"
+    },
+    {
+      "source": "customer_refill_reminders",
+      "target": "customer_subscriptions",
+      "definition": "FOREIGN KEY (subscription_id, customer_id) REFERENCES customer_subscriptions(subscription_id, customer_id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "customer_refill_reminders",
+      "target": "customer_refill_reminders",
+      "definition": "FOREIGN KEY (previous_reminder_id) REFERENCES customer_refill_reminders(reminder_id) ON DELETE RESTRICT"
+    },
+    {
+      "source": "medicine_supplier_bindings",
+      "target": "supplier_info",
+      "definition": "FOREIGN KEY (supplier_id) REFERENCES supplier_info(supplier_id)"
+    },
+    {
+      "source": "stock_history_open",
+      "target": "stock_history",
+      "definition": "FOREIGN KEY (source_batch_id) REFERENCES stock_history(batch_id)"
+    }
+  ],
+  "columns": [
+    {
+      "table_name": "customer",
+      "column_name": "customer_id",
+      "data_type": "integer",
+      "column_default": "nextval('customers_customer_id_seq'::regclass)",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer",
+      "column_name": "customer_name",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer",
+      "column_name": "email",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer",
+      "column_name": "password",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer",
+      "column_name": "phone",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer",
+      "column_name": "customer_city",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer",
+      "column_name": "customer_contact",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer",
+      "column_name": "address",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer",
+      "column_name": "email_verified",
+      "data_type": "boolean",
+      "column_default": "false",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer",
+      "column_name": "is_active",
+      "data_type": "boolean",
+      "column_default": "true",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer",
+      "column_name": "status",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_accounts",
+      "column_name": "account_id",
+      "data_type": "integer",
+      "column_default": "nextval('customer_accounts_account_id_seq'::regclass)",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_accounts",
+      "column_name": "customer_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_accounts",
+      "column_name": "opening_balance",
+      "data_type": "numeric",
+      "column_default": "0",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_accounts",
+      "column_name": "current_balance",
+      "data_type": "numeric",
+      "column_default": "0",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_accounts",
+      "column_name": "total_debit",
+      "data_type": "numeric",
+      "column_default": "0",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_accounts",
+      "column_name": "total_credit",
+      "data_type": "numeric",
+      "column_default": "0",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_accounts",
+      "column_name": "credit_limit",
+      "data_type": "numeric",
+      "column_default": "0",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_accounts",
+      "column_name": "payment_terms",
+      "data_type": "integer",
+      "column_default": "30",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_accounts",
+      "column_name": "account_status",
+      "data_type": "USER-DEFINED",
+      "column_default": "'active'::enum_customer_accounts_account_status",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_accounts",
+      "column_name": "notes",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_accounts",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_accounts",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_accounts",
+      "column_name": "status",
+      "data_type": "integer",
+      "column_default": "1",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_ledger",
+      "column_name": "ledger_id",
+      "data_type": "integer",
+      "column_default": "nextval('customer_ledger_ledger_id_seq'::regclass)",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_ledger",
+      "column_name": "customer_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_ledger",
+      "column_name": "account_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_ledger",
+      "column_name": "transaction_date",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_ledger",
+      "column_name": "transaction_type",
+      "data_type": "USER-DEFINED",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_ledger",
+      "column_name": "reference_type",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_ledger",
+      "column_name": "reference_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_ledger",
+      "column_name": "reference_number",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_ledger",
+      "column_name": "debit_amount",
+      "data_type": "numeric",
+      "column_default": "0",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_ledger",
+      "column_name": "credit_amount",
+      "data_type": "numeric",
+      "column_default": "0",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_ledger",
+      "column_name": "balance",
+      "data_type": "numeric",
+      "column_default": "0",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_ledger",
+      "column_name": "payment_method",
+      "data_type": "USER-DEFINED",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_ledger",
+      "column_name": "description",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_ledger",
+      "column_name": "performed_by",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_ledger",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_ledger",
+      "column_name": "status",
+      "data_type": "integer",
+      "column_default": "1",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_ledger",
+      "column_name": "product_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_ledger",
+      "column_name": "product_quantity",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_ledger",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_prescriptions",
+      "column_name": "prescription_id",
+      "data_type": "bigint",
+      "column_default": "nextval('customer_prescriptions_prescription_id_seq'::regclass)",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_prescriptions",
+      "column_name": "customer_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_prescriptions",
+      "column_name": "original_filename",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_prescriptions",
+      "column_name": "media_type",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_prescriptions",
+      "column_name": "image_sha256",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_prescriptions",
+      "column_name": "image_byte_size",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_prescriptions",
+      "column_name": "ocr_status",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_prescriptions",
+      "column_name": "analysis_status",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_prescriptions",
+      "column_name": "review_required",
+      "data_type": "boolean",
+      "column_default": "true",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_prescriptions",
+      "column_name": "confirmation_required",
+      "data_type": "boolean",
+      "column_default": "true",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_prescriptions",
+      "column_name": "raw_ocr_text",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_prescriptions",
+      "column_name": "ai_result",
+      "data_type": "jsonb",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_prescriptions",
+      "column_name": "customer_verification_status",
+      "data_type": "character varying",
+      "column_default": "'unverified'::character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_prescriptions",
+      "column_name": "customer_corrections",
+      "data_type": "jsonb",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_prescriptions",
+      "column_name": "confirmed_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_prescriptions",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_prescriptions",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_prescriptions",
+      "column_name": "image_data",
+      "data_type": "bytea",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_refill_reminders",
+      "column_name": "reminder_id",
+      "data_type": "integer",
+      "column_default": "nextval('customer_refill_reminders_reminder_id_seq'::regclass)",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_refill_reminders",
+      "column_name": "customer_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_refill_reminders",
+      "column_name": "source_invoice_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_refill_reminders",
+      "column_name": "product_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_refill_reminders",
+      "column_name": "reminder_date",
+      "data_type": "date",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_refill_reminders",
+      "column_name": "lifecycle_status",
+      "data_type": "character varying",
+      "column_default": "'active'::character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_refill_reminders",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_refill_reminders",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_refill_reminders",
+      "column_name": "subscription_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_refill_reminders",
+      "column_name": "recurrence_days",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_refill_reminders",
+      "column_name": "previous_reminder_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_subscriptions",
+      "column_name": "subscription_id",
+      "data_type": "integer",
+      "column_default": "nextval('customer_subscriptions_subscription_id_seq'::regclass)",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_subscriptions",
+      "column_name": "customer_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_subscriptions",
+      "column_name": "environment",
+      "data_type": "character varying",
+      "column_default": "'sandbox'::character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_subscriptions",
+      "column_name": "paypal_subscription_id",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_subscriptions",
+      "column_name": "paypal_plan_id",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_subscriptions",
+      "column_name": "subscription_type",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_subscriptions",
+      "column_name": "subscription_status",
+      "data_type": "character varying",
+      "column_default": "'approval_pending'::character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_subscriptions",
+      "column_name": "amount",
+      "data_type": "numeric",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_subscriptions",
+      "column_name": "currency",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_subscriptions",
+      "column_name": "started_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_subscriptions",
+      "column_name": "last_payment_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_subscriptions",
+      "column_name": "next_billing_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_subscriptions",
+      "column_name": "cancelled_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_subscriptions",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_subscriptions",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "customer_subscriptions",
+      "column_name": "request_id",
+      "data_type": "uuid",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_subscriptions",
+      "column_name": "approval_url",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customer_subscriptions",
+      "column_name": "payment_failure_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customers",
+      "column_name": "customer_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customers",
+      "column_name": "customer_name",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customers",
+      "column_name": "email",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customers",
+      "column_name": "password",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customers",
+      "column_name": "phone",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customers",
+      "column_name": "customer_city",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customers",
+      "column_name": "customer_contact",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customers",
+      "column_name": "address",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customers",
+      "column_name": "email_verified",
+      "data_type": "boolean",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customers",
+      "column_name": "is_active",
+      "data_type": "boolean",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customers",
+      "column_name": "status",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customers",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "customers",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "invoice_id",
+      "data_type": "integer",
+      "column_default": "nextval('invoices_invoice_id_seq'::regclass)",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "invoice_number",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "customer_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "customer_name",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "customer_phone",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "customer_email",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "branch_name",
+      "data_type": "character varying",
+      "column_default": "'Main Branch'::character varying",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "total_amount",
+      "data_type": "double precision",
+      "column_default": "'0'::double precision",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "discount",
+      "data_type": "double precision",
+      "column_default": "'0'::double precision",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "delivery_fee",
+      "data_type": "double precision",
+      "column_default": "'0'::double precision",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "paid_amount",
+      "data_type": "double precision",
+      "column_default": "'0'::double precision",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "due_amount",
+      "data_type": "double precision",
+      "column_default": "'0'::double precision",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "payment_status",
+      "data_type": "character varying",
+      "column_default": "'unpaid'::character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "payment_method",
+      "data_type": "character varying",
+      "column_default": "'cash'::character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "delivery_status",
+      "data_type": "character varying",
+      "column_default": "'pending'::character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "delivery_address",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "builty_no",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "notes",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "card_holder_name",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "card_last_four",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "card_expiry",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "billing_address",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "wallet_account_name",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "wallet_account_number",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "wallet_cnic",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "created_by",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "status",
+      "data_type": "integer",
+      "column_default": "1",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "invoice_date",
+      "data_type": "date",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "legacy_source_schema",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "legacy_source_invoice_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "legacy_source_invoice_number",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice",
+      "column_name": "legacy_source_record",
+      "data_type": "jsonb",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "item_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "invoice_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "product_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "product_title",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "batch_number",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "expiry_date",
+      "data_type": "date",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "quantity",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "unit_price",
+      "data_type": "double precision",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "discount",
+      "data_type": "double precision",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "tax",
+      "data_type": "double precision",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "total_price",
+      "data_type": "double precision",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "status",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "purchase_price",
+      "data_type": "double precision",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_report",
+      "column_name": "item_id",
+      "data_type": "integer",
+      "column_default": "nextval('invoice_items_item_id_seq'::regclass)",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice_report",
+      "column_name": "invoice_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice_report",
+      "column_name": "product_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_report",
+      "column_name": "product_title",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice_report",
+      "column_name": "batch_number",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_report",
+      "column_name": "expiry_date",
+      "data_type": "date",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_report",
+      "column_name": "quantity",
+      "data_type": "integer",
+      "column_default": "1",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice_report",
+      "column_name": "unit_price",
+      "data_type": "double precision",
+      "column_default": "'0'::double precision",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice_report",
+      "column_name": "discount",
+      "data_type": "double precision",
+      "column_default": "'0'::double precision",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_report",
+      "column_name": "tax",
+      "data_type": "double precision",
+      "column_default": "'0'::double precision",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoice_report",
+      "column_name": "total_price",
+      "data_type": "double precision",
+      "column_default": "'0'::double precision",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice_report",
+      "column_name": "status",
+      "data_type": "integer",
+      "column_default": "1",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice_report",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice_report",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice_report",
+      "column_name": "purchase_price",
+      "data_type": "double precision",
+      "column_default": "0",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "invoice_report",
+      "column_name": "batch_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "invoice_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "invoice_number",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "customer_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "customer_name",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "customer_phone",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "customer_email",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "branch_name",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "total_amount",
+      "data_type": "double precision",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "discount",
+      "data_type": "double precision",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "delivery_fee",
+      "data_type": "double precision",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "paid_amount",
+      "data_type": "double precision",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "due_amount",
+      "data_type": "double precision",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "payment_status",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "payment_method",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "delivery_status",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "delivery_address",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "builty_no",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "notes",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "card_holder_name",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "card_last_four",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "card_expiry",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "billing_address",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "wallet_account_name",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "wallet_account_number",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "wallet_cnic",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "created_by",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "status",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "invoice_date",
+      "data_type": "date",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "pharmacist_consultations",
+      "column_name": "consultation_id",
+      "data_type": "bigint",
+      "column_default": "nextval('pharmacist_consultations_consultation_id_seq'::regclass)",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "pharmacist_consultations",
+      "column_name": "customer_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "pharmacist_consultations",
+      "column_name": "source",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "pharmacist_consultations",
+      "column_name": "status",
+      "data_type": "character varying",
+      "column_default": "'pending'::character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "pharmacist_consultations",
+      "column_name": "ddi_status",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "pharmacist_consultations",
+      "column_name": "review_fingerprint",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "pharmacist_consultations",
+      "column_name": "interaction_details",
+      "data_type": "jsonb",
+      "column_default": "'[]'::jsonb",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "pharmacist_consultations",
+      "column_name": "cart_snapshot",
+      "data_type": "jsonb",
+      "column_default": "'[]'::jsonb",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "pharmacist_consultations",
+      "column_name": "customer_message",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "pharmacist_consultations",
+      "column_name": "pharmacist_guidance",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "pharmacist_consultations",
+      "column_name": "pharmacist_id",
+      "data_type": "uuid",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "pharmacist_consultations",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "pharmacist_consultations",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "pharmacist_consultations",
+      "column_name": "responded_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "pharmacist_consultations",
+      "column_name": "decision",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "pharmacist_consultations",
+      "column_name": "decision_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "pharmacist_consultations",
+      "column_name": "checkout_consumed_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "pharmacist_consultations",
+      "column_name": "cart_instance_id",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "stock_report",
+      "column_name": "ledger_id",
+      "data_type": "integer",
+      "column_default": "nextval('stock_ledger_ledger_id_seq'::regclass)",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "stock_report",
+      "column_name": "batch_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "stock_report",
+      "column_name": "product_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "stock_report",
+      "column_name": "transaction_type",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "stock_report",
+      "column_name": "quantity_change",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "stock_report",
+      "column_name": "balance_after",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "stock_report",
+      "column_name": "reference_type",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "stock_report",
+      "column_name": "reference_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "stock_report",
+      "column_name": "reference_number",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "stock_report",
+      "column_name": "unit_price",
+      "data_type": "numeric",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "stock_report",
+      "column_name": "total_value",
+      "data_type": "numeric",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "stock_report",
+      "column_name": "reason",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "stock_report",
+      "column_name": "notes",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "stock_report",
+      "column_name": "performed_by",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "stock_report",
+      "column_name": "approved_by",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "stock_report",
+      "column_name": "witness",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "stock_report",
+      "column_name": "transaction_date",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "stock_report",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "stock_report",
+      "column_name": "sales_tax",
+      "data_type": "numeric",
+      "column_default": "0",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "stock_report",
+      "column_name": "advance_tax",
+      "data_type": "numeric",
+      "column_default": "0",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "stock_report",
+      "column_name": "product_expiry",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "storefront_checkout_idempotency",
+      "column_name": "cart_instance_id",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "storefront_checkout_idempotency",
+      "column_name": "request_fingerprint",
+      "data_type": "character varying",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "storefront_checkout_idempotency",
+      "column_name": "customer_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "storefront_checkout_idempotency",
+      "column_name": "status",
+      "data_type": "character varying",
+      "column_default": "'processing'::character varying",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "storefront_checkout_idempotency",
+      "column_name": "order_id",
+      "data_type": "integer",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "storefront_checkout_idempotency",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "storefront_checkout_idempotency",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "storefront_checkout_idempotency",
+      "column_name": "completed_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    }
+  ],
+  "orders": [
+    {
+      "count": "57",
+      "total": 27614.3
+    }
+  ],
+  "products": [
+    {
+      "product_id": 900127,
+      "product_title": "Panadol 500mg",
+      "product_salt": "Paracetamol 500mg"
+    },
+    {
+      "product_id": 900128,
+      "product_title": "Panadol Extra",
+      "product_salt": "Paracetamol 500mg + Caffeine 65mg"
+    },
+    {
+      "product_id": 900129,
+      "product_title": "Panadol Liquid",
+      "product_salt": "Paracetamol 120mg/5ml"
+    },
+    {
+      "product_id": 900130,
+      "product_title": "Brufen 400mg",
+      "product_salt": "Ibuprofen 400mg"
+    },
+    {
+      "product_id": 900131,
+      "product_title": "Brufen 200mg",
+      "product_salt": "Ibuprofen 200mg"
+    },
+    {
+      "product_id": 900132,
+      "product_title": "Brufen Syrup",
+      "product_salt": "Ibuprofen 100mg/5ml"
+    },
+    {
+      "product_id": 900133,
+      "product_title": "Arinac",
+      "product_salt": "Ibuprofen + Pseudoephedrine"
+    },
+    {
+      "product_id": 900134,
+      "product_title": "Arinac Forte",
+      "product_salt": "Ibuprofen 400mg + Pseudoephedrine 60mg"
+    },
+    {
+      "product_id": 900135,
+      "product_title": "Augmentin 625mg",
+      "product_salt": "Amoxicillin 500mg + Clavulanic Acid 125mg"
+    },
+    {
+      "product_id": 900136,
+      "product_title": "Augmentin BD 1000mg",
+      "product_salt": "Amoxicillin 875mg + Clavulanic Acid 125mg"
+    },
+    {
+      "product_id": 900137,
+      "product_title": "Augmentin DS",
+      "product_salt": "Amoxicillin + Clavulanic Acid"
+    },
+    {
+      "product_id": 900138,
+      "product_title": "Augmentin Infant Drops",
+      "product_salt": "Amoxicillin + Clavulanic Acid"
+    },
+    {
+      "product_id": 900139,
+      "product_title": "Amclav",
+      "product_salt": "Amoxicillin + Clavulanic Acid"
+    },
+    {
+      "product_id": 900140,
+      "product_title": "Cefspan 400mg",
+      "product_salt": "Cefixime 400mg"
+    },
+    {
+      "product_id": 900141,
+      "product_title": "Zetro 500mg",
+      "product_salt": "Azithromycin 500mg"
+    },
+    {
+      "product_id": 900142,
+      "product_title": "Risek 20mg",
+      "product_salt": "Omeprazole 20mg"
+    },
+    {
+      "product_id": 900143,
+      "product_title": "Nexum 40mg",
+      "product_salt": "Esomeprazole 40mg"
+    },
+    {
+      "product_id": 900144,
+      "product_title": "Gravinate 50mg",
+      "product_salt": "Dimenhydrinate 50mg"
+    },
+    {
+      "product_id": 900145,
+      "product_title": "Rigix 10mg",
+      "product_salt": "Cetirizine 10mg"
+    },
+    {
+      "product_id": 900146,
+      "product_title": "Lorin 10mg",
+      "product_salt": "Loratadine 10mg"
+    },
+    {
+      "product_id": 900147,
+      "product_title": "Piriton",
+      "product_salt": "Chlorpheniramine Maleate"
+    },
+    {
+      "product_id": 900148,
+      "product_title": "Ventolin",
+      "product_salt": "Salbutamol"
+    },
+    {
+      "product_id": 900149,
+      "product_title": "Seretide",
+      "product_salt": "Fluticasone + Salmeterol"
+    },
+    {
+      "product_id": 900150,
+      "product_title": "Hydryllin",
+      "product_salt": "Diphenhydramine + Ammonium Chloride"
+    },
+    {
+      "product_id": 900151,
+      "product_title": "Cofloz Herbal Cough Syrup",
+      "product_salt": "Ivy Leaf / Herbal Extracts"
+    },
+    {
+      "product_id": 900152,
+      "product_title": "Ponstan 500mg",
+      "product_salt": "Mefenamic Acid 500mg"
+    },
+    {
+      "product_id": 900153,
+      "product_title": "Dicloran 50mg",
+      "product_salt": "Diclofenac Sodium 50mg"
+    },
+    {
+      "product_id": 900154,
+      "product_title": "Lipiget 20mg",
+      "product_salt": "Atorvastatin 20mg"
+    },
+    {
+      "product_id": 900155,
+      "product_title": "Polybion Forte",
+      "product_salt": "Multivitamins + B Complex"
+    },
+    {
+      "product_id": 900156,
+      "product_title": "Panadol 30ml Drops",
+      "product_salt": "Paracetamol 80mg/ml"
+    },
+    {
+      "product_id": 900157,
+      "product_title": "Piriton 120ml",
+      "product_salt": "Chlorpheniramine Maleate"
+    },
+    {
+      "product_id": 900158,
+      "product_title": "Duphalac Syrup",
+      "product_salt": "Lactulose"
+    },
+    {
+      "product_id": 900159,
+      "product_title": "Fexet 120mg",
+      "product_salt": "Fexofenadine 120mg"
+    },
+    {
+      "product_id": 900160,
+      "product_title": "Fexet 60mg",
+      "product_salt": "Fexofenadine 60mg"
+    },
+    {
+      "product_id": 900161,
+      "product_title": "Montiget 10mg",
+      "product_salt": "Montelukast 10mg"
+    },
+    {
+      "product_id": 900162,
+      "product_title": "Gabica 75mg",
+      "product_salt": "Pregabalin 75mg"
+    },
+    {
+      "product_id": 900163,
+      "product_title": "Gabica 150mg",
+      "product_salt": "Pregabalin 150mg"
+    },
+    {
+      "product_id": 900164,
+      "product_title": "Gabica 300mg",
+      "product_salt": "Pregabalin 300mg"
+    },
+    {
+      "product_id": 900165,
+      "product_title": "Rovista 10mg",
+      "product_salt": "Rosuvastatin 10mg"
+    },
+    {
+      "product_id": 900166,
+      "product_title": "Rovista 20mg",
+      "product_salt": "Rosuvastatin 20mg"
+    },
+    {
+      "product_id": 900167,
+      "product_title": "Fenoget 200mg",
+      "product_salt": "Fenofibrate 200mg"
+    },
+    {
+      "product_id": 900168,
+      "product_title": "Amtas 5mg/40mg",
+      "product_salt": "Amlodipine + Atorvastatin"
+    },
+    {
+      "product_id": 900169,
+      "product_title": "Co-Tasmi 40mg/12.5mg",
+      "product_salt": "Telmisartan + Hydrochlorothiazide"
+    },
+    {
+      "product_id": 900170,
+      "product_title": "Claritek 250mg",
+      "product_salt": "Clarithromycin 250mg"
+    },
+    {
+      "product_id": 900171,
+      "product_title": "Claritek XL 500mg",
+      "product_salt": "Clarithromycin 500mg"
+    },
+    {
+      "product_id": 900172,
+      "product_title": "Amclav 375mg",
+      "product_salt": "Amoxicillin + Clavulanic Acid"
+    },
+    {
+      "product_id": 900173,
+      "product_title": "Amclav 1g",
+      "product_salt": "Amoxicillin + Clavulanic Acid"
+    },
+    {
+      "product_id": 900174,
+      "product_title": "Cefiget 400mg",
+      "product_salt": "Cefixime 400mg"
+    },
+    {
+      "product_id": 900175,
+      "product_title": "Cefiget Suspension",
+      "product_salt": "Cefixime 100mg/5ml"
+    },
+    {
+      "product_id": 900176,
+      "product_title": "Cipesta 250mg",
+      "product_salt": "Ciprofloxacin 250mg"
+    },
+    {
+      "product_id": 900177,
+      "product_title": "Cipesta 500mg",
+      "product_salt": "Ciprofloxacin 500mg"
+    },
+    {
+      "product_id": 900178,
+      "product_title": "Dravix 250mg",
+      "product_salt": "Levofloxacin 250mg"
+    },
+    {
+      "product_id": 900179,
+      "product_title": "Dravix 500mg",
+      "product_salt": "Levofloxacin 500mg"
+    },
+    {
+      "product_id": 900180,
+      "product_title": "Celbexx 200mg",
+      "product_salt": "Celecoxib 200mg"
+    },
+    {
+      "product_id": 900181,
+      "product_title": "Emrix SR 15mg",
+      "product_salt": "Meloxicam 15mg"
+    },
+    {
+      "product_id": 900182,
+      "product_title": "Ferfix Syrup",
+      "product_salt": "Iron / Ferrous preparation"
+    },
+    {
+      "product_id": 900183,
+      "product_title": "Osam-D",
+      "product_salt": "Calcium + Vitamin D3"
+    },
+    {
+      "product_id": 900184,
+      "product_title": "Cartigen Plus",
+      "product_salt": "Glucosamine + Chondroitin"
+    },
+    {
+      "product_id": 900185,
+      "product_title": "Cytopan 50mg/200mcg",
+      "product_salt": "Diclofenac + Misoprostol"
+    },
+    {
+      "product_id": 900186,
+      "product_title": "Cytopan 75mg/200mcg",
+      "product_salt": "Diclofenac + Misoprostol"
+    },
+    {
+      "product_id": 900187,
+      "product_title": "Artheget EZ",
+      "product_salt": "Artemether + Lumefantrine"
+    },
+    {
+      "product_id": 900188,
+      "product_title": "Artheget Junior",
+      "product_salt": "Artemether + Lumefantrine"
+    },
+    {
+      "product_id": 900189,
+      "product_title": "Dv-Care Hand Sanitizer",
+      "product_salt": "Ethanol-based Hand Sanitizer"
+    },
+    {
+      "product_id": 900190,
+      "product_title": "PK-Merz",
+      "product_salt": "Amantadine"
+    },
+    {
+      "product_id": 900191,
+      "product_title": "Bekson Inhaler",
+      "product_salt": "Beclomethasone"
+    },
+    {
+      "product_id": 900192,
+      "product_title": "Bekson Forte HFA",
+      "product_salt": "Beclomethasone 250mcg"
+    },
+    {
+      "product_id": 900193,
+      "product_title": "Preneu",
+      "product_salt": "Pregabalin"
+    },
+    {
+      "product_id": 900255,
+      "product_title": "Amlo-Q 5mg",
+      "product_salt": "Amlodipine 5mg"
+    },
+    {
+      "product_id": 900256,
+      "product_title": "Amlo-Q 10mg",
+      "product_salt": "Amlodipine 10mg"
+    },
+    {
+      "product_id": 900257,
+      "product_title": "Fortius 10mg",
+      "product_salt": "Rosuvastatin 10mg"
+    },
+    {
+      "product_id": 900258,
+      "product_title": "Freehale 10mg",
+      "product_salt": "Montelukast 10mg"
+    },
+    {
+      "product_id": 900259,
+      "product_title": "Jardin 10mg",
+      "product_salt": "Loratadine 10mg"
+    },
+    {
+      "product_id": 900260,
+      "product_title": "Qsartan 50mg",
+      "product_salt": "Losartan Potassium 50mg"
+    },
+    {
+      "product_id": 900261,
+      "product_title": "Zyto 500mg",
+      "product_salt": "Azithromycin 500mg"
+    },
+    {
+      "product_id": 900262,
+      "product_title": "Ongene 8mg",
+      "product_salt": "Ondansetron 8mg"
+    },
+    {
+      "product_id": 900263,
+      "product_title": "Caldree",
+      "product_salt": "Calcium Carbonate + Vitamin D3"
+    },
+    {
+      "product_id": 900264,
+      "product_title": "Sunvit",
+      "product_salt": "Cholecalciferol"
+    },
+    {
+      "product_id": 900265,
+      "product_title": "Afdol",
+      "product_salt": "Paracetamol"
+    },
+    {
+      "product_id": 900266,
+      "product_title": "Nebcin",
+      "product_salt": "Tobramycin"
+    },
+    {
+      "product_id": 900267,
+      "product_title": "Exotan",
+      "product_salt": "Exenatide"
+    },
+    {
+      "product_id": 900268,
+      "product_title": "TruGlif",
+      "product_salt": "Empagliflozin"
+    },
+    {
+      "product_id": 900269,
+      "product_title": "Glyzia",
+      "product_salt": "Sitagliptin"
+    },
+    {
+      "product_id": 900270,
+      "product_title": "Glyziamet",
+      "product_salt": "Sitagliptin + Metformin"
+    },
+    {
+      "product_id": 900271,
+      "product_title": "Esi-Dep",
+      "product_salt": "Escitalopram"
+    },
+    {
+      "product_id": 900272,
+      "product_title": "Gluconorm",
+      "product_salt": "Gliclazide"
+    },
+    {
+      "product_id": 900273,
+      "product_title": "Lipomax",
+      "product_salt": "Atorvastatin"
+    },
+    {
+      "product_id": 900274,
+      "product_title": "Mecovate",
+      "product_salt": "Methylcobalamin"
+    },
+    {
+      "product_id": 900275,
+      "product_title": "Aaram",
+      "product_salt": "Diclofenac Sodium"
+    },
+    {
+      "product_id": 900276,
+      "product_title": "Aaram-Plus",
+      "product_salt": "Diclofenac Sodium + Lidocaine"
+    },
+    {
+      "product_id": 900277,
+      "product_title": "Aloc",
+      "product_salt": "Fexofenadine"
+    },
+    {
+      "product_id": 900278,
+      "product_title": "Aloc-D",
+      "product_salt": "Fexofenadine + Pseudoephedrine"
+    },
+    {
+      "product_id": 900279,
+      "product_title": "Ambac",
+      "product_salt": "Ampicillin + Sulbactam"
+    },
+    {
+      "product_id": 900280,
+      "product_title": "Amkay",
+      "product_salt": "Amikacin Sulphate"
+    },
+    {
+      "product_id": 900281,
+      "product_title": "Ampin",
+      "product_salt": "Ampicillin Sodium"
+    },
+    {
+      "product_id": 900282,
+      "product_title": "Amplus",
+      "product_salt": "Ampicillin + Cloxacillin"
+    },
+    {
+      "product_id": 900283,
+      "product_title": "Atlin",
+      "product_salt": "Atenolol"
+    },
+    {
+      "product_id": 900284,
+      "product_title": "Avelin",
+      "product_salt": "Moxifloxacin"
+    },
+    {
+      "product_id": 900285,
+      "product_title": "Acicon 20mg",
+      "product_salt": "Famotidine 20mg"
+    },
+    {
+      "product_id": 900286,
+      "product_title": "AciReg 40mg",
+      "product_salt": "Esomeprazole 40mg"
+    },
+    {
+      "product_id": 900287,
+      "product_title": "Aerokast 10mg",
+      "product_salt": "Montelukast Sodium 10mg"
+    },
+    {
+      "product_id": 900288,
+      "product_title": "Ampress 5mg",
+      "product_salt": "Amlodipine Besylate 5mg"
+    },
+    {
+      "product_id": 900289,
+      "product_title": "Artimov-K 50mg",
+      "product_salt": "Diclofenac Potassium 50mg"
+    },
+    {
+      "product_id": 900290,
+      "product_title": "AV-Sartan 5/80mg",
+      "product_salt": "Amlodipine + Valsartan"
+    },
+    {
+      "product_id": 900291,
+      "product_title": "Barilol 5mg",
+      "product_salt": "Bisoprolol Fumarate 5mg"
+    },
+    {
+      "product_id": 900292,
+      "product_title": "Barimox 400mg",
+      "product_salt": "Moxifloxacin 400mg"
+    },
+    {
+      "product_id": 900293,
+      "product_title": "Baristat 40mg",
+      "product_salt": "Febuxostat 40mg"
+    },
+    {
+      "product_id": 900294,
+      "product_title": "Baritec 20mg",
+      "product_salt": "Olmesartan Medoxomil 20mg"
+    },
+    {
+      "product_id": 900295,
+      "product_title": "Evixa 20mg",
+      "product_salt": "Escitalopram 20mg"
+    },
+    {
+      "product_id": 900296,
+      "product_title": "Evixa 40mg",
+      "product_salt": "Escitalopram 40mg"
+    },
+    {
+      "product_id": 900297,
+      "product_title": "Zatrik ORS",
+      "product_salt": "Oral Rehydration Salts"
+    },
+    {
+      "product_id": 900298,
+      "product_title": "Leczux",
+      "product_salt": "Lactulose"
+    },
+    {
+      "product_id": 900299,
+      "product_title": "Zohydro Cream",
+      "product_salt": "Topical formulation"
+    },
+    {
+      "product_id": 900300,
+      "product_title": "Barforte",
+      "product_salt": "Prednisolone Acetate"
+    },
+    {
+      "product_id": 900301,
+      "product_title": "Barinep",
+      "product_salt": "Nepafenac 0.1%"
+    },
+    {
+      "product_id": 900302,
+      "product_title": "Barlev 500mg",
+      "product_salt": "Levetiracetam 500mg"
+    },
+    {
+      "product_id": 900303,
+      "product_title": "Baropent DR 40mg",
+      "product_salt": "Pantoprazole Sodium 40mg"
+    },
+    {
+      "product_id": 900304,
+      "product_title": "Barresten 500mg",
+      "product_salt": "Clotrimazole"
+    }
+  ]
+}

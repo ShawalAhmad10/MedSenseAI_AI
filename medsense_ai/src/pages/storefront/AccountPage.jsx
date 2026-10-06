@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { User, MapPin, Lock, Bell, Package, FileText, DollarSign, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { getCustomerDetails, updateCustomer, getCustomerLedger } from '../../services/customerService';
+import { getMyCustomerAccount } from '../../services/storefrontAccountService';
 import { getCustomerOrders, getOrderById } from '../../services/storefrontOrderService';
-import api from '../../services/api';
 
 export default function AccountPage() {
-  const { isAuthenticated, openAuthModal, user } = useAuth();
+  const { isAuthenticated, openAuthModal, user, updateProfile } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
   const [customerData, setCustomerData] = useState(null);
   const [customerAccount, setCustomerAccount] = useState(null);
@@ -15,6 +15,8 @@ export default function AccountPage() {
   const [loading, setLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [profileMessage, setProfileMessage] = useState('');
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -34,8 +36,7 @@ export default function AccountPage() {
     try {
       await Promise.all([
         loadCustomerData(),
-        loadOrders(),
-        loadLedger()
+        loadOrders()
       ]);
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -46,9 +47,10 @@ export default function AccountPage() {
 
   const loadCustomerData = async () => {
     try {
-      const data = await getCustomerDetails(user.id);
+      const data = await getMyCustomerAccount();
       setCustomerData(data.customer);
       setCustomerAccount(data.account);
+      setLedger(data.ledgerEntries);
       setForm({
         name: data.customer.name || '',
         email: data.customer.email || '',
@@ -57,7 +59,7 @@ export default function AccountPage() {
         address: data.customer.address || ''
       });
     } catch (error) {
-      console.error('Failed to load customer data:', error);
+      setProfileError(error.message || 'Could not load your account details.');
     }
   };
 
@@ -93,25 +95,22 @@ export default function AccountPage() {
     }
   };
 
-  const loadLedger = async () => {
-    try {
-      const ledgerData = await getCustomerLedger(user.id);
-      setLedger(ledgerData);
-    } catch (error) {
-      console.error('Failed to load ledger:', error);
-    }
-  };
-
   const handleSave = async () => {
+    if (isSaving) return;
+    setProfileError('');
+    setProfileMessage('');
+    for (const [key, label] of [['name','full name'], ['phone','phone number'], ['city','city'], ['address','address']]) {
+      if (!form[key].trim()) { setProfileError(`Please enter your ${label}.`); return; }
+    }
     setIsSaving(true);
     try {
-      await updateCustomer(user.id, form);
-      await loadCustomerData();
+      const updated = await updateProfile(form);
+      setCustomerData(current => ({ ...current, ...updated }));
+      setForm(current => ({ ...current, ...updated }));
       setIsEditing(false);
-      alert('Profile updated successfully!');
+      setProfileMessage('Profile updated successfully.');
     } catch (error) {
-      console.error('Failed to update profile:', error);
-      alert(error.message || 'Failed to update profile');
+      setProfileError(error.message || 'Could not update your profile. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -151,11 +150,15 @@ export default function AccountPage() {
         <div className="sf-page-header">
           <div>
             <h1>{user?.name || 'My Account'}</h1>
+            <Link className="sf-link" to="/subscriptions">Manage subscription</Link>
             <p className="sf-section-subcopy" style={{ marginBottom: 0 }}>
               Manage your profile, orders, and account information
             </p>
           </div>
         </div>
+
+        {profileError && <p role="alert" className="sf-badge-danger" style={{ display: 'block', padding: '0.75rem' }}>{profileError}</p>}
+        {profileMessage && <p role="status" className="sf-badge-success" style={{ display: 'block', padding: '0.75rem' }}>{profileMessage}</p>}
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '2px solid var(--sf-border)', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
@@ -203,7 +206,7 @@ export default function AccountPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                   <h2 style={{ margin: 0 }}>Profile Information</h2>
                   {!isEditing && (
-                    <button className="sf-button-secondary" onClick={() => setIsEditing(true)}>
+                    <button className="sf-button-secondary" disabled={loading} onClick={() => { setProfileError(''); setProfileMessage(''); setIsEditing(true); }}>
                       Edit Profile
                     </button>
                   )}
@@ -211,9 +214,10 @@ export default function AccountPage() {
 
                 <div style={{ display: 'grid', gap: '1rem' }}>
                   <div className="sf-field">
-                    <label>Full Name</label>
+                    <label htmlFor="account-name">Full Name</label>
                     {isEditing ? (
                       <input
+                        id="account-name"
                         className="sf-input"
                         value={form.name}
                         onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -224,9 +228,10 @@ export default function AccountPage() {
                   </div>
 
                   <div className="sf-field">
-                    <label>Email</label>
+                    <label htmlFor="account-email">Email</label>
                     {isEditing ? (
                       <input
+                        id="account-email"
                         className="sf-input"
                         type="email"
                         value={form.email}
@@ -239,9 +244,10 @@ export default function AccountPage() {
                   </div>
 
                   <div className="sf-field">
-                    <label>Phone</label>
+                    <label htmlFor="account-phone">Phone</label>
                     {isEditing ? (
                       <input
+                        id="account-phone"
                         className="sf-input"
                         value={form.phone}
                         onChange={(e) => setForm({ ...form, phone: e.target.value })}
@@ -252,9 +258,10 @@ export default function AccountPage() {
                   </div>
 
                   <div className="sf-field">
-                    <label>City</label>
+                    <label htmlFor="account-city">City</label>
                     {isEditing ? (
                       <input
+                        id="account-city"
                         className="sf-input"
                         value={form.city}
                         onChange={(e) => setForm({ ...form, city: e.target.value })}
@@ -265,9 +272,10 @@ export default function AccountPage() {
                   </div>
 
                   <div className="sf-field">
-                    <label>Address</label>
+                    <label htmlFor="account-address">Address</label>
                     {isEditing ? (
                       <textarea
+                        id="account-address"
                         className="sf-textarea"
                         rows={3}
                         value={form.address}
@@ -283,8 +291,9 @@ export default function AccountPage() {
                       <button className="sf-button" onClick={handleSave} disabled={isSaving}>
                         {isSaving ? 'Saving...' : 'Save Changes'}
                       </button>
-                      <button className="sf-button-secondary" onClick={() => {
+                      <button className="sf-button-secondary" disabled={isSaving} onClick={() => {
                         setIsEditing(false);
+                        setProfileError('');
                         setForm({
                           name: customerData?.name || '',
                           email: customerData?.email || '',

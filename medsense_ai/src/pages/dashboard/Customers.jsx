@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLiveDataRefresh } from '../../hooks/useLiveDataRefresh';
 import {
   ArrowLeftRight, DollarSign, Edit, Eye, Loader2, RefreshCw,
   RotateCcw, Save, Search, TrendingDown, UserPlus,
@@ -102,8 +103,8 @@ export default function Customers() {
   };
 
   /* ─── Fetch customers list ─── */
-  const refreshCustomers = async () => {
-    setIsLoading(true);
+  const refreshCustomers = async (quiet = false) => {
+    if (!quiet) setIsLoading(true);
     try {
       const data = await listCustomers({ search: '', status: 'all' });
       const freshList = data.customers || [];
@@ -118,7 +119,7 @@ export default function Customers() {
     } catch (err) {
       showToast(err.message || 'Failed to fetch customers', 'error');
     } finally {
-      setIsLoading(false);
+      if (!quiet) setIsLoading(false);
     }
   };
 
@@ -175,6 +176,11 @@ export default function Customers() {
   };
 
   useEffect(() => { refreshCustomers(); }, []); // eslint-disable-line
+  useLiveDataRefresh(async () => {
+    await refreshCustomers(true);
+    if (surface === 'ledger' && selectedCustomer) await refreshLedger(selectedCustomer.id);
+    if (surface === 'payment' && selectedPaymentCustomer) await fetchDeliveredOrders(selectedPaymentCustomer.id);
+  });
 
   /* Auto-select first customer on ledger tab */
   useEffect(() => {

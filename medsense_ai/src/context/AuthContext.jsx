@@ -10,6 +10,7 @@ import {
   readCustomerAuth,
   writeCustomerAuth,
 } from '../services/customerAuthSession';
+import { updateMyCustomerProfile } from '../services/storefrontAccountService';
 
 const AuthContext = createContext(null);
 
@@ -145,6 +146,18 @@ export function AuthProvider({ children }) {
     setAuthError('');
   };
 
+  const updateProfile = useCallback(async (profile) => {
+    const stored = readCustomerAuth();
+    if (!stored) throw new Error('Your session has expired. Please sign in again.');
+    const updated = await updateMyCustomerProfile(profile);
+    const current = readCustomerAuth();
+    if (!current || current.token !== stored.token) throw new Error('Your session changed. Please sign in again.');
+    const refreshed = { ...current, ...updated, token: current.token };
+    if (!writeCustomerAuth(refreshed)) throw new Error('Your session has expired. Please sign in again.');
+    setUser(refreshed);
+    return updated;
+  }, []);
+
   const openAuthModal = React.useCallback((intent = 'checkout') => {
     setAuthModalState({ open: true, intent });
     setAuthError('');
@@ -161,6 +174,7 @@ export function AuthProvider({ children }) {
       login,
       register,
       logout,
+      updateProfile,
       isAuthenticated: authStatus === 'authenticated' && Boolean(user),
       authStatus,
       retryAuthValidation: validateStoredCustomer,
@@ -170,7 +184,7 @@ export function AuthProvider({ children }) {
       authError,
       authLoading,
     }),
-    [authModalState, user, authError, authLoading, authStatus, validateStoredCustomer],
+    [authModalState, user, authError, authLoading, authStatus, validateStoredCustomer, updateProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

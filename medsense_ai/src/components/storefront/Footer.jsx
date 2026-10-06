@@ -5,9 +5,9 @@ const footerColumns = [
   {
     title: 'Shop',
     links: [
-      { label: 'Pain Relief', href: '/category/pain-relief' },
+      { label: 'Analgesic', href: '/category/analgesic' },
       { label: 'Vitamins', href: '/category/vitamins' },
-      { label: 'Digestive Care', href: '/category/digestive-care' },
+      { label: 'Gastrointestinal', href: '/category/gastrointestinal' },
     ],
   },
   {
@@ -16,6 +16,7 @@ const footerColumns = [
       { label: 'Track Order', href: '/orders' },
       { label: 'Prescription Upload', href: '/prescription/upload' },
       { label: 'Refill Alerts', href: '/refills' },
+      { label: 'Subscriptions', href: '/subscriptions' },
     ],
   },
   {

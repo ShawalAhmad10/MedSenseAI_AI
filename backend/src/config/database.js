@@ -1,6 +1,10 @@
 // src/config/database.js
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
+const databaseSchema = process.env.DB_SCHEMA || 'public';
+if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(databaseSchema)) {
+  throw new Error('DB_SCHEMA must be a valid PostgreSQL schema name.');
+}
 
 const sequelize = new Sequelize(
   process.env.DB_NAME,
@@ -10,6 +14,13 @@ const sequelize = new Sequelize(
     host: process.env.DB_HOST,
     port: process.env.DB_PORT || 5432,
     dialect: 'postgres',
+    dialectOptions: {
+      options: `-c search_path=${databaseSchema}`,
+      connectionTimeoutMillis: 15000,
+      ...(process.env.DB_SSL === 'true' ? {
+        ssl: { require: true, rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' }
+      } : {})
+    },
     logging: process.env.NODE_ENV === 'development' ? console.log : false,
     pool: {
       max: 10,

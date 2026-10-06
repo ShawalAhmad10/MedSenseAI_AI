@@ -2,6 +2,7 @@ const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
 
 const Stock = sequelize.define('Stock', {
+  stock_number: { type: DataTypes.STRING, allowNull: true },
   stock_id: {
     type: DataTypes.INTEGER,
     primaryKey: true,

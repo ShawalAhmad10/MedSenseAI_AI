@@ -122,6 +122,9 @@ export async function getInvoiceCatalog() {
     });
 
     const products = (productsResponse.data || []).map(product => ({
+      ...product,
+      fifoBatches: (product.batches || []).filter(batch => batch.available).map(batch => ({ ...batch,
+        productId: product.id, name: batch.name || product.title })),
       id: product.id || product.product_id || '',
       title: product.title || product.product_title || '',
       price: product.price || product.product_price || 0,

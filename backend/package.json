@@ -6,6 +6,9 @@
   "type": "commonjs",
   "scripts": {
     "start": "node src/server.js",
+    "prestart": "npm run db:prices",
+    "predev": "npm run db:prices",
+    "db:prices": "node src/db/migrate-product-prices.js",
     "dev": "nodemon src/server.js",
     "setup": "node setup.js",
     "db:init": "node src/db/init.js",
@@ -19,7 +22,7 @@
     "test:d1": "node --test"
   },
   "dependencies": {
-    "axios": "^1.19.0",
+    "axios": "^1.20.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -30,7 +33,7 @@
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
-    "nodemailer": "^6.9.13",
+    "nodemailer": "^10.0.15",
     "pg": "^8.12.0",
     "sequelize": "^6.35.2",
     "uuid": "^10.0.0"

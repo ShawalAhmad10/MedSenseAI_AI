@@ -25,32 +25,34 @@ from medsense_ai.medical_data_ingestion.normalization import normalize_medical_n
 
 TARGET_MODEL_NAMES = (
     "Cefoperazone",
+    "Cloxacillin",
     "Dexketoprofen",
     "Dydrogesterone",
     "Etoricoxib",
     "Fusidic acid",
+    "Gliclazide",
     "Norethisterone",
     "Rupatadine",
+    "Salbutamol",
 )
 
 DEFAULT_BRIDGE_ARTIFACT = Path(__file__).with_name("data") / "ddi_bridge_v1.json"
 
 GOVERNED_ALIASES = {
-    "amoxycillin": "amoxicillin",
-    "cefipime": "cefepime",
-    "ceflriaxone": "ceftriaxone",
-    "cefoiaxone": "ceftriaxone",
-    "cefriaxone": "ceftriaxone",
-    "ceftriarone": "ceftriaxone",
-    "ceftrizone": "ceftriaxone",
-    "fosmomycin": "fosfomycin",
-    "salbacatam": "sulbactam",
-    "salbactam": "sulbactam",
-    "slidenafil": "sildenafil",
-    "sulbactum": "sulbactam",
-    "tazobactum": "tazobactam",
+    'amoxycillin': 'amoxicillin',
+    'cefipime': 'cefepime',
+    'ceflriaxone': 'ceftriaxone',
+    'cefoiaxone': 'ceftriaxone',
+    'cefriaxone': 'ceftriaxone',
+    'ceftriarone': 'ceftriaxone',
+    'ceftrizone': 'ceftriaxone',
+    'fosmomycin': 'fosfomycin',
+    'salbacatam': 'sulbactam',
+    'salbactam': 'sulbactam',
+    'slidenafil': 'sildenafil',
+    'sulbactum': 'sulbactam',
+    'tazobactum': 'tazobactam',
 }
-
 
 def build_supplemental_identity_payload(
     model_dir: Path,
@@ -160,8 +162,8 @@ def build_supplemental_identity_payload(
         "schema_version": SUPPLEMENTAL_IDENTITY_SCHEMA_VERSION,
         "matching_policy": (
             "Exact governed lookup after NFKC/casefold/whitespace normalization; "
-            "conservative enumerated formulation candidates and versioned DRAP-corpus "
-            "aliases only; no fuzzy matching or arbitrary prefix inference."
+            "conservative enumerated formulation candidates and versioned governed aliases "
+            "with explicit provenance only; no fuzzy matching or arbitrary prefix inference."
         ),
         "provenance": {
             "source": "PubChem/model feature identity",
