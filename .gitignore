@@ -1,4 +1,4 @@
-﻿# ==========================================================
+# ==========================================================
 # MedSenseAI public repository exclusions
 # ==========================================================
 
@@ -19,7 +19,6 @@
 # Database dumps / local DBs
 *.backup
 *.dump
-*.sql
 *.db
 
 # Private handoff / migration data
@@ -85,3 +84,9 @@ backend/test-user-temp.json
 backend/*user-temp*.json
 backend/*token-temp*.json
 **/test-user-temp.json
+
+# SQL dumps are private; backend migration SQL is source code
+database/*.sql
+database/**/*dump*.sql
+database/**/*backup*.sql
+**/*database-dump*.sql
