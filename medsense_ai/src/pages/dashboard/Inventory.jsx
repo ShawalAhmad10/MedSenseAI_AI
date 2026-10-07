@@ -197,6 +197,8 @@ export default function Inventory() {
   const [isStockLoading, setIsStockLoading] = useState(false);
   const [stockSearch, setStockSearch] = useState('');
 
+  const [stockCatalogProducts, setStockCatalogProducts] = useState([]);
+  const [stockCatalogSuppliers, setStockCatalogSuppliers] = useState([]);
   const [isStockIntakeOpen, setIsStockIntakeOpen] = useState(false);
   const [isStockOpeningOpen, setIsStockOpeningOpen] = useState(false);
   const [isStockReturnOpen, setIsStockReturnOpen] = useState(false);
@@ -230,6 +232,56 @@ export default function Inventory() {
     }
   }, []);
 
+  const openStockIntake = useCallback(async () => {
+    try {
+      const [productResponse, supplierResponse] = await Promise.all([
+        listProducts(),
+        listSuppliers()
+      ]);
+
+      const productList =
+        Array.isArray(productResponse)
+          ? productResponse
+          : Array.isArray(productResponse?.data)
+          ? productResponse.data
+          : [];
+
+      const supplierList =
+        Array.isArray(supplierResponse)
+          ? supplierResponse
+          : Array.isArray(supplierResponse?.data)
+          ? supplierResponse.data
+          : Array.isArray(supplierResponse?.data?.suppliers)
+          ? supplierResponse.data.suppliers
+          : [];
+
+      const catalog = await getStockCatalog({
+        inventoryItems: productList,
+        suppliers: supplierList
+      });
+
+      setStockCatalogProducts(
+        Array.isArray(catalog?.products) && catalog.products.length > 0
+          ? catalog.products
+          : productList
+      );
+
+      setStockCatalogSuppliers(
+        Array.isArray(catalog?.suppliers) && catalog.suppliers.length > 0
+          ? catalog.suppliers
+          : supplierList
+      );
+
+      setIsStockIntakeOpen(true);
+    } catch (error) {
+      console.error('Stock intake catalog load failed:', error);
+      setStockCatalogProducts([]);
+      setStockCatalogSuppliers([]);
+      setIsStockIntakeOpen(true);
+    }
+  }, []);
+
+
   const refreshStockWorkspace = useCallback(async (quiet = false) => {
     if (!quiet) setIsStockLoading(true);
     try {
@@ -241,7 +293,7 @@ export default function Inventory() {
         listStockReturns(),
       ]);
       try {
-        const catalogData = await getStockCatalog({ inventoryItems: productList || [], suppliers: supplierList || [] });
+        const catalogData = await getStockCatalog({ inventoryItems: products || [], suppliers: suppliers || [] });
         setCatalog(catalogData);
       } catch (catErr) {
         console.error('Catalog fetch error:', catErr.message);
@@ -645,7 +697,7 @@ export default function Inventory() {
             </motion.button>
           )}
           {surface === 'procurement' && (
-            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setIsStockIntakeOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '0.5rem 1.1rem', borderRadius: 9, background: '#1e3a8a', color: 'white', border: 'none', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer' }}>
+            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={openStockIntake} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '0.5rem 1.1rem', borderRadius: 9, background: '#1e3a8a', color: 'white', border: 'none', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer' }}>
               <PackagePlus size={15} /> Add New Batch
             </motion.button>
           )}
@@ -1287,9 +1339,11 @@ export default function Inventory() {
         }}
       />
       <StockIntakeModal
+        suppliers={stockCatalogSuppliers}
+        products={stockCatalogProducts}
         isOpen={isStockIntakeOpen}
         onClose={() => setIsStockIntakeOpen(false)}
-        catalog={catalog}
+        catalog={{ ...catalog, suppliers, products }}
         currentUserName={currentUserName}
         onSubmit={handleCreateStockEntry}
       />

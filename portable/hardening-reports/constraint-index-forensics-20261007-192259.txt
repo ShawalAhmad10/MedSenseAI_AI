@@ -1,0 +1,26 @@
+MedSenseAI constraint/index forensic audit
+Generated: 2026-10-07 19:23:09
+
+SOURCE
+Neon: neondb
+
+TARGET
+127.0.0.1:5433/medsenseai_pharm_neonclone_20261007_191540
+
+CONSTRAINTS
+Source objects: 765
+Target objects: 765
+Missing: 0
+Extra: 0
+Changed: 10
+Pass: False
+
+INDEXES
+Source objects: 178
+Target objects: 178
+Missing: 0
+Extra: 0
+Changed: 1
+Pass: False
+
+READ ONLY AUDIT.

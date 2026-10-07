@@ -17,6 +17,7 @@ const {
   selectAlternatives,
   chooseIdentity,
   exactNameMatches,
+  normalizeSaltComposition,
 } = recommendationService._private;
 
 function read(relativePath) {
@@ -202,6 +203,163 @@ test(
 );
 
 test(
+  'in-stock source does not suppress same-salt alternatives',
+  () => {
+    const source = product({
+      id: 1,
+      salt: 'Paracetamol 500mg',
+      stock: 20,
+    });
+    const result = selectAlternatives(source, [
+      source,
+      product({ id: 2, salt: 'Paracetamol 500mg', stock: 5 }),
+    ]);
+
+    assert.deepEqual(
+      result.recommendations.map((item) => item.product_id),
+      [2]
+    );
+  }
+);
+
+test(
+  'out-of-stock source can still discover an available same-salt product',
+  () => {
+    const source = product({
+      id: 1,
+      salt: 'Paracetamol 500mg',
+      stock: 0,
+      status: 0,
+    });
+    const result = selectAlternatives(source, [
+      source,
+      product({ id: 2, salt: 'Paracetamol 500mg', stock: 4 }),
+    ]);
+
+    assert.deepEqual(
+      result.recommendations.map((item) => item.product_id),
+      [2]
+    );
+  }
+);
+
+test(
+  'complete combination composition is order-insensitive but partial overlap is rejected',
+  () => {
+    assert.equal(
+      normalizeSaltComposition('Amoxicillin + Clavulanic Acid'),
+      normalizeSaltComposition('Clavulanic Acid + Amoxicillin')
+    );
+    assert.notEqual(
+      normalizeSaltComposition('Amoxicillin + Clavulanic Acid'),
+      normalizeSaltComposition('Amoxicillin')
+    );
+
+    const source = product({
+      id: 1,
+      salt: 'Amoxicillin + Clavulanic Acid',
+    });
+    const result = selectAlternatives(source, [
+      source,
+      product({ id: 2, salt: 'Clavulanic Acid + Amoxicillin' }),
+      product({ id: 3, salt: 'Amoxicillin' }),
+    ]);
+
+    assert.deepEqual(
+      result.recommendations.map((item) => item.product_id),
+      [2]
+    );
+  }
+);
+
+test(
+  'salt strength and slash notation remain exact and are not inferred',
+  () => {
+    assert.notEqual(
+      normalizeSaltComposition('Paracetamol 500mg'),
+      normalizeSaltComposition('Paracetamol 250mg')
+    );
+    assert.notEqual(
+      normalizeSaltComposition('Cefixime 100mg/5ml'),
+      normalizeSaltComposition('Cefixime 100mg')
+    );
+  }
+);
+
+test(
+  'authoritative selection replaces the source and reruns existing DDI on the final cart',
+  async () => {
+    const source = product({ id: 1, salt: 'Paracetamol 500mg' });
+    const alternative = product({ id: 2, salt: 'Paracetamol 500mg' });
+    const other = product({ id: 3, salt: 'Ibuprofen 400mg' });
+    let receivedProducts;
+
+    const result = await recommendationService.validateAlternativeSelection(
+      {
+        sourceProductId: 1,
+        alternativeProductId: 2,
+        cartItems: [
+          { product_id: 1, quantity: 1 },
+          { product_id: 3, quantity: 1 },
+        ],
+      },
+      {
+        products: [source, alternative, other],
+        checkCart: async (products) => {
+          receivedProducts = products;
+          return {
+            httpStatus: 200,
+            result: {
+              status: 'CLEAR_WITH_LIMITATIONS',
+              checkout_allowed: true,
+              review_required: false,
+            },
+          };
+        },
+      }
+    );
+
+    assert.deepEqual(
+      receivedProducts.map((item) => item.product_id),
+      [2, 3]
+    );
+    assert.deepEqual(result.final_cart, [
+      { product_id: 2, quantity: 1 },
+      { product_id: 3, quantity: 1 },
+    ]);
+    assert.equal(result.ddi.checkout_allowed, true);
+  }
+);
+
+test(
+  'selection rejects spoofed salt and stale unavailable candidates',
+  async () => {
+    const source = product({ id: 1, salt: 'Paracetamol 500mg' });
+    const wrongSalt = product({ id: 2, salt: 'Ibuprofen 400mg' });
+    const noStock = product({ id: 3, salt: 'Paracetamol 500mg', stock: 0 });
+    const input = {
+      sourceProductId: 1,
+      cartItems: [{ product_id: 1, quantity: 1, product_salt: 'spoofed' }],
+    };
+
+    await assert.rejects(
+      recommendationService.validateAlternativeSelection(
+        { ...input, alternativeProductId: 2 },
+        { products: [source, wrongSalt] }
+      ),
+      (error) => error.code === 'RECOMMENDATION_SALT_MISMATCH'
+    );
+    await assert.rejects(
+      recommendationService.validateAlternativeSelection(
+        { ...input, alternativeProductId: 3 },
+        { products: [source, noStock] }
+      ),
+      (error) => error.code === 'RECOMMENDATION_ALTERNATIVE_UNAVAILABLE'
+    );
+  }
+);
+
+test(
   'inactive and out-of-stock candidates are excluded',
   () => {
     const source =
@@ -322,6 +480,11 @@ test(
     assert.match(
       routes,
       /'\/products\/:productId'[\s\S]*recommendationController\.byProduct/
+    );
+
+    assert.match(
+      routes,
+      /'\/products\/:productId\/select'[\s\S]*recommendationController\.selectAlternative/
     );
 
     assert.match(

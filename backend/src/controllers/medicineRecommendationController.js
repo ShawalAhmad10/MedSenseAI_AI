@@ -120,3 +120,33 @@ exports.interactionAware =
       );
     }
   };
+
+exports.selectAlternative =
+  async (req, res) => {
+    try {
+      const result =
+        await recommendationService
+          .validateAlternativeSelection({
+            sourceProductId:
+              req.params.productId,
+
+            alternativeProductId:
+              req.body?.alternative_product_id,
+
+            cartItems:
+              req.body?.cart_items,
+          });
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      console.error(
+        'Alternative selection validation error:',
+        error
+      );
+
+      sendError(res, error);
+    }
+  };

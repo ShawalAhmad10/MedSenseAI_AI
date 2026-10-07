@@ -20,10 +20,7 @@ async function fetchCategoriesDirectory() {
 }
 
 // Delay helper for smooth transitions
-const delay = (payload, timeout = 150) =>
-  new Promise((resolve) => {
-    setTimeout(() => resolve(payload), timeout);
-  });
+const delay = (payload) => Promise.resolve(payload);
 
 // Get all products from database
 async function fetchAllProducts() {

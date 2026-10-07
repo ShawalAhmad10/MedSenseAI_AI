@@ -452,6 +452,70 @@ export function CartProvider({ children }) {
     }
   };
 
+  const replaceItem = (
+    sourceId,
+    validatedAlternative,
+    finalCart
+  ) => {
+    const sourceKey =
+      String(sourceId).replace(/^prod-/, '');
+    const alternativeKey =
+      String(validatedAlternative?.id ?? '')
+        .replace(/^prod-/, '');
+
+    if (!alternativeKey) {
+      throw new Error(
+        'A validated alternative product is required.'
+      );
+    }
+
+    const finalQuantities = new Map(
+      (finalCart || []).map((item) => [
+        String(item.product_id),
+        Number(item.quantity),
+      ])
+    );
+
+    setItems((current) => {
+      const source = current.find(
+        (item) =>
+          String(item.id).replace(/^prod-/, '') === sourceKey
+      );
+
+      if (!source) {
+        return current;
+      }
+
+      const remaining = current.filter(
+        (item) => {
+          const key = String(item.id).replace(/^prod-/, '');
+          return key !== sourceKey && key !== alternativeKey;
+        }
+      );
+      const quantity =
+        finalQuantities.get(alternativeKey) ||
+        source.quantity;
+
+      return [
+        ...remaining,
+        {
+          ...source,
+          ...validatedAlternative,
+          id: `prod-${alternativeKey}`,
+          quantity,
+          stockQty:
+            Number(validatedAlternative.stockQty || 0),
+        },
+      ];
+    });
+
+    // The product set changed. Existing consultation snapshots and approvals
+    // are bound to the old signature and cannot authorize this new cart.
+    setDdiResult(null);
+    setDdiError(null);
+    setDdiIdentity(null);
+  };
+
   const clearCart = () => {
     setItems([]);
 
@@ -553,6 +617,7 @@ export function CartProvider({ children }) {
       addItem,
       removeItem,
       updateQuantity,
+      replaceItem,
       refreshCartInventory,
       clearCart,
       mergeGuestCartToAccount,

@@ -332,6 +332,78 @@ export async function getProductRecommendations(
   }
 }
 
+export async function validateSameSaltAlternativeSelection(
+  sourceProductId,
+  alternativeProductId,
+  cartItems
+) {
+  const sourceId =
+    positiveProductId(sourceProductId);
+  const alternativeId =
+    positiveProductId(alternativeProductId);
+
+  const normalizedCart =
+    (cartItems || []).map((item) => ({
+      product_id:
+        positiveProductId(
+          item?.id ?? item?.product_id
+        ),
+      quantity:
+        Math.max(1, Number(item?.quantity) || 1),
+    }));
+
+  try {
+    const response = await axios.post(
+      `${API_URL}/products/${sourceId}/select`,
+      {
+        alternative_product_id:
+          alternativeId,
+        cart_items:
+          normalizedCart,
+      },
+      {
+        timeout: 20000,
+      }
+    );
+    const data = response.data?.data;
+
+    if (
+      !data ||
+      data.status !==
+        'ALTERNATIVE_SELECTION_VALIDATED' ||
+      !data.selected_alternative ||
+      !Array.isArray(data.final_cart) ||
+      !data.ddi
+    ) {
+      throw new Error(
+        'Alternative selection service returned an invalid response.'
+      );
+    }
+
+    return {
+      ...data,
+      selectedAlternative:
+        mapRecommendationProduct(
+          data.selected_alternative
+        ),
+    };
+  } catch (error) {
+    if (
+      error?.message ===
+      'Alternative selection service returned an invalid response.'
+    ) {
+      throw error;
+    }
+
+    throw new Error(
+      apiError(
+        error,
+        'Could not validate the selected same-salt alternative.'
+      )
+    );
+  }
+}
+
 export async function getPrescriptionRecommendations(
   prescriptionId
 ) {

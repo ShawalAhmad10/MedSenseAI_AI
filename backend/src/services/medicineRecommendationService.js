@@ -6,6 +6,9 @@ const {
   sequelize,
 } = require('../models');
 
+const ddiService =
+  require('./ddiService');
+
 const SCHEMA_VERSION =
   'medicine-recommendation-v1';
 
@@ -61,6 +64,36 @@ function normalizeText(value) {
     .trim()
     .toLowerCase()
     .replace(/\s+/g, ' ');
+}
+
+// Product salt is authoritative, but its presentation is not guaranteed to
+// preserve the order of ingredients in an explicit combination. Normalize
+// only complete "+"-separated components. Do not split on commas, slashes,
+// "and", or infer missing strengths/forms.
+function normalizeSaltComposition(value) {
+  const normalized =
+    normalizeText(value);
+
+  if (!normalized) {
+    return '';
+  }
+
+  const components =
+    normalized
+      .split('+')
+      .map(normalizeText);
+
+  if (components.some(
+    (component) => !component
+  )) {
+    return normalized;
+  }
+
+  return components
+    .sort((a, b) =>
+      a.localeCompare(b)
+    )
+    .join(' + ');
 }
 
 function normalizeLimit(value) {
@@ -135,12 +168,23 @@ function mapProduct(row) {
       Number(
         row.available_stock || 0
       ),
+
+    product_pack_size:
+      row.product_pack_size == null
+        ? null
+        : Number(row.product_pack_size),
+
+    product_pack_description:
+      row.product_pack_description || null,
+
+    brand_name:
+      row.brand_name || null,
   };
 }
 
 function chooseIdentity(product) {
   const salt =
-    normalizeText(
+    normalizeSaltComposition(
       product.product_salt
     );
 
@@ -185,7 +229,9 @@ function sameIdentity(
   ) {
     return (
       normalizeText(
-        candidate.product_salt
+        normalizeSaltComposition(
+          candidate.product_salt
+        )
       ) ===
       sourceIdentity.identity
     );
@@ -299,13 +345,33 @@ async function loadActiveProductSnapshot() {
           p.product_discount,
           p.product_requires_rx,
           p.product_status,
+          p.product_pack_size,
+          p.product_pack_description,
+          b.brand_name,
 
           COALESCE(
             SUM(
               CASE
                 WHEN
-                  sh.expiry_date >=
-                    CURRENT_DATE
+                  COALESCE(
+                    queue_product.archived,
+                    FALSE
+                  ) = FALSE
+                  AND COALESCE(
+                    queue_product.manually_inactive,
+                    FALSE
+                  ) = FALSE
+                  AND
+                  sh.status = 1
+                  AND COALESCE(
+                    sh.batch_status,
+                    'ACTIVE'
+                  ) = 'ACTIVE'
+                  AND sh.sale_price > 0
+                  AND (
+                    sh.expiry_date IS NULL
+                    OR sh.expiry_date >= CURRENT_DATE
+                  )
                   AND
                   sh.remaining_quantity > 0
                 THEN
@@ -319,12 +385,32 @@ async function loadActiveProductSnapshot() {
 
         FROM product p
 
-        LEFT JOIN stock_history sh
-          ON sh.product_id =
-             p.product_id
-         AND sh.status = 1
+        LEFT JOIN product queue_product
+          ON (
+            queue_product.fifo_family_id IS NOT NULL
+            AND queue_product.fifo_family_id = p.fifo_family_id
+          ) OR (
+            queue_product.fifo_family_id IS NULL
+            AND p.fifo_family_id IS NULL
+            AND LOWER(TRIM(COALESCE(queue_product.product_title, ''))) =
+                LOWER(TRIM(COALESCE(p.product_title, '')))
+            AND LOWER(TRIM(COALESCE(queue_product.product_generic_name, ''))) =
+                LOWER(TRIM(COALESCE(p.product_generic_name, '')))
+            AND LOWER(TRIM(COALESCE(queue_product.product_salt, ''))) =
+                LOWER(TRIM(COALESCE(p.product_salt, '')))
+            AND queue_product.product_brand IS NOT DISTINCT FROM p.product_brand
+            AND COALESCE(NULLIF(queue_product.product_pack_size, 0), 1) =
+                COALESCE(NULLIF(p.product_pack_size, 0), 1)
+          )
 
-        WHERE p.product_status = 1
+        LEFT JOIN stock_history sh
+          ON sh.product_id = queue_product.product_id
+
+        LEFT JOIN brand b
+          ON b.brand_id = p.product_brand
+
+        WHERE COALESCE(p.archived, FALSE) = FALSE
+          AND COALESCE(p.manually_inactive, FALSE) = FALSE
 
         GROUP BY
           p.product_id,
@@ -336,7 +422,10 @@ async function loadActiveProductSnapshot() {
           p.product_pack_price,
           p.product_discount,
           p.product_requires_rx,
-          p.product_status
+          p.product_status,
+          p.product_pack_size,
+          p.product_pack_description,
+          b.brand_name
 
         ORDER BY p.product_id
       `,
@@ -349,6 +438,195 @@ async function loadActiveProductSnapshot() {
   return rows.map(
     mapProduct
   );
+}
+
+function normalizeCartItems(value) {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw recommendationError(
+      'RECOMMENDATION_INVALID_CART',
+      'cart_items must contain at least one product',
+      400
+    );
+  }
+
+  const items = value.map((item) => ({
+    product_id: positiveInteger(
+      item?.product_id ?? item?.id,
+      'RECOMMENDATION_INVALID_CART_PRODUCT_ID'
+    ),
+    quantity: positiveInteger(
+      item?.quantity ?? 1,
+      'RECOMMENDATION_INVALID_CART_QUANTITY'
+    ),
+  }));
+
+  if (items.length > 100) {
+    throw recommendationError(
+      'RECOMMENDATION_INVALID_CART',
+      'cart_items cannot contain more than 100 lines',
+      400
+    );
+  }
+
+  return items;
+}
+
+function toDdiProduct(product) {
+  return {
+    product_id: Number(product.product_id),
+    product_title: product.product_title || null,
+    product_generic_name: product.product_generic_name || null,
+    product_salt: product.product_salt || null,
+    product_requires_rx: product.product_requires_rx == null
+      ? null
+      : Boolean(product.product_requires_rx),
+    product_status: Number(product.product_status),
+  };
+}
+
+async function validateAlternativeSelection(
+  input,
+  dependencies = {}
+) {
+  const sourceProductId = positiveInteger(
+    input?.sourceProductId
+  );
+  const alternativeProductId = positiveInteger(
+    input?.alternativeProductId,
+    'RECOMMENDATION_INVALID_ALTERNATIVE_ID'
+  );
+  const cartItems = normalizeCartItems(
+    input?.cartItems
+  );
+
+  if (sourceProductId === alternativeProductId) {
+    throw recommendationError(
+      'RECOMMENDATION_SAME_PRODUCT',
+      'The selected alternative must be a different product',
+      409
+    );
+  }
+
+  if (!cartItems.some(
+    (item) => item.product_id === sourceProductId
+  )) {
+    throw recommendationError(
+      'RECOMMENDATION_SOURCE_NOT_IN_CART',
+      'The original product is not present in the current cart',
+      409
+    );
+  }
+
+  const products = dependencies.products ||
+    await loadActiveProductSnapshot();
+  const byId = new Map(
+    products.map((product) => [
+      Number(product.product_id),
+      product,
+    ])
+  );
+  const source = byId.get(sourceProductId);
+  const alternative = byId.get(alternativeProductId);
+
+  if (!source) {
+    throw recommendationError(
+      'RECOMMENDATION_PRODUCT_NOT_FOUND',
+      'Original product not found',
+      404
+    );
+  }
+
+  const sourceSalt = normalizeSaltComposition(
+    source.product_salt
+  );
+  const alternativeSalt = normalizeSaltComposition(
+    alternative?.product_salt
+  );
+
+  if (
+    !alternative ||
+    Number(alternative.product_status) !== 1 ||
+    Number(alternative.available_stock) <= 0
+  ) {
+    throw recommendationError(
+      'RECOMMENDATION_ALTERNATIVE_UNAVAILABLE',
+      'The selected alternative is no longer active and available',
+      409
+    );
+  }
+
+  if (!sourceSalt || sourceSalt !== alternativeSalt) {
+    throw recommendationError(
+      'RECOMMENDATION_SALT_MISMATCH',
+      'The selected product does not have the same authoritative salt composition',
+      409
+    );
+  }
+
+  const grouped = new Map();
+  for (const item of cartItems) {
+    const productId = item.product_id === sourceProductId
+      ? alternativeProductId
+      : item.product_id;
+    grouped.set(
+      productId,
+      (grouped.get(productId) || 0) + item.quantity
+    );
+  }
+
+  const finalCart = [];
+  for (const [productId, quantity] of grouped) {
+    const product = byId.get(productId);
+    if (!product) {
+      throw recommendationError(
+        'RECOMMENDATION_CART_PRODUCT_UNAVAILABLE',
+        'One or more cart products are no longer available',
+        409
+      );
+    }
+    if (quantity > Number(product.available_stock)) {
+      throw recommendationError(
+        'RECOMMENDATION_INSUFFICIENT_STOCK',
+        'The final cart quantity exceeds current authoritative stock',
+        409
+      );
+    }
+    finalCart.push({
+      product,
+      quantity,
+    });
+  }
+
+  const checkCart = dependencies.checkCart || ddiService.checkCart;
+  const ddi = await checkCart(
+    finalCart.map(({ product }) => toDdiProduct(product))
+  );
+
+  if (ddi?.httpStatus !== 200 || !ddi?.result) {
+    throw recommendationError(
+      'DDI_UPSTREAM_ERROR',
+      'The final cart interaction check could not be completed',
+      503
+    );
+  }
+
+  return {
+    schema_version: SCHEMA_VERSION,
+    status: 'ALTERNATIVE_SELECTION_VALIDATED',
+    source_product: source,
+    selected_alternative: {
+      ...alternative,
+      recommendation_basis: 'SAME_SALT',
+    },
+    final_cart: finalCart.map(({ product, quantity }) => ({
+      product_id: product.product_id,
+      quantity,
+    })),
+    ddi: ddi.result,
+    message:
+      'The same-salt selection was validated against current catalogue and stock data. The final cart remains governed by the existing DDI and pharmacist-review workflow.',
+    limitations: [LIMITATION],
+  };
 }
 
 function mapProductRecommendation(
@@ -831,14 +1109,17 @@ async function recommendByPrescription(
 module.exports = {
   recommendByProductId,
   recommendByPrescription,
+  validateAlternativeSelection,
 
   _private: {
     normalizeText,
+    normalizeSaltComposition,
     normalizeLimit,
     chooseIdentity,
     sameIdentity,
     selectAlternatives,
     exactNameMatches,
     sourceProductIdForCandidate,
+    normalizeCartItems,
   },
 };

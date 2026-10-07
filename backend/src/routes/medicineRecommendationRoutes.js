@@ -19,6 +19,15 @@ router.get(
   recommendationController.byProduct
 );
 
+// Validate an explicit customer selection against authoritative product,
+// salt, stock, and the existing centralized DDI workflow. The browser cart is
+// not mutated here; the validated response is applied by the existing cart
+// lifecycle, and checkout performs its normal final revalidation.
+router.post(
+  '/products/:productId/select',
+  recommendationController.selectAlternative
+);
+
 // Interaction-aware recommendations:
 // cart product ids are untrusted input, while all
 // product details and stock are reloaded from

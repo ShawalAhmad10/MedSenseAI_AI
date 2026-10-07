@@ -132,3 +132,71 @@ exports.confirmMine =
       );
     }
   };
+
+
+exports.listForPharmacist =
+  async (req, res) => {
+    try {
+      const rows =
+        await prescriptionService
+          .listPharmacistPrescriptions();
+
+      return res.json({
+        success: true,
+        data: rows,
+      });
+    } catch (error) {
+      return sendError(
+        res,
+        error
+      );
+    }
+  };
+
+exports.getForPharmacist =
+  async (req, res) => {
+    try {
+      const row =
+        await prescriptionService
+          .getPharmacistPrescription(
+            req.params
+              .prescriptionId
+          );
+
+      return res.json({
+        success: true,
+        data: row,
+      });
+    } catch (error) {
+      return sendError(
+        res,
+        error
+      );
+    }
+  };
+
+exports.reviewForPharmacist =
+  async (req, res) => {
+    try {
+      const row =
+        await prescriptionService
+          .reviewPharmacistPrescription(
+            req.params
+              .prescriptionId,
+
+            req.user?.id,
+
+            req.body || {}
+          );
+
+      return res.json({
+        success: true,
+        data: row,
+      });
+    } catch (error) {
+      return sendError(
+        res,
+        error
+      );
+    }
+  };

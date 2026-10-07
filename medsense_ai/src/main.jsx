@@ -1,3 +1,4 @@
+import PrescriptionReview from './pages/dashboard/PrescriptionReview';
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
@@ -83,10 +84,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                     {/* Pharmacist prescription review UI is disabled until a real
                         pharmacist-side review API is implemented. Customer OCR remains
                         available through the governed storefront prescription workflow. */}
-                    <Route
-                      path="prescriptions"
-                      element={<Navigate to="/pharmacist/dashboard" replace />}
-                    />
+                    <Route path="prescriptions" element={<PrescriptionReview />} />
                     <Route path="inventory" element={<Inventory />} />
                     <Route path="customers" element={<Customers />} />
                     <Route path="record-payment" element={<RecordPayment />} />

@@ -66,12 +66,22 @@ test(
   () => {
     assert.match(
       recommendation,
-      /WHERE p\.product_status = 1/
+      /candidate\.product_status[\s\S]*?=== 1/
     );
 
     assert.match(
       recommendation,
-      /LEFT JOIN stock_history sh[\s\S]*?AND sh\.status = 1/
+      /LEFT JOIN stock_history sh[\s\S]*?ON sh\.product_id = queue_product\.product_id/
+    );
+
+    assert.match(
+      recommendation,
+      /sh\.status = 1/
+    );
+
+    assert.match(
+      recommendation,
+      /queue_product\.archived[\s\S]*?queue_product\.manually_inactive/
     );
 
     assert.match(

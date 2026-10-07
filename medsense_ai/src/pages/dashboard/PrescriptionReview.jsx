@@ -16,99 +16,255 @@ import Pagination from '../../components/common/Pagination'
 import SeverityBadge from '../../components/common/SeverityBadge'
 import { useToast } from '../../hooks/useToast'
 import { formatDate, formatTimeAgo } from '../../utils/formatters'
+import api from '../../services/api'
 
-// Mock data
-const mockPrescriptions = [
-  {
-    id:'RX-001', patientName:'Ahmed Khan', patientId:'PAT-1042',
-    initials:'AK', hue:210,
-    uploadDate: new Date(Date.now()-2*60000).toISOString(),
-    medicineCount:3, interactionCount:2,
-    confidence:91, status:'pending',
-    imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAwIiBoZWlnaHQ9IjgwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjhmOWZhIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyNCIgZmlsbD0iI2FhYSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+UFJFU0NSSVBUSU9OIFJYLTAwMTwvdGV4dD48L3N2Zz4=',
-    medicines:[
-      {id:'m1',name:'Warfarin 5mg',genericName:'Warfarin sodium',dosage:'5mg',frequency:'Once daily'},
-      {id:'m2',name:'Aspirin 100mg',genericName:'Acetylsalicylic acid',dosage:'100mg',frequency:'Once daily'},
-      {id:'m3',name:'Omeprazole',genericName:'Omeprazole',dosage:'20mg',frequency:'Before meals'},
-    ],
-    interactions:[
-      {id:'i1', medicines:['Warfarin','Aspirin'], severity:'critical',
-       description:'Concurrent use significantly increases bleeding risk.',
-       recommendation:'Consider alternative antiplatelet or reduce Warfarin dose.'},
-    ],
-  },
-  {
-    id:'RX-002', patientName:'Sara Raza', patientId:'PAT-2091',
-    initials:'SR', hue:142,
-    uploadDate: new Date(Date.now()-15*60000).toISOString(),
-    medicineCount:2, interactionCount:0,
-    confidence:88, status:'pending',
-    imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAwIiBoZWlnaHQ9IjgwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjhmOWZhIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyNCIgZmlsbD0iI2FhYSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+UFJFU0NSSVBUSU9OIFJYLTAwMjwvdGV4dD48L3N2Zz4=',
-    medicines:[
-      {id:'m1',name:'Metformin 500mg',genericName:'Metformin HCl',dosage:'500mg',frequency:'Twice daily'},
-      {id:'m2',name:'Glimepiride 2mg',genericName:'Glimepiride',dosage:'2mg',frequency:'Once daily'},
-    ],
-    interactions:[],
-  },
-  {
-    id:'RX-003', patientName:'Bilal Hussain', patientId:'PAT-0337',
-    initials:'BH', hue:280,
-    uploadDate: new Date(Date.now()-60*60000).toISOString(),
-    medicineCount:4, interactionCount:1,
-    confidence:62, status:'flagged',
-    imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAwIiBoZWlnaHQ9IjgwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjhmOWZhIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyNCIgZmlsbD0iI2FhYSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+UFJFU0NSSVBUSU9OIFJYLTAwMzwvdGV4dD48L3N2Zz4=',
-    medicines:[
-      {id:'m1',name:'Lisinopril 10mg',genericName:'Lisinopril',dosage:'10mg',frequency:'Once daily'},
-      {id:'m2',name:'Spironolactone',genericName:'Spironolactone',dosage:'25mg',frequency:'Once daily'},
-      {id:'m3',name:'Potassium Chloride',genericName:'KCl',dosage:'20mEq',frequency:'Twice daily'},
-      {id:'m4',name:'Ibuprofen 400mg',genericName:'Ibuprofen',dosage:'400mg',frequency:'As needed'},
-    ],
-    interactions:[
-      {id:'i1', medicines:['Lisinopril','Potassium Chloride'], severity:'warning',
-       description:'Risk of hyperkalemia when used together.',
-       recommendation:'Monitor potassium levels regularly.'},
-    ],
-  },
-  {
-    id:'RX-004', patientName:'Fatima Ali', patientId:'PAT-1155',
-    initials:'FA', hue:32,
-    uploadDate: new Date(Date.now()-3*3600000).toISOString(),
-    medicineCount:2, interactionCount:0,
-    confidence:95, status:'approved',
-    imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAwIiBoZWlnaHQ9IjgwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjhmOWZhIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyNCIgZmlsbD0iI2FhYSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+UFJFU0NSSVBUSU9OIFJYLTAwNDwvdGV4dD48L3N2Zz4=',
-    medicines:[
-      {id:'m1',name:'Amoxicillin 500mg',genericName:'Amoxicillin trihydrate',dosage:'500mg',frequency:'Three times daily'},
-      {id:'m2',name:'Paracetamol 500mg',genericName:'Acetaminophen',dosage:'500mg',frequency:'As needed'},
-    ],
-    interactions:[],
-  },
-  {
-    id:'RX-005', patientName:'Usman Sheikh', patientId:'PAT-2240',
-    initials:'US', hue:0,
-    uploadDate: new Date(Date.now()-5*3600000).toISOString(),
-    medicineCount:3, interactionCount:1,
-    confidence:44, status:'rejected',
-    imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAwIiBoZWlnaHQ9IjgwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjhmOWZhIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyNCIgZmlsbD0iI2FhYSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+UFJFU0NSSVBUSU9OIFJYLTAwNTwvdGV4dD48L3N2Zz4=',
-    medicines:[
-      {id:'m1',name:'Atorvastatin 40mg',genericName:'Atorvastatin calcium',dosage:'40mg',frequency:'Once at night'},
-      {id:'m2',name:'Erythromycin 500mg',genericName:'Erythromycin',dosage:'500mg',frequency:'Four times daily'},
-      {id:'m3',name:'Digoxin 0.25mg',genericName:'Digoxin',dosage:'0.25mg',frequency:'Once daily'},
-    ],
-    interactions:[
-      {id:'i1', medicines:['Atorvastatin','Erythromycin'], severity:'critical',
-       description:'Erythromycin inhibits statin metabolism, risking rhabdomyolysis.',
-       recommendation:'Temporarily discontinue statin during antibiotic course.'},
-    ],
-  },
-]
+// Live records are loaded from the backend.
+const mockPrescriptions = []
+// Live pharmacist prescription service.
+// Authentication is handled by the shared api.js interceptor.
 
-// Mock service
-const prescriptionService = {
-  approve: async () => new Promise(res => setTimeout(res, 800)),
-  flag: async () => new Promise(res => setTimeout(res, 800)),
-  reject: async () => new Promise(res => setTimeout(res, 800)),
+function normalizeLivePrescription(row = {}) {
+  const medicines = Array.isArray(row.medicines)
+    ? row.medicines.map((medicine, index) => ({
+        id:
+          medicine?.id ||
+          `medicine-${index + 1}`,
+
+        name:
+          medicine?.name ||
+          '',
+
+        genericName:
+          medicine?.genericName ||
+          '',
+
+        dosage:
+          medicine?.dosage ||
+          '',
+
+        frequency:
+          medicine?.frequency ||
+          '',
+
+        confidence:
+          medicine?.confidence ??
+          null,
+      }))
+    : []
+
+  return {
+    ...row,
+
+    id:
+      row.id ||
+      `RX-${String(
+        row.prescriptionId || ''
+      ).padStart(4, '0')}`,
+
+    patientName:
+      row.patientName ||
+      `Customer ${row.patientId || ''}`,
+
+    patientId:
+      String(
+        row.patientId || ''
+      ),
+
+    uploadDate:
+      row.uploadDate ||
+      new Date().toISOString(),
+
+    medicineCount:
+      medicines.length,
+
+    interactionCount:
+      Number(
+        row.interactionCount || 0
+      ),
+
+    confidence:
+      Number(
+        row.confidence || 0
+      ),
+
+    status:
+      row.status ||
+      'pending',
+
+    medicines,
+
+    interactions:
+      Array.isArray(row.interactions)
+        ? row.interactions
+        : [],
+
+    imageUrl:
+      row.imageUrl ||
+      null,
+
+    rawOcrText:
+      row.rawOcrText ||
+      '',
+  }
 }
 
+function prescriptionIdFrom(value) {
+  if (
+    value &&
+    typeof value === 'object' &&
+    value.prescriptionId
+  ) {
+    return value.prescriptionId
+  }
+
+  const text =
+    String(value || '')
+
+  const numeric =
+    Number(
+      text.replace(
+        /^RX-/i,
+        ''
+      )
+    )
+
+  if (
+    !Number.isInteger(numeric) ||
+    numeric <= 0
+  ) {
+    throw new Error(
+      'Invalid prescription identifier.'
+    )
+  }
+
+  return numeric
+}
+
+const prescriptionService = {
+  list: async () => {
+    const response =
+      await api.get(
+        '/prescriptions/pharmacist/review'
+      )
+
+    const summaries =
+      Array.isArray(
+        response?.data?.data
+      )
+        ? response.data.data
+        : []
+
+    /*
+     * Detail calls provide the original uploaded image,
+     * raw OCR text, customer confirmation and medicines.
+     * This keeps the existing professional UI unchanged.
+     */
+    const detailed =
+      await Promise.all(
+        summaries.map(
+          async (summary) => {
+            try {
+              const detail =
+                await api.get(
+                  `/prescriptions/pharmacist/review/${summary.prescriptionId}`
+                )
+
+              return normalizeLivePrescription(
+                detail?.data?.data ||
+                summary
+              )
+            } catch {
+              return normalizeLivePrescription(
+                summary
+              )
+            }
+          }
+        )
+      )
+
+    return detailed
+  },
+
+  approve: async (
+    prescriptionId,
+    payload = {}
+  ) => {
+    const id =
+      prescriptionIdFrom(
+        prescriptionId
+      )
+
+    const response =
+      await api.patch(
+        `/prescriptions/pharmacist/review/${id}`,
+        {
+          status: 'approved',
+          medicines:
+            payload.medicines || [],
+          note:
+            payload.note || '',
+        }
+      )
+
+    return normalizeLivePrescription(
+      response?.data?.data || {}
+    )
+  },
+
+  flag: async (
+    prescriptionId,
+    payload = {}
+  ) => {
+    const id =
+      prescriptionIdFrom(
+        prescriptionId
+      )
+
+    const response =
+      await api.patch(
+        `/prescriptions/pharmacist/review/${id}`,
+        {
+          status: 'flagged',
+          medicines:
+            payload.medicines || [],
+          note:
+            payload.note || '',
+        }
+      )
+
+    return normalizeLivePrescription(
+      response?.data?.data || {}
+    )
+  },
+
+  reject: async (
+    prescriptionId,
+    payload = {}
+  ) => {
+    const id =
+      prescriptionIdFrom(
+        prescriptionId
+      )
+
+    const response =
+      await api.patch(
+        `/prescriptions/pharmacist/review/${id}`,
+        {
+          status: 'rejected',
+          medicines:
+            payload.medicines || [],
+          note:
+            payload.note ||
+            payload.reason ||
+            '',
+        }
+      )
+
+    return normalizeLivePrescription(
+      response?.data?.data || {}
+    )
+  },
+}
 export default function PrescriptionReview() {
   const [prescriptions, setPrescriptions] = useState(mockPrescriptions)
   const [selectedRx, setSelectedRx] = useState(null)
@@ -137,6 +293,40 @@ export default function PrescriptionReview() {
   const fileInputRef = useRef(null)
   const noteRef = useRef(null)
   const controls = useAnimation()
+  // LIVE_PRESCRIPTION_LOAD
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadLivePrescriptions() {
+      try {
+        const liveRows =
+          await prescriptionService.list()
+
+        if (!cancelled) {
+          setPrescriptions(
+            liveRows
+          )
+        }
+      } catch (error) {
+        if (!cancelled) {
+          showToast({
+            type: 'error',
+            message:
+              error?.response?.data?.message ||
+              error?.message ||
+              'Could not load prescriptions',
+          })
+        }
+      }
+    }
+
+    loadLivePrescriptions()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   
   const toast = useToast()
   const showToast = toast?.showToast || console.log

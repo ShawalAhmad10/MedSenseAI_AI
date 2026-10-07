@@ -886,7 +886,7 @@ export default function Dashboard() {
             <div style={{ textAlign: 'right', marginTop: '0.75rem' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--blue)', fontWeight: 500, cursor: 'pointer' }}
                 onClick={() => navigate('/pharmacist/dashboard/inventory')}>
-                View all stock >
+                View all stock &gt;
               </span>
             </div>
           </div>
@@ -1044,7 +1044,7 @@ export default function Dashboard() {
             <div style={{ textAlign: 'center', marginTop: '0.75rem' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--blue)', fontWeight: 500, cursor: 'pointer' }}
                 onClick={() => navigate('/pharmacist/dashboard/suppliers')}>
-                Order from suppliers >
+                Order from suppliers &gt;
               </span>
             </div>
           </div>
@@ -1120,7 +1120,7 @@ export default function Dashboard() {
               </div>
               <span style={{ fontSize: '0.75rem', color: 'var(--blue)', fontWeight: 500, cursor: 'pointer' }}
                 onClick={() => navigate('/pharmacist/dashboard/orders')}>
-                View all orders >
+                View all orders &gt;
               </span>
             </div>
 

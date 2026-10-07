@@ -48,16 +48,26 @@ const cart =
   );
 
 test(
-  'original catalogue recommendation client remains read-only',
+  'catalogue discovery stays read-only while explicit selection uses validation POST',
   () => {
     assert.doesNotMatch(
       baseService,
-      /axios\.(post|patch|delete)/
+      /axios\.(patch|delete)/
     );
 
     assert.match(
       baseService,
       /axios\.get/
+    );
+
+    assert.match(
+      baseService,
+      /validateSameSaltAlternativeSelection[\s\S]*axios\.post/
+    );
+
+    assert.match(
+      baseService,
+      /products\/\$\{sourceId\}\/select/
     );
   }
 );

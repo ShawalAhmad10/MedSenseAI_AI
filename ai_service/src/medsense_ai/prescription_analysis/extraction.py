@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import re
 
@@ -29,6 +29,7 @@ _STRENGTH_RE = re.compile(
             |µg
             |ug
             |mg
+            |ng
             |g
             |ml
             |mL

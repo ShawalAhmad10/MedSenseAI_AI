@@ -1,24 +1,87 @@
-node_modules/
-dist/
-medsense_ai/test-results/
-medsense_ai/playwright-report/
-medsense_ai/debug.log
+﻿# ==========================================================
+# MedSenseAI public repository exclusions
+# ==========================================================
+
+# Secrets / local environment
 .env
 .env.*
 !.env.example
+**/.env
+**/.env.*
+!**/.env.example
 
-ai_service/.env
+# Credentials / private configuration
+*.pem
+*.key
+*.p12
+*.pfx
 
-ai_service/.venv-lead-3139/
+# Database dumps / local DBs
+*.backup
+*.dump
+*.sql
+*.db
+
+# Private handoff / migration data
+MedSenseAI_PRIVATE_HANDOFF/
+integration-backups/
 database/cloud-migration-*/
-database/pgadmin-config-before-neon-*.db
-**/cloud-migration-tests.log
 database/final-postgresql-*/
-database/*.backup
 portable/backend.env.reference
 
-# Large/local AI source datasets - not runtime repository content
+# Python environments/cache
+.venv/
+.venv-*/
+**/.venv/
+**/.venv-*/
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+**/.pytest_cache/
+
+# Node
+node_modules/
+**/node_modules/
+
+# Build / test output
+dist/
+build/
+test-results/
+playwright-report/
+
+# Logs
+*.log
+runtime-logs/
+portable/runtime-logs/
+
+# Archives/backups
+*.bak
+*.backup
+*.dump
+*.zip
+*.tar
+*.gz
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Large/local AI research datasets - not runtime repository content
 ai_service/data/rxnorm-cpc-*/
 ai_service/data/test-temp-run-*/
 ai_service/data/processed/test-cache-*/
 
+# Generated Python packaging metadata
+*.egg-info/
+**/*.egg-info/
+
+# Private portable environment reference
+portable/backend.env.reference
+
+# Temporary authentication/test artifacts
+backend/test-user-temp.json
+backend/*user-temp*.json
+backend/*token-temp*.json
+**/test-user-temp.json

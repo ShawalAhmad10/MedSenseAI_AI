@@ -12,6 +12,10 @@ import InteractionWarningModal from '../../components/storefront/InteractionWarn
 import EscalateToPharmacistModal from '../../components/storefront/EscalateToPharmacistModal';
 import { getDdiPresentation } from '../../services/storefrontDdiService';
 import { getInteractionAwareRecommendations } from '../../services/storefrontInteractionAwareRecommendationService';
+import {
+  getProductRecommendations,
+  validateSameSaltAlternativeSelection,
+} from '../../services/storefrontRecommendationService';
 import { listCustomerConsultations } from '../../services/storefrontConsultationService';
 
 function cartProductId(
@@ -201,6 +205,7 @@ export default function CartPage() {
     removeItem,
     subtotal,
     updateQuantity,
+    replaceItem,
     refreshCartInventory,
     ddiLoading,
     ddiError,
@@ -211,6 +216,11 @@ export default function CartPage() {
   useEffect(() => { void refreshCartInventory(); }, [cartInstanceId, refreshCartInventory]);
   const [showWarnings, setShowWarnings] = useState(false);
   const [showEscalation, setShowEscalation] = useState(false);
+
+  const [sameSaltByProduct, setSameSaltByProduct] = useState({});
+  const [sameSaltLoading, setSameSaltLoading] = useState({});
+  const [sameSaltErrors, setSameSaltErrors] = useState({});
+  const [selectingAlternative, setSelectingAlternative] = useState(null);
 
   const [
     cartConsultation,
@@ -416,6 +426,110 @@ export default function CartPage() {
       ? alternativeReview
       : null;
 
+  useEffect(() => {
+    let cancelled = false;
+    const sourceIds = [
+      ...new Set(
+        items.map(cartProductId).filter(Boolean)
+      ),
+    ];
+
+    if (sourceIds.length === 0) {
+      setSameSaltByProduct({});
+      setSameSaltLoading({});
+      setSameSaltErrors({});
+      return undefined;
+    }
+
+    setSameSaltLoading(
+      Object.fromEntries(sourceIds.map((id) => [id, true]))
+    );
+    setSameSaltErrors({});
+
+    void Promise.all(
+      sourceIds.map(async (sourceId) => {
+        try {
+          const result = await getProductRecommendations(sourceId);
+          return {
+            sourceId,
+            recommendations:
+              result.match_basis === 'SAME_SALT'
+                ? result.recommendations || []
+                : [],
+            error: '',
+          };
+        } catch (error) {
+          return {
+            sourceId,
+            recommendations: [],
+            error:
+              error?.message ||
+              'Could not load same-salt alternatives.',
+          };
+        }
+      })
+    ).then((results) => {
+      if (cancelled) return;
+      setSameSaltByProduct(
+        Object.fromEntries(
+          results.map((result) => [
+            result.sourceId,
+            result.recommendations,
+          ])
+        )
+      );
+      setSameSaltErrors(
+        Object.fromEntries(
+          results
+            .filter((result) => result.error)
+            .map((result) => [result.sourceId, result.error])
+        )
+      );
+      setSameSaltLoading({});
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cartSignature]);
+
+  const handleSameSaltSelection = async (
+    sourceItem,
+    candidate
+  ) => {
+    const sourceId = cartProductId(sourceItem);
+    const selectionKey = `${sourceId}-${candidate.id}`;
+    setSelectingAlternative(selectionKey);
+    setSameSaltErrors((current) => ({
+      ...current,
+      [sourceId]: '',
+    }));
+
+    try {
+      const validation =
+        await validateSameSaltAlternativeSelection(
+          sourceId,
+          candidate.id,
+          items
+        );
+
+      replaceItem(
+        sourceItem.id,
+        validation.selectedAlternative,
+        validation.final_cart
+      );
+    } catch (error) {
+      setSameSaltErrors((current) => ({
+        ...current,
+        [sourceId]:
+          error?.message ||
+          'Could not select this alternative.',
+      }));
+    } finally {
+      setSelectingAlternative(null);
+    }
+  };
+
   const handleGovernedAlternativeCheck =
     async (
       sourceProductId
@@ -599,6 +713,71 @@ export default function CartPage() {
                       </button>
                     </div>
                     <div><strong>PKR {fifoTotal(item).toFixed(2)}</strong><FifoPriceBreakdown item={item} /></div>
+                  </div>
+                  <div
+                    style={{
+                      marginTop: '1rem',
+                      paddingTop: '0.9rem',
+                      borderTop: '1px solid #e5e7eb',
+                    }}
+                  >
+                    <strong style={{ display: 'block' }}>
+                      Same-Salt Alternatives
+                    </strong>
+                    <p className="sf-muted" style={{ fontSize: '0.82rem', lineHeight: 1.45, margin: '0.35rem 0 0.7rem' }}>
+                      Other available products with the same active salt/composition are shown below. Final cart safety checks and pharmacist review may still apply.
+                    </p>
+                    {sameSaltLoading[cartProductId(item)] ? (
+                      <span className="sf-muted" style={{ fontSize: '0.82rem' }}>
+                        Loading same-salt alternatives...
+                      </span>
+                    ) : sameSaltErrors[cartProductId(item)] ? (
+                      <div className="sf-badge-warning">
+                        {sameSaltErrors[cartProductId(item)]}
+                      </div>
+                    ) : (sameSaltByProduct[cartProductId(item)] || []).length === 0 ? (
+                      <span className="sf-muted" style={{ fontSize: '0.82rem' }}>
+                        No other in-stock same-salt product is currently available.
+                      </span>
+                    ) : (
+                      <div style={{ display: 'grid', gap: '0.65rem' }}>
+                        {(sameSaltByProduct[cartProductId(item)] || []).map((candidate) => {
+                          const selectionKey = `${cartProductId(item)}-${candidate.id}`;
+                          return (
+                            <div
+                              key={candidate.id}
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                gap: '0.8rem',
+                                padding: '0.7rem',
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '8px',
+                                flexWrap: 'wrap',
+                              }}
+                            >
+                              <div>
+                                <strong style={{ display: 'block' }}>{candidate.name}</strong>
+                                <span className="sf-muted" style={{ fontSize: '0.78rem' }}>
+                                  {candidate.salt || 'Salt not available'} · PKR {Number(candidate.price).toFixed(2)} · {candidate.stockQty} in stock
+                                </span>
+                              </div>
+                              <button
+                                className="sf-button-secondary"
+                                type="button"
+                                disabled={Boolean(selectingAlternative)}
+                                onClick={() => handleSameSaltSelection(item, candidate)}
+                              >
+                                {selectingAlternative === selectionKey
+                                  ? 'Validating...'
+                                  : 'Select Alternative'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </article>
               ))}

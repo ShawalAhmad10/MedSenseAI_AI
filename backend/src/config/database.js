@@ -16,17 +16,21 @@ const sequelize = new Sequelize(
     dialect: 'postgres',
     dialectOptions: {
       options: `-c search_path=${databaseSchema}`,
-      connectionTimeoutMillis: 15000,
+      connectionTimeoutMillis: 30000,
       ...(process.env.DB_SSL === 'true' ? {
         ssl: { require: true, rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' }
       } : {})
     },
     logging: process.env.NODE_ENV === 'development' ? console.log : false,
     pool: {
-      max: 10,
+      // The shared Neon endpoint can be slow to establish several TLS sessions
+      // at once during the storefront's initial parallel data load. Keep the
+      // pool deliberately small and wait for an existing slot instead of
+      // failing otherwise healthy requests during cold start.
+      max: 3,
       min: 0,
-      acquire: 30000,
-      idle: 10000,
+      acquire: 60000,
+      idle: 30000,
     },
     define: {
       timestamps: true,

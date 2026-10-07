@@ -8,8 +8,32 @@ const {
   verifyCustomerToken,
 } = require('../middleware/customerAuth');
 
+const {
+  authenticateToken,
+} = require('../middleware/auth');
 const prescriptionController =
   require('../controllers/prescriptionController');
+
+router.get(
+  '/pharmacist/review',
+  authenticateToken,
+  prescriptionController
+    .listForPharmacist
+);
+
+router.get(
+  '/pharmacist/review/:prescriptionId',
+  authenticateToken,
+  prescriptionController
+    .getForPharmacist
+);
+
+router.patch(
+  '/pharmacist/review/:prescriptionId',
+  authenticateToken,
+  prescriptionController
+    .reviewForPharmacist
+);
 
 router.use(
   verifyCustomerToken

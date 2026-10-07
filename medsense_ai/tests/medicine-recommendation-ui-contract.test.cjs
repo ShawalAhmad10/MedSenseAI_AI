@@ -54,10 +54,66 @@ test(
       /axios\.get/
     );
 
+    assert.match(
+      source,
+      /validateSameSaltAlternativeSelection[\s\S]*axios\.post/
+    );
+
     assert.doesNotMatch(
       source,
-      /axios\.(post|patch|delete)/
+      /axios\.(patch|delete)/
     );
+  }
+);
+
+test(
+  'cart displays database-backed same-salt alternatives for every item and selection is explicit',
+  () => {
+    const source =
+      read(
+        'src/pages/storefront/CartPage.jsx'
+      );
+
+    assert.match(
+      source,
+      /items\.map\(\(item\)[\s\S]*Same-Salt Alternatives/
+    );
+    assert.match(
+      source,
+      /getProductRecommendations/
+    );
+    assert.match(
+      source,
+      /Select Alternative/
+    );
+    assert.match(
+      source,
+      /validateSameSaltAlternativeSelection/
+    );
+    assert.match(
+      source,
+      /No other in-stock same-salt product is currently available\./
+    );
+    assert.doesNotMatch(
+      source,
+      /handleSameSaltSelection[\s\S]{0,2500}\baddItem\s*\(/
+    );
+  }
+);
+
+test(
+  'validated replacement changes the existing cart identity and invalidates prior DDI state',
+  () => {
+    const source =
+      read(
+        'src/context/CartContext.jsx'
+      );
+
+    assert.match(source, /const replaceItem\s*=/);
+    assert.match(source, /setItems\s*\(/);
+    assert.match(source, /setDdiResult\(null\)/);
+    assert.match(source, /setDdiIdentity\(null\)/);
+    assert.match(source, /replaceItem,/);
   }
 );
 

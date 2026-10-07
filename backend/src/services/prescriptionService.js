@@ -1366,6 +1366,514 @@ async function confirmCustomerPrescription(
     }
   );
 }
+
+async function ensurePharmacistReviewSchema() {
+  await ensurePrescriptionSchema();
+
+  await sequelize.query(`
+    ALTER TABLE customer_prescriptions
+      ADD COLUMN IF NOT EXISTS pharmacist_review_status
+        VARCHAR(32) NOT NULL DEFAULT 'pending',
+      ADD COLUMN IF NOT EXISTS pharmacist_review_note
+        TEXT,
+      ADD COLUMN IF NOT EXISTS pharmacist_medicines
+        JSONB,
+      ADD COLUMN IF NOT EXISTS pharmacist_reviewed_by
+        VARCHAR(128),
+      ADD COLUMN IF NOT EXISTS pharmacist_reviewed_at
+        TIMESTAMPTZ;
+  `);
+}
+
+function parsePrescriptionJson(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (typeof value === 'object') {
+    return value;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function derivePharmacistMedicines(row) {
+  const pharmacistMedicines =
+    parsePrescriptionJson(
+      row.pharmacist_medicines
+    );
+
+  if (Array.isArray(pharmacistMedicines)) {
+    return pharmacistMedicines;
+  }
+
+  const corrections =
+    parsePrescriptionJson(
+      row.customer_corrections
+    );
+
+  if (
+    corrections &&
+    Array.isArray(corrections.medicines)
+  ) {
+    return corrections.medicines
+      .filter(
+        (medicine) =>
+          medicine?.action !== 'rejected'
+      )
+      .map(
+        (medicine, index) => ({
+          id:
+            medicine.candidate_id ||
+            medicine.id ||
+            `customer-${index + 1}`,
+
+          name:
+            medicine.name ||
+            medicine.corrected_name ||
+            medicine.raw_name_text ||
+            '',
+
+          dosage:
+            medicine.strength ||
+            medicine.dosage ||
+            medicine.raw_strength_text ||
+            '',
+
+          confidence:
+            medicine.confidence ??
+            null,
+
+          source:
+            medicine.action ||
+            'customer-confirmed',
+        })
+      );
+  }
+
+  const ai =
+    parsePrescriptionJson(
+      row.ai_result
+    );
+
+  const candidates =
+    ai?.prescription_analysis?.candidates;
+
+  if (!Array.isArray(candidates)) {
+    return [];
+  }
+
+  return candidates.map(
+    (candidate, index) => ({
+      id:
+        candidate.candidate_id ||
+        `ocr-${index + 1}`,
+
+      name:
+        candidate.raw_name_text ||
+        '',
+
+      dosage:
+        candidate.raw_strength_text ||
+        '',
+
+      confidence:
+        candidate?.source?.confidence ??
+        null,
+
+      source:
+        candidate.review_required
+          ? 'ocr-review-required'
+          : 'ocr',
+    })
+  );
+}
+
+function mapPharmacistPrescription(
+  row,
+  includeImage = false
+) {
+  const medicines =
+    derivePharmacistMedicines(row);
+
+  const confidenceValues =
+    medicines
+      .map((medicine) =>
+        Number(medicine.confidence)
+      )
+      .filter((value) =>
+        Number.isFinite(value)
+      );
+
+  const confidence =
+    confidenceValues.length
+      ? Math.round(
+          (
+            confidenceValues.reduce(
+              (sum, value) =>
+                sum + value,
+              0
+            ) /
+            confidenceValues.length
+          ) * 100
+        )
+      : 0;
+
+  let imageUrl = null;
+
+  if (
+    includeImage &&
+    row.image_data
+  ) {
+    const imageBuffer =
+      Buffer.isBuffer(row.image_data)
+        ? row.image_data
+        : Buffer.from(row.image_data);
+
+    imageUrl =
+      `data:${
+        row.media_type ||
+        'image/jpeg'
+      };base64,${
+        imageBuffer.toString('base64')
+      }`;
+  }
+
+  return {
+    id:
+      `RX-${String(
+        row.prescription_id
+      ).padStart(4, '0')}`,
+
+    prescriptionId:
+      Number(row.prescription_id),
+
+    patientName:
+      row.customer_name ||
+      `Customer ${row.customer_id}`,
+
+    patientId:
+      String(row.customer_id),
+
+    uploadDate:
+      row.created_at,
+
+    originalFilename:
+      row.original_filename ||
+      null,
+
+    mediaType:
+      row.media_type ||
+      null,
+
+    status:
+      row.pharmacist_review_status ||
+      'pending',
+
+    ocrStatus:
+      row.ocr_status ||
+      null,
+
+    analysisStatus:
+      row.analysis_status ||
+      null,
+
+    customerVerificationStatus:
+      row.customer_verification_status ||
+      null,
+
+    reviewRequired:
+      row.review_required === true,
+
+    confirmationRequired:
+      row.confirmation_required === true,
+
+    rawOcrText:
+      row.raw_ocr_text ||
+      '',
+
+    medicines,
+
+    medicineCount:
+      medicines.length,
+
+    confidence,
+
+    interactionCount:
+      0,
+
+    reviewNote:
+      row.pharmacist_review_note ||
+      '',
+
+    reviewedAt:
+      row.pharmacist_reviewed_at ||
+      null,
+
+    imageUrl,
+  };
+}
+
+async function listPharmacistPrescriptions() {
+  await ensurePharmacistReviewSchema();
+
+  const [rows] =
+    await sequelize.query(`
+      SELECT
+        cp.prescription_id,
+        cp.customer_id,
+        c.customer_name,
+        cp.original_filename,
+        cp.media_type,
+        cp.ocr_status,
+        cp.analysis_status,
+        cp.review_required,
+        cp.confirmation_required,
+        cp.customer_verification_status,
+        cp.raw_ocr_text,
+        cp.ai_result,
+        cp.customer_corrections,
+        cp.pharmacist_review_status,
+        cp.pharmacist_review_note,
+        cp.pharmacist_medicines,
+        cp.pharmacist_reviewed_by,
+        cp.pharmacist_reviewed_at,
+        cp.created_at,
+        cp.updated_at
+      FROM customer_prescriptions cp
+      JOIN customer c
+        ON c.customer_id =
+           cp.customer_id
+      ORDER BY
+        cp.created_at DESC,
+        cp.prescription_id DESC
+      LIMIT 200
+    `);
+
+  return rows.map(
+    (row) =>
+      mapPharmacistPrescription(
+        row,
+        false
+      )
+  );
+}
+
+async function getPharmacistPrescription(
+  prescriptionIdValue
+) {
+  await ensurePharmacistReviewSchema();
+
+  const prescriptionId =
+    positiveInteger(
+      prescriptionIdValue,
+      'PRESCRIPTION_INVALID_ID'
+    );
+
+  const [rows] =
+    await sequelize.query(
+      `
+        SELECT
+          cp.*,
+          c.customer_name
+        FROM customer_prescriptions cp
+        JOIN customer c
+          ON c.customer_id =
+             cp.customer_id
+        WHERE cp.prescription_id =
+              :prescription_id
+        LIMIT 1
+      `,
+      {
+        replacements: {
+          prescription_id:
+            prescriptionId,
+        },
+      }
+    );
+
+  if (rows.length !== 1) {
+    throw prescriptionError(
+      'PRESCRIPTION_NOT_FOUND',
+      'Prescription not found',
+      404
+    );
+  }
+
+  return mapPharmacistPrescription(
+    rows[0],
+    true
+  );
+}
+
+async function reviewPharmacistPrescription(
+  prescriptionIdValue,
+  pharmacistId,
+  payload = {}
+) {
+  await ensurePharmacistReviewSchema();
+
+  const prescriptionId =
+    positiveInteger(
+      prescriptionIdValue,
+      'PRESCRIPTION_INVALID_ID'
+    );
+
+  const status =
+    String(
+      payload.status || ''
+    )
+      .trim()
+      .toLowerCase();
+
+  const allowed =
+    new Set([
+      'approved',
+      'flagged',
+      'rejected',
+    ]);
+
+  if (!allowed.has(status)) {
+    throw prescriptionError(
+      'PRESCRIPTION_INVALID_REVIEW_STATUS',
+      'Review status must be approved, flagged, or rejected',
+      400
+    );
+  }
+
+  const note =
+    String(
+      payload.note || ''
+    ).trim();
+
+  if (
+    (
+      status === 'rejected' ||
+      status === 'flagged'
+    ) &&
+    !note
+  ) {
+    throw prescriptionError(
+      'PRESCRIPTION_REVIEW_NOTE_REQUIRED',
+      'A pharmacist note is required for flagging or rejection',
+      400
+    );
+  }
+
+  const medicines =
+    Array.isArray(payload.medicines)
+      ? payload.medicines
+          .slice(0, 20)
+          .map(
+            (medicine, index) => ({
+              id:
+                medicine?.id ||
+                `pharmacist-${index + 1}`,
+
+              name:
+                String(
+                  medicine?.name || ''
+                ).trim(),
+
+              dosage:
+                String(
+                  medicine?.dosage || ''
+                ).trim(),
+
+              source:
+                'pharmacist-reviewed',
+            })
+          )
+          .filter(
+            (medicine) =>
+              medicine.name
+          )
+      : [];
+
+  if (
+    status === 'approved' &&
+    medicines.length === 0
+  ) {
+    throw prescriptionError(
+      'PRESCRIPTION_MEDICINES_REQUIRED',
+      'At least one pharmacist-reviewed medicine is required before approval',
+      400
+    );
+  }
+
+  const [rows] =
+    await sequelize.query(
+      `
+        UPDATE customer_prescriptions
+        SET
+          pharmacist_review_status =
+            :status,
+
+          pharmacist_review_note =
+            :note,
+
+          pharmacist_medicines =
+            CAST(
+              :medicines
+              AS JSONB
+            ),
+
+          pharmacist_reviewed_by =
+            :reviewed_by,
+
+          pharmacist_reviewed_at =
+            NOW(),
+
+          updated_at =
+            NOW()
+
+        WHERE prescription_id =
+              :prescription_id
+
+        RETURNING
+          prescription_id
+      `,
+      {
+        replacements: {
+          prescription_id:
+            prescriptionId,
+
+          status,
+
+          note:
+            note || null,
+
+          medicines:
+            JSON.stringify(
+              medicines
+            ),
+
+          reviewed_by:
+            String(
+              pharmacistId ??
+              ''
+            ),
+        },
+      }
+    );
+
+  if (rows.length !== 1) {
+    throw prescriptionError(
+      'PRESCRIPTION_NOT_FOUND',
+      'Prescription not found',
+      404
+    );
+  }
+
+  return getPharmacistPrescription(
+    prescriptionId
+  );
+}
+
 module.exports = {
   AI_SERVICE_URL,
   PRESCRIPTION_AI_URL,
@@ -1376,4 +1884,7 @@ module.exports = {
   listCustomerPrescriptions,
   getCustomerPrescription,
   confirmCustomerPrescription,
+  listPharmacistPrescriptions,
+  getPharmacistPrescription,
+  reviewPharmacistPrescription,
 };
